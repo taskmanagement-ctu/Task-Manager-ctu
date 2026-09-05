@@ -115,10 +115,10 @@ export const createVerifiedUser = async (req: Request, res: Response): Promise<v
     const { name, email, phone, userType, department } = req.body;
     let { universityId } = req.body;
 
-    if (!universityId || !name || !email || !phone) {
+    if (!universityId || !name || !email) {
       res.status(400).json({
         success: false,
-        message: 'All fields (University ID, Name, Email, Phone) are required.',
+        message: 'University ID, Name, and Email are required.',
       });
       return;
     }
@@ -147,7 +147,7 @@ export const createVerifiedUser = async (req: Request, res: Response): Promise<v
     if (!isValidPhone(normalizedPhone)) {
       res.status(400).json({
         success: false,
-        message: 'Phone number must be exactly 10 digits.',
+        message: 'Invalid phone number format.',
       });
       return;
     }
@@ -245,6 +245,63 @@ export const deleteVerifiedUser = async (req: Request, res: Response): Promise<v
 };
 
 /**
+ * POST /api/verified-users/bulk-delete
+ * Delete multiple verified user entries
+ */
+export const bulkDeleteVerifiedUsers = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = req.user;
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ success: false, message: 'Please provide an array of IDs to delete' });
+      return;
+    }
+
+    const validIds = ids.filter((id: any) => typeof id === 'string' && id.trim().length > 0);
+    if (validIds.length === 0) {
+      res.status(400).json({ success: false, message: 'No valid IDs provided' });
+      return;
+    }
+
+    if (user.role === 'department_admin') {
+      const perms = await getDeptAdminPermissions(user);
+      if (!perms.allowed) {
+        res.status(403).json({
+          success: false,
+          message: 'Forbidden. You do not have permission to delete verified users.',
+        });
+        return;
+      }
+
+      // Check if any selected user belongs to a different department
+      const nonDeptCount = await VerifiedUser.countDocuments({
+        _id: { $in: validIds },
+        department: { $ne: perms.department },
+      });
+
+      if (nonDeptCount > 0) {
+        res.status(403).json({
+          success: false,
+          message: 'Forbidden. Some selected users are outside your department.',
+        });
+        return;
+      }
+    }
+
+    const result = await VerifiedUser.deleteMany({ _id: { $in: validIds } });
+    res.status(200).json({
+      success: true,
+      message: `Successfully deleted ${result.deletedCount} verified user(s)`,
+      data: { deletedCount: result.deletedCount },
+    });
+  } catch (error: any) {
+    console.error('Error bulk deleting verified users:', error);
+    res.status(500).json({ success: false, message: error.message || 'Server error' });
+  }
+};
+
+/**
  * GET /api/verified-users
  * List verified users with pagination, search, and filter.
  */
@@ -316,9 +373,16 @@ export const getVerifiedUsers = async (req: Request, res: Response): Promise<voi
       filter.isRegistered = false;
     }
 
+    const sortBy = (req.query.sortBy as string || 'name').trim();
+    const sortOrder = req.query.sortOrder === 'desc' ? -1 : 1;
+    const sortField = ['name', 'universityId', 'email', 'department', 'createdAt'].includes(sortBy)
+      ? sortBy
+      : 'name';
+
     const total = await VerifiedUser.countDocuments(filter);
     const users = await VerifiedUser.find(filter)
-      .sort({ createdAt: -1 })
+      .collation({ locale: 'en', strength: 2 })
+      .sort({ [sortField]: sortOrder as 1 | -1 })
       .skip((page - 1) * limit)
       .limit(limit)
       .select('-__v');

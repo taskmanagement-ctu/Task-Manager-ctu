@@ -9,7 +9,11 @@ import {
   ChevronRight,
   ShieldAlert,
   ShieldCheck,
-  User as UserIcon
+  User as UserIcon,
+  Trash2,
+  Ban,
+  CheckCircle,
+  AlertTriangle
 } from 'lucide-react';
 import './UserManagementPage.css';
 
@@ -31,14 +35,17 @@ const UserManagementPage: React.FC = () => {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Modal State
+  // Selected User for actions
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [showRoleModal, setShowRoleModal] = useState(false);
-  const [newRole, setNewRole] = useState<string>('');
   
   // Status confirm State
   const [showStatusModal, setShowStatusModal] = useState(false);
-  const [statusAction, setStatusAction] = useState<boolean>(true); // true = activate
+  const [statusAction, setStatusAction] = useState<boolean>(true); // true = activate, false = deactivate
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+  // Delete confirm State
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchUsers = async () => {
     try {
@@ -80,25 +87,33 @@ const UserManagementPage: React.FC = () => {
     };
   }, []);
 
-  const handleRoleChangeSubmit = async () => {
-    if (!selectedUser) return;
-    try {
-      await api.updateUserRole(selectedUser.id, newRole);
-      setShowRoleModal(false);
-      fetchUsers();
-    } catch (err: any) {
-      alert(err.message);
-    }
-  };
-
   const handleStatusChangeSubmit = async () => {
     if (!selectedUser) return;
     try {
+      setIsUpdatingStatus(true);
       await api.updateUserStatus(selectedUser.id, statusAction);
       setShowStatusModal(false);
+      setSelectedUser(null);
       fetchUsers();
     } catch (err: any) {
-      alert(err.message);
+      alert(err.message || 'Failed to update user status');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleDeleteUserSubmit = async () => {
+    if (!selectedUser) return;
+    try {
+      setIsDeleting(true);
+      await api.deleteUser(selectedUser.id);
+      setShowDeleteModal(false);
+      setSelectedUser(null);
+      fetchUsers();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete user');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -127,7 +142,7 @@ const UserManagementPage: React.FC = () => {
     <div className="um-container">
       <div className="um-header">
         <h1 className="um-title">User Management</h1>
-        <p className="um-subtitle">Manage system access, roles, and status for all university personnel.</p>
+        <p className="um-subtitle">Manage system access and status for all university personnel.</p>
       </div>
 
       <div className="um-filters">
@@ -139,14 +154,20 @@ const UserManagementPage: React.FC = () => {
               className="um-search-input"
               placeholder="Search users by ID, Name..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
             />
           </div>
           
           <select
             className="um-role-select"
             value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
+            onChange={(e) => {
+              setRoleFilter(e.target.value);
+              setPage(1);
+            }}
           >
             <option value="All">All Roles</option>
             <option value="super_admin">Super Admin</option>
@@ -203,7 +224,7 @@ const UserManagementPage: React.FC = () => {
                     </div>
                   </td>
                   <td>
-                    <div className="user-phone">{user.phone ? user.phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3') : '-'}</div>
+                    <div className="user-phone">{user.phone && user.phone !== '-' ? user.phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3') : '-'}</div>
                   </td>
                   <td>
                     <div className="user-dept">{user.department || '-'}</div>
@@ -220,26 +241,33 @@ const UserManagementPage: React.FC = () => {
                     </span>
                   </td>
                   <td className="actions-cell">
-                    <button className="btn-icon" onClick={(e) => toggleDropdown(user.id, e)}>
+                    <button className="btn-icon" onClick={(e) => toggleDropdown(user.id, e)} title="Actions">
                       <MoreVertical size={18} />
                     </button>
                     {activeDropdown === user.id && (
                       <div className="action-dropdown" ref={dropdownRef}>
-                        <button className="dropdown-item" onClick={() => {
-                          setSelectedUser(user);
-                          setNewRole(user.role);
-                          setShowRoleModal(true);
-                          setActiveDropdown(null);
-                        }}>
-                          Change Role
+                        <button 
+                          className="dropdown-item" 
+                          onClick={() => {
+                            setSelectedUser(user);
+                            setStatusAction(!user.isActive);
+                            setShowStatusModal(true);
+                            setActiveDropdown(null);
+                          }}
+                        >
+                          {user.isActive ? <Ban size={15} color="#d97706" /> : <CheckCircle size={15} color="#10b981" />}
+                          <span>{user.isActive ? 'Deactivate User' : 'Activate User'}</span>
                         </button>
-                        <button className={`dropdown-item ${user.isActive ? 'danger' : ''}`} onClick={() => {
-                          setSelectedUser(user);
-                          setStatusAction(!user.isActive);
-                          setShowStatusModal(true);
-                          setActiveDropdown(null);
-                        }}>
-                          {user.isActive ? 'Deactivate User' : 'Activate User'}
+                        <button 
+                          className="dropdown-item danger" 
+                          onClick={() => {
+                            setSelectedUser(user);
+                            setShowDeleteModal(true);
+                            setActiveDropdown(null);
+                          }}
+                        >
+                          <Trash2 size={15} color="#dc2626" />
+                          <span>Delete User</span>
                         </button>
                       </div>
                     )}
@@ -304,21 +332,28 @@ const UserManagementPage: React.FC = () => {
                 </button>
                 {activeDropdown === `mobile-${user.id}` && (
                   <div className="action-dropdown" ref={dropdownRef} style={{ top: '100%', right: '0', width: '100%' }}>
-                    <button className="dropdown-item" onClick={() => {
-                      setSelectedUser(user);
-                      setNewRole(user.role);
-                      setShowRoleModal(true);
-                      setActiveDropdown(null);
-                    }}>
-                      Change Role
+                    <button 
+                      className="dropdown-item" 
+                      onClick={() => {
+                        setSelectedUser(user);
+                        setStatusAction(!user.isActive);
+                        setShowStatusModal(true);
+                        setActiveDropdown(null);
+                      }}
+                    >
+                      {user.isActive ? <Ban size={15} color="#d97706" /> : <CheckCircle size={15} color="#10b981" />}
+                      <span>{user.isActive ? 'Deactivate User' : 'Activate User'}</span>
                     </button>
-                    <button className={`dropdown-item ${user.isActive ? 'danger' : ''}`} onClick={() => {
-                      setSelectedUser(user);
-                      setStatusAction(!user.isActive);
-                      setShowStatusModal(true);
-                      setActiveDropdown(null);
-                    }}>
-                      {user.isActive ? 'Deactivate' : 'Activate'}
+                    <button 
+                      className="dropdown-item danger" 
+                      onClick={() => {
+                        setSelectedUser(user);
+                        setShowDeleteModal(true);
+                        setActiveDropdown(null);
+                      }}
+                    >
+                      <Trash2 size={15} color="#dc2626" />
+                      <span>Delete User</span>
                     </button>
                   </div>
                 )}
@@ -343,57 +378,148 @@ const UserManagementPage: React.FC = () => {
         )}
       </div>
 
-      {/* Role Change Modal */}
-      {showRoleModal && selectedUser && (
+      {/* Status Change Modal (Deactivate / Activate) */}
+      {showStatusModal && selectedUser && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <h3 style={{ marginBottom: '1rem' }}>Change Role</h3>
-            <p style={{ color: '#4b5563', fontSize: '0.95rem' }}>
-              Change <strong>{selectedUser.name}</strong>'s role from {formatRoleText(selectedUser.role)}?
-            </p>
-            <div style={{ marginTop: '1.5rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, fontSize: '0.875rem' }}>Select New Role</label>
-              <select
-                className="um-role-select"
-                style={{ width: '100%' }}
-                value={newRole}
-                onChange={(e) => setNewRole(e.target.value)}
-              >
-                <option value="staff">Staff</option>
-                <option value="department_admin">Department Admin</option>
-                <option value="super_admin">Super Admin</option>
-              </select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              {statusAction ? (
+                <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981' }}>
+                  <CheckCircle size={22} />
+                </div>
+              ) : (
+                <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#fffbeb', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#d97706' }}>
+                  <Ban size={22} />
+                </div>
+              )}
+              <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#111827' }}>
+                {statusAction ? 'Activate User Account' : 'Deactivate User Account'}
+              </h3>
             </div>
-            <div className="modal-actions" style={{ marginTop: '2rem' }}>
-              <button className="btn-paginate" onClick={() => setShowRoleModal(false)}>
+            
+            <p style={{ color: '#4b5563', fontSize: '0.95rem', lineHeight: '1.5', margin: '0 0 1rem 0' }}>
+              Are you sure you want to {statusAction ? 'activate' : 'deactivate'}{' '}
+              <strong>{selectedUser.name}</strong> ({selectedUser.universityId})?
+            </p>
+
+            {!statusAction ? (
+              <div style={{ 
+                backgroundColor: '#fffbeb', 
+                border: '1px solid #fde68a', 
+                borderRadius: '6px', 
+                padding: '0.85rem 1rem', 
+                color: '#92400e', 
+                fontSize: '0.85rem', 
+                lineHeight: 1.45, 
+                marginBottom: '1.5rem' 
+              }}>
+                <strong>Account Suspension Effect:</strong>
+                <ul style={{ margin: '0.35rem 0 0 1.25rem', padding: 0 }}>
+                  <li>The user cannot access their dashboard.</li>
+                  <li>When they attempt to log in, they will see the message: <em>"Your account has been suspended by super admin."</em></li>
+                  <li>You can reactivate their account at any time.</li>
+                </ul>
+              </div>
+            ) : (
+              <div style={{ 
+                backgroundColor: '#ecfdf5', 
+                border: '1px solid #a7f3d0', 
+                borderRadius: '6px', 
+                padding: '0.85rem 1rem', 
+                color: '#065f46', 
+                fontSize: '0.85rem', 
+                lineHeight: 1.45, 
+                marginBottom: '1.5rem' 
+              }}>
+                Activating this account will restore dashboard access and allow <strong>{selectedUser.name}</strong> to log in normally.
+              </div>
+            )}
+
+            <div className="modal-actions">
+              <button 
+                type="button" 
+                className="btn-paginate" 
+                onClick={() => setShowStatusModal(false)}
+                disabled={isUpdatingStatus}
+              >
                 Cancel
               </button>
-              <button className="btn-add-user" onClick={handleRoleChangeSubmit} disabled={newRole === selectedUser.role}>
-                Confirm
+              <button 
+                type="button" 
+                className="btn-add-user" 
+                style={{ 
+                  backgroundColor: statusAction ? '#10b981' : '#d97706',
+                  borderColor: statusAction ? '#10b981' : '#d97706',
+                  color: '#fff',
+                  cursor: isUpdatingStatus ? 'not-allowed' : 'pointer'
+                }} 
+                onClick={handleStatusChangeSubmit}
+                disabled={isUpdatingStatus}
+              >
+                {isUpdatingStatus ? 'Updating...' : statusAction ? 'Activate User' : 'Deactivate User'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Status Change Modal */}
-      {showStatusModal && selectedUser && (
+      {/* Delete User Confirmation Modal */}
+      {showDeleteModal && selectedUser && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <h3 style={{ marginBottom: '1rem' }}>{statusAction ? 'Activate' : 'Deactivate'} User?</h3>
-            <p style={{ color: '#4b5563', fontSize: '0.95rem' }}>
-              Are you sure you want to {statusAction ? 'activate' : 'deactivate'} <strong>{selectedUser.name}</strong>?
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#dc2626' }}>
+                <AlertTriangle size={22} />
+              </div>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#111827' }}>
+                Delete User Permanently?
+              </h3>
+            </div>
+            
+            <p style={{ color: '#4b5563', fontSize: '0.95rem', lineHeight: '1.5', margin: '0 0 1rem 0' }}>
+              Are you sure you want to delete <strong>{selectedUser.name}</strong> ({selectedUser.universityId}) directly from the database?
             </p>
-            <div className="modal-actions" style={{ marginTop: '2rem' }}>
-              <button className="btn-paginate" onClick={() => setShowStatusModal(false)}>
+
+            <div style={{ 
+              backgroundColor: '#fef2f2', 
+              border: '1px solid #fecaca', 
+              borderRadius: '6px', 
+              padding: '0.85rem 1rem', 
+              color: '#991b1b', 
+              fontSize: '0.85rem', 
+              lineHeight: 1.45, 
+              marginBottom: '1.5rem' 
+            }}>
+              <strong>Permanent Database Deletion:</strong>
+              <ul style={{ margin: '0.35rem 0 0 1.25rem', padding: 0 }}>
+                <li>This user will be permanently erased from the database.</li>
+                <li>All active staff and team assignments for this user will be removed.</li>
+                <li>This action is irreversible.</li>
+              </ul>
+            </div>
+
+            <div className="modal-actions">
+              <button 
+                type="button" 
+                className="btn-paginate" 
+                onClick={() => setShowDeleteModal(false)}
+                disabled={isDeleting}
+              >
                 Cancel
               </button>
               <button 
+                type="button" 
                 className="btn-add-user" 
-                style={{ backgroundColor: statusAction ? '#10b981' : '#ef4444' }} 
-                onClick={handleStatusChangeSubmit}
+                style={{ 
+                  backgroundColor: '#dc2626', 
+                  borderColor: '#dc2626',
+                  color: '#fff',
+                  cursor: isDeleting ? 'not-allowed' : 'pointer'
+                }} 
+                onClick={handleDeleteUserSubmit}
+                disabled={isDeleting}
               >
-                Confirm
+                {isDeleting ? 'Deleting...' : 'Delete User'}
               </button>
             </div>
           </div>

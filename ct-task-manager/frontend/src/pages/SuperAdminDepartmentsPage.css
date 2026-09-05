@@ -43,11 +43,17 @@
   align-items: flex-start;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   position: relative;
+  z-index: 1;
 }
 
 .dept-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+  z-index: 2;
+}
+
+.dept-card.menu-active {
+  z-index: 50 !important;
 }
 
 .dept-card-main {
@@ -100,6 +106,20 @@
   border-radius: 6px;
 }
 
+.dept-code-badge {
+  display: inline-flex;
+  align-items: center;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.12rem 0.5rem;
+  border-radius: 6px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .badge-both {
   background: #eff6ff;
   color: #2563eb;
@@ -139,10 +159,13 @@
   display: flex;
   align-items: center;
   margin-left: 0.5rem;
+  position: relative;
+  z-index: 50;
 }
 
 .dept-menu-wrapper {
   position: relative;
+  z-index: 50;
 }
 
 .dept-dots-btn {
@@ -170,14 +193,14 @@
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  width: 190px;
+  width: 195px;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.16), 0 8px 12px -6px rgba(0, 0, 0, 0.08);
   z-index: 100;
   overflow: hidden;
-  padding: 0.3rem;
+  padding: 0.35rem;
   animation: deptMenuFade 0.15s ease-out;
 }
 

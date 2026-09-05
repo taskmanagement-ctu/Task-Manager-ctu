@@ -5,6 +5,7 @@ import {
   importFile,
   createVerifiedUser,
   deleteVerifiedUser,
+  bulkDeleteVerifiedUsers,
   getVerifiedUsers,
   getStats,
   getByUniversityId,
@@ -30,6 +31,12 @@ router.post('/', authenticate, authorizeRoles('super_admin', 'department_admin')
 
 // POST /api/verified-users/import — Upload Excel/CSV file
 router.post('/import', authenticate, authorizeRoles('super_admin', 'department_admin'), uploadFile.single('file'), importFile);
+
+// POST /api/verified-users/bulk-delete — Bulk delete verified users
+router.post('/bulk-delete', authenticate, authorizeRoles('super_admin', 'department_admin'), bulkDeleteVerifiedUsers);
+
+// DELETE /api/verified-users/bulk — Bulk delete verified users
+router.delete('/bulk', authenticate, authorizeRoles('super_admin', 'department_admin'), bulkDeleteVerifiedUsers);
 
 // DELETE /api/verified-users/:id — Delete a verified user
 router.delete('/:id', authenticate, authorizeRoles('super_admin', 'department_admin'), deleteVerifiedUser);

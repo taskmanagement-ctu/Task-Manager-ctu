@@ -40,7 +40,31 @@ const VerifiedUsersPage = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('All');
+  const [sortBy, setSortBy] = useState('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [loading, setLoading] = useState(false);
+
+  // ─── Multi-Selection & Bulk Delete State ───────────
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [actionSuccessMessage, setActionSuccessMessage] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteModalState, setDeleteModalState] = useState<{
+    isOpen: boolean;
+    ids: string[];
+    names: string[];
+    universityId?: string;
+    registeredCount: number;
+    isBulk: boolean;
+  }>({
+    isOpen: false,
+    ids: [],
+    names: [],
+    universityId: '',
+    registeredCount: 0,
+    isBulk: false,
+  });
+
+  const headerCheckboxRef = useRef<HTMLInputElement>(null);
 
   // ─── Upload State ───────────────────────────────────
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -98,6 +122,8 @@ const VerifiedUsersPage = () => {
         search: search || undefined,
         status: statusFilter || undefined,
         department: deptParam,
+        sortBy,
+        sortOrder,
       });
       setUsers(result.data.users);
       setPagination(result.data.pagination);
@@ -106,7 +132,7 @@ const VerifiedUsersPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, departmentFilter, isDeptAdmin, currentUser]);
+  }, [search, statusFilter, departmentFilter, sortBy, sortOrder, isDeptAdmin, currentUser]);
 
   // ─── Fetch Stats ────────────────────────────────────
   const fetchStats = useCallback(async () => {
@@ -126,10 +152,53 @@ const VerifiedUsersPage = () => {
   // ─── Debounced Search ───────────────────────────────
   const handleSearchChange = (value: string) => {
     setSearch(value);
+    setSelectedIds([]);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
       // triggers fetchUsers via useEffect dependency
     }, 300);
+  };
+
+  // ─── Multi-Selection Logic ──────────────────────────
+  const currentPageIds = users.map(u => u._id);
+  const selectedOnCurrentPage = currentPageIds.filter(id => selectedIds.includes(id));
+  const isAllPageSelected = currentPageIds.length > 0 && selectedOnCurrentPage.length === currentPageIds.length;
+  const isPartialSelected = selectedOnCurrentPage.length > 0 && !isAllPageSelected;
+
+  useEffect(() => {
+    if (headerCheckboxRef.current) {
+      headerCheckboxRef.current.indeterminate = isPartialSelected;
+    }
+  }, [isPartialSelected]);
+
+  const handleSelectAllCurrentPage = () => {
+    if (isAllPageSelected) {
+      // Deselect all on current page
+      setSelectedIds(prev => prev.filter(id => !currentPageIds.includes(id)));
+    } else {
+      // Select all on current page
+      setSelectedIds(prev => Array.from(new Set([...prev, ...currentPageIds])));
+    }
+  };
+
+  const handleToggleSelectUser = (id: string) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds([]);
+  };
+
+  // ─── Sort Handler ───────────────────────────────────
+  const handleToggleNameSort = () => {
+    if (sortBy === 'name') {
+      setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy('name');
+      setSortOrder('asc');
+    }
   };
 
   // ─── File Selection & Upload ────────────────────────
@@ -208,8 +277,8 @@ const VerifiedUsersPage = () => {
 
   // ─── Handle Inline Submit ───────────────────────────
   const handleInlineSubmit = async () => {
-    if (!inlineForm.universityId.trim() || !inlineForm.name.trim() || !inlineForm.email.trim() || !inlineForm.phone.trim()) {
-      setInlineError('All fields (University ID, Name, Email, Phone, Department) are required.');
+    if (!inlineForm.universityId.trim() || !inlineForm.name.trim() || !inlineForm.email.trim()) {
+      setInlineError('University ID, Name, and Email are required.');
       return;
     }
 
@@ -218,15 +287,22 @@ const VerifiedUsersPage = () => {
       return;
     }
 
-    if (!/^\d{10}$/.test(inlineForm.phone.trim())) {
-      setInlineError('Phone number must be exactly 10 digits.');
-      return;
-    }
-
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(inlineForm.email.trim())) {
       setInlineError('Please enter a valid email address.');
       return;
+    }
+
+    // Phone: if 10 or more digits, use last 10; if less, set '-'
+    let finalPhone = '-';
+    const rawPhone = inlineForm.phone.trim();
+    if (rawPhone && rawPhone !== '-') {
+      const digits = rawPhone.replace(/\D/g, '');
+      if (digits.length >= 10) {
+        finalPhone = digits.slice(-10);
+      } else {
+        finalPhone = '-';
+      }
     }
 
     const dept = isDeptAdmin ? currentUser?.department : (inlineForm.department || departments[0]?.name);
@@ -242,7 +318,7 @@ const VerifiedUsersPage = () => {
         universityId: inlineForm.universityId.trim(),
         name: inlineForm.name.trim(),
         email: inlineForm.email.trim(),
-        phone: inlineForm.phone.trim(),
+        phone: finalPhone,
         userType: 'staff',
         department: dept,
       });
@@ -274,20 +350,70 @@ const VerifiedUsersPage = () => {
     }
   };
 
-  // ─── Delete Single Verified User ────────────────────
-  const handleDeleteUser = async (id: string, name: string, isRegistered?: boolean) => {
-    const confirmMsg = isRegistered
-      ? `User "${name}" has already registered an account. Are you sure you want to remove them from verified users?`
-      : `Are you sure you want to delete verified user "${name}"?`;
+  // ─── Delete Handlers ────────────────────────────────
+  const handleOpenSingleDelete = (user: VerifiedUser) => {
+    setDeleteModalState({
+      isOpen: true,
+      ids: [user._id],
+      names: [user.name],
+      universityId: user.universityId,
+      registeredCount: user.isRegistered ? 1 : 0,
+      isBulk: false,
+    });
+  };
 
-    if (!window.confirm(confirmMsg)) return;
+  const handleOpenBulkDelete = () => {
+    if (selectedIds.length === 0) return;
+    const selectedUsers = users.filter(u => selectedIds.includes(u._id));
+    const registeredCount = selectedUsers.filter(u => u.isRegistered).length;
+    const names = selectedUsers.map(u => u.name);
 
+    setDeleteModalState({
+      isOpen: true,
+      ids: [...selectedIds],
+      names,
+      universityId: '',
+      registeredCount,
+      isBulk: true,
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (deleteModalState.ids.length === 0) return;
+    setIsDeleting(true);
     try {
-      await api.deleteVerifiedUser(id);
-      fetchUsers(pagination.page);
-      fetchStats();
+      const res = await api.bulkDeleteVerifiedUsers(deleteModalState.ids);
+      const count = res.data?.deletedCount ?? deleteModalState.ids.length;
+
+      // Filter out deleted IDs from selectedIds
+      const deletedSet = new Set(deleteModalState.ids);
+      setSelectedIds(prev => prev.filter(id => !deletedSet.has(id)));
+
+      setDeleteModalState({
+        isOpen: false,
+        ids: [],
+        names: [],
+        universityId: '',
+        registeredCount: 0,
+        isBulk: false,
+      });
+
+      setActionSuccessMessage(`Successfully deleted ${count} verified staff record${count > 1 ? 's' : ''}.`);
+      setTimeout(() => setActionSuccessMessage(''), 4000);
+
+      // Check if current page has items left after deletion
+      const currentPageRemaining = users.filter(u => !deletedSet.has(u._id)).length;
+      let targetPage = pagination.page;
+      if (currentPageRemaining === 0 && pagination.page > 1) {
+        targetPage = pagination.page - 1;
+      }
+
+      await fetchUsers(targetPage);
+      await fetchStats();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete user');
+      alert(err.message || 'Failed to delete user(s)');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -435,7 +561,10 @@ const VerifiedUsersPage = () => {
               <select
                 className="vu-filter-select"
                 value={departmentFilter}
-                onChange={(e) => setDepartmentFilter(e.target.value)}
+                onChange={(e) => {
+                  setDepartmentFilter(e.target.value);
+                  setSelectedIds([]);
+                }}
               >
                 <option value="All">All Departments</option>
                 {departments.map(d => (
@@ -447,7 +576,10 @@ const VerifiedUsersPage = () => {
             <select
               className="vu-filter-select"
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setSelectedIds([]);
+              }}
             >
               <option value="">All Status</option>
               <option value="registered">Registered</option>
@@ -465,8 +597,70 @@ const VerifiedUsersPage = () => {
                 <Plus size={16} /> Add User
               </button>
             )}
+
+            {selectedIds.length > 0 && (
+              <button
+                type="button"
+                className="btn btn-danger vu-add-user-btn vu-header-delete-btn"
+                onClick={handleOpenBulkDelete}
+                disabled={isDeleting}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap' }}
+                title={`Delete ${selectedIds.length} selected staff member${selectedIds.length > 1 ? 's' : ''}`}
+              >
+                <Trash2 size={16} /> Delete ({selectedIds.length})
+              </button>
+            )}
           </div>
         </div>
+
+        {/* Bulk Selection Action Bar */}
+        {selectedIds.length > 0 && (
+          <div className="vu-bulk-banner">
+            <div className="vu-bulk-banner-left">
+              <span className="vu-bulk-badge">{selectedIds.length}</span>
+              <span className="vu-bulk-counter-text">
+                {selectedIds.length === 1 ? 'staff member selected' : 'staff members selected'}
+              </span>
+              {isAllPageSelected && users.length > 0 && (
+                <span className="vu-bulk-page-info">
+                  (All {users.length} on this page)
+                </span>
+              )}
+            </div>
+            <div className="vu-bulk-banner-right">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm vu-bulk-clear-btn"
+                onClick={handleClearSelection}
+              >
+                <X size={14} /> Clear Selection
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger btn-sm vu-bulk-delete-btn"
+                onClick={handleOpenBulkDelete}
+                disabled={isDeleting}
+              >
+                <Trash2 size={15} /> Delete Selected ({selectedIds.length})
+              </button>
+            </div>
+          </div>
+        )}
+
+        {actionSuccessMessage && (
+          <div className="vu-action-success-banner">
+            <Check size={16} className="vu-action-success-icon" />
+            <span>{actionSuccessMessage}</span>
+            <button 
+              className="vu-inline-error-close" 
+              onClick={() => setActionSuccessMessage('')}
+              type="button"
+              title="Dismiss"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
 
         {inlineError && (
           <div className="vu-inline-error-banner">
@@ -495,8 +689,32 @@ const VerifiedUsersPage = () => {
               <table className="vu-table">
                 <thead>
                   <tr>
+                    <th style={{ width: '46px', textAlign: 'center' }}>
+                      <input
+                        ref={headerCheckboxRef}
+                        type="checkbox"
+                        className="vu-table-checkbox"
+                        checked={isAllPageSelected}
+                        onChange={handleSelectAllCurrentPage}
+                        title={isAllPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
+                        aria-label="Select all staff on this page"
+                      />
+                    </th>
                     <th style={{ width: '130px' }}>University ID</th>
-                    <th style={{ minWidth: '160px' }}>Name</th>
+                    <th 
+                      style={{ minWidth: '160px', cursor: 'pointer', userSelect: 'none' }}
+                      onClick={handleToggleNameSort}
+                      title="Click to toggle Name sort (A-Z / Z-A)"
+                    >
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span>Name</span>
+                        {sortBy === 'name' && (
+                          <span className="vu-sort-indicator">
+                            {sortOrder === 'asc' ? 'A → Z' : 'Z → A'}
+                          </span>
+                        )}
+                      </div>
+                    </th>
                     <th style={{ minWidth: '200px' }}>Email</th>
                     <th style={{ width: '140px' }}>Phone</th>
                     <th style={{ minWidth: '150px' }}>Department</th>
@@ -508,6 +726,9 @@ const VerifiedUsersPage = () => {
                   {/* Inline Add Row */}
                   {isInlineAdding && (
                     <tr className="vu-inline-add-row">
+                      <td style={{ textAlign: 'center' }}>
+                        <span className="vu-inline-add-dot">•</span>
+                      </td>
                       <td>
                         <input
                           ref={idInputRef}
@@ -597,33 +818,48 @@ const VerifiedUsersPage = () => {
                   )}
 
                   {/* Existing Users Rows */}
-                  {users.map((user) => (
-                    <tr key={user._id}>
-                      <td className="vu-id-cell">{user.universityId}</td>
-                      <td style={{ fontWeight: 600 }}>{user.name}</td>
-                      <td>{user.email}</td>
-                      <td>{user.phone}</td>
-                      <td>{user.department || '—'}</td>
-                      <td>
-                        <span
-                          className={`vu-status-badge ${
-                            user.isRegistered ? 'vu-status-registered' : 'vu-status-not-registered'
-                          }`}
-                        >
-                          {user.isRegistered ? 'Registered' : 'Not Registered'}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <button 
-                          className="vu-delete-btn"
-                          onClick={() => handleDeleteUser(user._id, user.name, user.isRegistered)}
-                          title="Delete user"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {users.map((user) => {
+                    const isSelected = selectedIds.includes(user._id);
+                    return (
+                      <tr 
+                        key={user._id}
+                        className={isSelected ? 'vu-row-selected' : ''}
+                      >
+                        <td style={{ textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            className="vu-table-checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelectUser(user._id)}
+                            aria-label={`Select ${user.name}`}
+                          />
+                        </td>
+                        <td className="vu-id-cell">{user.universityId}</td>
+                        <td style={{ fontWeight: 600 }}>{user.name}</td>
+                        <td>{user.email}</td>
+                        <td>{user.phone}</td>
+                        <td>{user.department || '—'}</td>
+                        <td>
+                          <span
+                            className={`vu-status-badge ${
+                              user.isRegistered ? 'vu-status-registered' : 'vu-status-not-registered'
+                            }`}
+                          >
+                            {user.isRegistered ? 'Registered' : 'Not Registered'}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <button 
+                            className="vu-delete-btn"
+                            onClick={() => handleOpenSingleDelete(user)}
+                            title="Delete user"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -653,6 +889,89 @@ const VerifiedUsersPage = () => {
           </>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalState.isOpen && (
+        <div 
+          className="vu-modal-overlay" 
+          onClick={() => !isDeleting && setDeleteModalState(prev => ({ ...prev, isOpen: false }))}
+        >
+          <div className="vu-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="vu-modal-header">
+              <div className="vu-modal-icon-danger">
+                <Trash2 size={22} />
+              </div>
+              <div>
+                <h3 className="vu-modal-title">
+                  {deleteModalState.isBulk
+                    ? `Delete ${deleteModalState.ids.length} Verified Staff Member${deleteModalState.ids.length > 1 ? 's' : ''}?`
+                    : `Delete Verified Staff Member?`}
+                </h3>
+                <p className="vu-modal-desc">
+                  {deleteModalState.isBulk ? (
+                    <>You are about to delete <strong>{deleteModalState.ids.length}</strong> selected verified records from the staff directory.</>
+                  ) : (
+                    <>Are you sure you want to delete <strong>{deleteModalState.names[0]}</strong> {deleteModalState.universityId ? `(ID: ${deleteModalState.universityId})` : ''}?</>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {deleteModalState.registeredCount > 0 && (
+              <div className="vu-modal-alert">
+                <AlertCircle size={18} className="vu-modal-alert-icon" />
+                <div className="vu-modal-alert-text">
+                  <strong>Registered Account Notice:</strong>
+                  <p>
+                    {deleteModalState.isBulk ? (
+                      <>
+                        <strong>{deleteModalState.registeredCount}</strong> of the selected staff member{deleteModalState.registeredCount > 1 ? 's have' : ' has'} already registered an account.
+                      </>
+                    ) : (
+                      <>This staff member has already registered an account.</>
+                    )}
+                    {' '}Removing from this directory deletes pre-authorization, but does not delete their existing login account (manage that in Users & Permissions).
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="vu-modal-body">
+              <p className="vu-modal-warning-text">
+                This action cannot be undone. Are you sure you wish to proceed?
+              </p>
+            </div>
+
+            <div className="vu-modal-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setDeleteModalState(prev => ({ ...prev, isOpen: false }))}
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger vu-modal-delete-btn"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  'Deleting...'
+                ) : (
+                  <>
+                    <Trash2 size={16} />
+                    {deleteModalState.isBulk
+                      ? `Delete ${deleteModalState.ids.length} Users`
+                      : 'Delete User'}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

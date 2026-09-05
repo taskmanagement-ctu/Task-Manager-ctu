@@ -11,7 +11,8 @@ import {
   FileSpreadsheet, 
   UserPlus, 
   Check, 
-  X 
+  X,
+  Edit2
 } from 'lucide-react';
 
 const SuperAdminDepartmentsPage: React.FC = () => {
@@ -22,7 +23,14 @@ const SuperAdminDepartmentsPage: React.FC = () => {
   // Add Department Modal
   const [showAddModal, setShowAddModal] = useState(false);
   const [newDeptName, setNewDeptName] = useState('');
+  const [newDeptCode, setNewDeptCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Edit Department Modal state
+  const [editModalDept, setEditModalDept] = useState<Department | null>(null);
+  const [editDeptName, setEditDeptName] = useState('');
+  const [editDeptCode, setEditDeptCode] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Three-dots menu state
   const [activeMenuDeptId, setActiveMenuDeptId] = useState<string | null>(null);
@@ -74,14 +82,41 @@ const SuperAdminDepartmentsPage: React.FC = () => {
 
     try {
       setIsSubmitting(true);
-      await api.createDepartment(newDeptName.trim());
+      await api.createDepartment(newDeptName.trim(), newDeptCode.trim().toUpperCase());
       setShowAddModal(false);
       setNewDeptName('');
+      setNewDeptCode('');
       fetchDepartments();
     } catch (err: any) {
-      alert(err.message);
+      alert(err.message || 'Failed to create department');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const openEditModal = (dept: Department) => {
+    setActiveMenuDeptId(null);
+    setEditModalDept(dept);
+    setEditDeptName(dept.name || '');
+    setEditDeptCode(dept.code || '');
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editModalDept || !editDeptName.trim()) return;
+
+    try {
+      setIsSavingEdit(true);
+      await api.updateDepartment(editModalDept._id, {
+        name: editDeptName.trim(),
+        code: editDeptCode.trim().toUpperCase()
+      });
+      setEditModalDept(null);
+      fetchDepartments();
+    } catch (err: any) {
+      alert(err.message || 'Failed to update department');
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -164,13 +199,23 @@ const SuperAdminDepartmentsPage: React.FC = () => {
             <p className="text-muted" style={{ gridColumn: '1 / -1' }}>No departments found. Add one to get started.</p>
           ) : (
             departments.map((dept) => (
-              <div key={dept._id} className="dept-card">
+              <div 
+                key={dept._id} 
+                className={`dept-card ${activeMenuDeptId === dept._id ? 'menu-active' : ''}`}
+              >
                 <div className="dept-card-main">
                   <div className="dept-icon-wrapper">
                     <Building size={24} className="dept-icon" />
                   </div>
                   <div className="dept-info">
-                    <h3 className="dept-card-title">{dept.name}</h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.35rem' }}>
+                      <h3 className="dept-card-title" style={{ margin: 0 }}>{dept.name}</h3>
+                      {dept.code && (
+                        <span className="dept-code-badge" title={`Short Code: ${dept.code}`}>
+                          {dept.code}
+                        </span>
+                      )}
+                    </div>
                     <div className="dept-badge-row">
                       {getAccessBadge(dept.verifiedUserAccess)}
                       {dept.verifiedUserAccess !== 'none' && (
@@ -206,6 +251,13 @@ const SuperAdminDepartmentsPage: React.FC = () => {
                       <div className="dept-dropdown-menu">
                         <button 
                           className="dept-dropdown-item"
+                          onClick={() => openEditModal(dept)}
+                        >
+                          <Edit2 size={15} className="dept-item-icon blue" />
+                          <span>Edit Department</span>
+                        </button>
+                        <button 
+                          className="dept-dropdown-item"
                           onClick={() => openPermissionsModal(dept)}
                         >
                           <Shield size={15} className="dept-item-icon blue" />
@@ -230,34 +282,61 @@ const SuperAdminDepartmentsPage: React.FC = () => {
 
       {/* ─── Add Department Modal ─── */}
       {showAddModal && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '400px' }}>
-            <h3 style={{ marginBottom: '1rem' }}>Add Department</h3>
+        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
+          <div className="modal-content" style={{ maxWidth: '440px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0f172a' }}>Add Department</h3>
+              <button 
+                type="button"
+                onClick={() => setShowAddModal(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
             <form onSubmit={handleAddSubmit}>
-              <div className="form-group">
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, fontSize: '0.875rem' }}>
-                  Department Name
+              <div className="form-group" style={{ marginBottom: '1.2rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.45rem', fontWeight: 600, fontSize: '0.875rem', color: '#334155' }}>
+                  Department Full Name *
                 </label>
                 <input 
                   type="text"
                   className="form-control"
-                  style={{ width: '100%', padding: '0.625rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem' }}
-                  placeholder="e.g., Computer Science"
+                  style={{ width: '100%', padding: '0.625rem 0.8rem', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
+                  placeholder="e.g., School Of Engineering And Technology"
                   value={newDeptName}
                   onChange={(e) => setNewDeptName(e.target.value)}
                   required
                 />
               </div>
-              <div className="modal-actions" style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+
+              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.45rem', fontWeight: 600, fontSize: '0.875rem', color: '#334155' }}>
+                  Short Name / Code
+                </label>
+                <input 
+                  type="text"
+                  className="form-control"
+                  style={{ width: '100%', padding: '0.625rem 0.8rem', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.9rem', outline: 'none', textTransform: 'uppercase' }}
+                  placeholder="e.g., SOET"
+                  value={newDeptCode}
+                  onChange={(e) => setNewDeptCode(e.target.value.toUpperCase())}
+                />
+                <span style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '0.35rem', display: 'block' }}>
+                  Short code for quick identification (e.g., SOET, SMS).
+                </span>
+              </div>
+
+              <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
                 <button 
                   type="button" 
                   className="btn btn-secondary" 
                   onClick={() => {
                     setShowAddModal(false);
                     setNewDeptName('');
+                    setNewDeptCode('');
                   }}
                   disabled={isSubmitting}
-                  style={{ padding: '0.5rem 1rem', borderRadius: '0.375rem', border: '1px solid #cbd5e1', backgroundColor: 'white' }}
                 >
                   Cancel
                 </button>
@@ -265,9 +344,77 @@ const SuperAdminDepartmentsPage: React.FC = () => {
                   type="submit" 
                   className="btn btn-primary" 
                   disabled={!newDeptName.trim() || isSubmitting}
-                  style={{ padding: '0.5rem 1rem', borderRadius: '0.375rem', backgroundColor: '#3b82f6', color: 'white', border: 'none', fontWeight: 600 }}
                 >
                   {isSubmitting ? 'Adding...' : 'Add Department'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Edit Department Modal ─── */}
+      {editModalDept && (
+        <div className="modal-overlay" onClick={() => setEditModalDept(null)}>
+          <div className="modal-content" style={{ maxWidth: '440px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0f172a' }}>Edit Department</h3>
+              <button 
+                type="button"
+                onClick={() => setEditModalDept(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleEditSubmit}>
+              <div className="form-group" style={{ marginBottom: '1.2rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.45rem', fontWeight: 600, fontSize: '0.875rem', color: '#334155' }}>
+                  Department Full Name *
+                </label>
+                <input 
+                  type="text"
+                  className="form-control"
+                  style={{ width: '100%', padding: '0.625rem 0.8rem', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
+                  placeholder="e.g., School Of Engineering And Technology"
+                  value={editDeptName}
+                  onChange={(e) => setEditDeptName(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.45rem', fontWeight: 600, fontSize: '0.875rem', color: '#334155' }}>
+                  Short Name / Code
+                </label>
+                <input 
+                  type="text"
+                  className="form-control"
+                  style={{ width: '100%', padding: '0.625rem 0.8rem', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.9rem', outline: 'none', textTransform: 'uppercase' }}
+                  placeholder="e.g., SOET"
+                  value={editDeptCode}
+                  onChange={(e) => setEditDeptCode(e.target.value.toUpperCase())}
+                />
+                <span style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '0.35rem', display: 'block' }}>
+                  Short code for quick identification (e.g., SOET, SMS).
+                </span>
+              </div>
+
+              <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  onClick={() => setEditModalDept(null)}
+                  disabled={isSavingEdit}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn btn-primary" 
+                  disabled={!editDeptName.trim() || isSavingEdit}
+                >
+                  {isSavingEdit ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>

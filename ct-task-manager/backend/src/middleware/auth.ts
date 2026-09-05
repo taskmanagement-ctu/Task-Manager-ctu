@@ -49,9 +49,9 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     }
 
     if (!user.isActive) {
-      return res.status(401).json({
+      return res.status(403).json({
         success: false,
-        message: 'Authentication failed. Account is inactive.',
+        message: 'Your account has been suspended by super admin.',
       });
     }
 

@@ -15,21 +15,90 @@ export const getDepartments = async (req: Request, res: Response) => {
 // POST /api/departments
 export const createDepartment = async (req: Request, res: Response) => {
   try {
-    const { name } = req.body;
+    const { name, code } = req.body;
     
     if (!name || name.trim() === '') {
       return res.status(400).json({ success: false, message: 'Department name is required' });
     }
 
-    const existing = await Department.findOne({ name: name.trim() });
+    const trimmedName = name.trim();
+    const existing = await Department.findOne({ 
+      name: { $regex: new RegExp(`^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } 
+    });
     if (existing) {
       return res.status(400).json({ success: false, message: 'Department already exists' });
     }
 
-    const newDepartment = new Department({ name: name.trim() });
+    const newDepartment = new Department({ 
+      name: trimmedName,
+      code: code ? String(code).trim().toUpperCase() : ''
+    });
     await newDepartment.save();
 
     res.status(201).json({ success: true, message: 'Department created', data: { department: newDepartment } });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// PATCH /api/departments/:id (Super Admin only - Edit department name & code)
+export const updateDepartment = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, code } = req.body;
+
+    const department = await Department.findById(id);
+    if (!department) {
+      return res.status(404).json({ success: false, message: 'Department not found' });
+    }
+
+    const oldName = department.name;
+    let nameChanged = false;
+
+    if (name !== undefined) {
+      const trimmedName = String(name).trim();
+      if (!trimmedName) {
+        return res.status(400).json({ success: false, message: 'Department name cannot be empty' });
+      }
+
+      // Check if another department has this name
+      const duplicate = await Department.findOne({
+        _id: { $ne: id },
+        name: { $regex: new RegExp(`^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+      });
+      if (duplicate) {
+        return res.status(400).json({ success: false, message: 'Another department already has this name' });
+      }
+
+      if (trimmedName !== oldName) {
+        department.name = trimmedName;
+        nameChanged = true;
+      }
+    }
+
+    if (code !== undefined) {
+      department.code = code ? String(code).trim().toUpperCase() : '';
+    }
+
+    await department.save();
+
+    // If name changed, cascade update to users and verified users
+    if (nameChanged) {
+      const newName = department.name;
+      await User.updateMany({ department: oldName }, { $set: { department: newName } });
+      try {
+        const VerifiedUser = require('../models/VerifiedUser').default;
+        await VerifiedUser.updateMany({ department: oldName }, { $set: { department: newName } });
+      } catch (err) {
+        console.error('Error cascading department name to VerifiedUser:', err);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Department updated successfully',
+      data: { department }
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }

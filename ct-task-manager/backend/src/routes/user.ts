@@ -5,8 +5,10 @@ import {
   getUserById,
   updateUserRole,
   updateUserStatus,
+  deleteUser,
   getUserProfile,
   updateUserProfile,
+  changeDepartmentAdmin,
 } from '../controllers/userController';
 import { authenticate, authorizeRoles } from '../middleware/auth';
 
@@ -45,5 +47,13 @@ router.patch('/:id/role', updateUserRole);
 // @route   PATCH /api/users/:id/status
 // @desc    Activate/deactivate user
 router.patch('/:id/status', updateUserStatus);
+
+// @route   DELETE /api/users/:id
+// @desc    Permanently delete user from database
+router.delete('/:id', deleteUser);
+
+// @route   POST /api/users/change-department-admin
+// @desc    Change department admin, transferring active team assignments and setting old admin to unassigned staff
+router.post('/change-department-admin', changeDepartmentAdmin);
 
 export default router;

@@ -7,7 +7,7 @@ export const isValidUniversityId = (id: string): boolean => {
 };
 
 export const isValidPhone = (phone: string): boolean => {
-  return /^\d{10}$/.test(phone);
+  return phone === '-' || /^\d{10}$/.test(phone);
 };
 
 export const isValidEmail = (email: string): boolean => {
@@ -27,17 +27,20 @@ export const normalizeString = (value: unknown): string => {
 };
 
 /**
- * Normalize a phone number — strip spaces, dashes, and leading +91.
+ * Normalize a phone number:
+ * - If the column has 10 or more digits, extract the last 10 digits.
+ * - If the numbers are less (or missing/empty), skip the phone number and add a "-".
  */
 export const normalizePhone = (value: unknown): string => {
+  if (value === null || value === undefined) return '-';
   const raw = normalizeString(value);
-  // Remove common formatting characters
-  const cleaned = raw.replace(/[\s\-().+]/g, '');
-  // Strip leading 91 if the result is 12 digits (country code)
-  if (cleaned.length === 12 && cleaned.startsWith('91')) {
-    return cleaned.slice(2);
+  if (!raw || raw === '-') return '-';
+
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length >= 10) {
+    return digits.slice(-10);
   }
-  return cleaned;
+  return '-';
 };
 
 /**
@@ -139,14 +142,16 @@ export const validateRow = (
     });
   }
 
-  if (!isNonEmptyString(row.phone)) {
-    errors.push({ row: rowNumber, field: 'Phone', message: 'Phone number is required' });
-  } else if (!isValidPhone(row.phone)) {
-    errors.push({
-      row: rowNumber,
-      field: 'Phone',
-      message: `Invalid phone number "${row.phone}". Expected exactly 10 digits`,
-    });
+  // Phone handling: do not skip row; take last 10 digits if >= 10, or set to '-' if less
+  if (!isNonEmptyString(row.phone) || row.phone === '-') {
+    row.phone = '-';
+  } else {
+    const digits = row.phone.replace(/\D/g, '');
+    if (digits.length >= 10) {
+      row.phone = digits.slice(-10);
+    } else {
+      row.phone = '-';
+    }
   }
 
   return errors;

@@ -2,6 +2,7 @@ import express from 'express';
 import { 
   getDepartments, 
   createDepartment, 
+  updateDepartment,
   deleteDepartment,
   updateDepartmentPermissions,
   getMyDepartmentPermissions
@@ -18,6 +19,8 @@ router.get('/my-permissions', authenticate, getMyDepartmentPermissions);
 
 // Only Super Admins can manage departments
 router.post('/', authenticate, authorizeRoles('super_admin'), createDepartment);
+router.patch('/:id', authenticate, authorizeRoles('super_admin'), updateDepartment);
+router.put('/:id', authenticate, authorizeRoles('super_admin'), updateDepartment);
 router.patch('/:id/permissions', authenticate, authorizeRoles('super_admin'), updateDepartmentPermissions);
 router.delete('/:id', authenticate, authorizeRoles('super_admin'), deleteDepartment);
 

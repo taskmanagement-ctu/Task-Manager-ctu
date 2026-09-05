@@ -1117,11 +1117,11 @@ export const getNaacReport = async (req: Request, res: Response) => {
 
     const deptMap: { [dept: string]: any } = {};
 
-    // Initialize all departments
+    // Initialize all departments with exact name and code configured by Super Admin
     allDepartments.forEach((d: any) => {
       deptMap[d.name] = {
         department: d.name,
-        code: d.code || '',
+        code: (d.code && d.code.trim()) ? d.code.trim().toUpperCase() : '',
         totalTasksGiven: 0,
         totalTasksPending: 0,
         totalTasksInReview: 0,
@@ -1136,9 +1136,15 @@ export const getNaacReport = async (req: Request, res: Response) => {
     // Also include any department present on users
     allUsers.forEach((u: any) => {
       if (u.department && !deptMap[u.department]) {
+        // Look up if this department exists in Department model (case-insensitive)
+        const matchedDept = allDepartments.find(
+          (ad: any) => ad.name.trim().toLowerCase() === u.department.trim().toLowerCase()
+        );
+        const code = matchedDept && matchedDept.code ? matchedDept.code.trim().toUpperCase() : '';
+
         deptMap[u.department] = {
           department: u.department,
-          code: '',
+          code,
           totalTasksGiven: 0,
           totalTasksPending: 0,
           totalTasksInReview: 0,
@@ -1153,14 +1159,22 @@ export const getNaacReport = async (req: Request, res: Response) => {
 
     const allUserIdsToFetchTasks: mongoose.Types.ObjectId[] = [];
 
-    // Map users to their respective department
+    // Map users to their respective department (skip unassigned staff)
     allUsers.forEach((u: any) => {
       if (u.role === 'super_admin') return; // Super admin not counted in department stats
-      const deptName = u.department || 'Unassigned Department';
+      if (!u.department || !u.department.trim() || u.department === 'Unassigned Department' || u.department === 'No Department Assigned') {
+        return; // Unassigned staff do not belong to an institutional department
+      }
+      const deptName = u.department.trim();
       if (!deptMap[deptName]) {
+        const matchedDept = allDepartments.find(
+          (ad: any) => ad.name.trim().toLowerCase() === deptName.toLowerCase()
+        );
+        const code = matchedDept && matchedDept.code ? matchedDept.code.trim().toUpperCase() : '';
+
         deptMap[deptName] = {
           department: deptName,
-          code: '',
+          code,
           totalTasksGiven: 0,
           totalTasksPending: 0,
           totalTasksInReview: 0,
@@ -1275,7 +1289,11 @@ export const getNaacReport = async (req: Request, res: Response) => {
     });
 
     // 4. Sort departments by averageRating (desc), then totalTasksCompleted (desc) and assign department rank
-    const deptList = Object.values(deptMap).filter((d: any) => d.users.length > 0 || d.totalTasksGiven > 0);
+    const deptList = Object.values(deptMap).filter((d: any) => 
+      d.department !== 'Unassigned Department' &&
+      d.department !== 'No Department Assigned' &&
+      (d.users.length > 0 || d.totalTasksGiven > 0)
+    );
     deptList.sort((a: any, b: any) => {
       if (b.averageRating !== a.averageRating) return b.averageRating - a.averageRating;
       if (b.totalTasksCompleted !== a.totalTasksCompleted) return b.totalTasksCompleted - a.totalTasksCompleted;

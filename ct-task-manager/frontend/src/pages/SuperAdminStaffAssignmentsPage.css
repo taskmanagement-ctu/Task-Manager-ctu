@@ -354,6 +354,15 @@
   border-radius: 8px;
 }
 
+.saa-existing-admin-card {
+  background: #fffbeb;
+  border: 1.5px solid #fcd34d;
+  border-radius: 10px;
+  padding: 0.95rem 1.1rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 1px 3px rgba(180, 83, 9, 0.06);
+}
+
 /* Empty & Loading States */
 .saa-empty-state {
   grid-column: 1 / -1;

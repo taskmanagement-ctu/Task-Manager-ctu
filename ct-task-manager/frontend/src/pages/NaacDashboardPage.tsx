@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { api } from '../services/api';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
 import { 
   CheckCircle, ClipboardList, Building2, BarChart3, ChevronRight, 
@@ -51,6 +51,9 @@ const NaacDashboardPage: React.FC = () => {
   const [error, setError] = useState('');
   const [expandedDept, setExpandedDept] = useState<string | null>(null);
   const [selectedDeptModal, setSelectedDeptModal] = useState<DepartmentReport | null>(null);
+
+  // Chart label display mode: 'short' (Super Admin Short Code), 'full' (Full Department Name)
+  const [chartLabelMode, setChartLabelMode] = useState<'short' | 'full'>('short');
 
   // Unified Export Dropdown States
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
@@ -106,6 +109,18 @@ const NaacDashboardPage: React.FC = () => {
   const totalUsers = data.reduce((sum, d) => sum + d.users.length, 0);
   const activeUsers = data.reduce((sum, d) => sum + d.users.filter(u => u.tasksGiven > 0).length, 0);
   const resourceUtilization = totalUsers > 0 ? ((activeUsers / totalUsers) * 100).toFixed(1) : '0.0';
+
+  const getChartTickLabel = (deptName: string): string => {
+    const item = data.find(d => d.department.toLowerCase() === deptName.toLowerCase());
+    const code = item?.code?.trim();
+    
+    if (chartLabelMode === 'short') {
+      // If Super Admin set a short code, use that code. If no code was set, show department name.
+      return code ? code : deptName;
+    }
+    // Full Name: Return exact department name set by Super Admin
+    return deptName;
+  };
 
   if (loading) return <div className="naac-loading"><div className="naac-spinner" /><span>Loading NAAC Report & Leaderboard...</span></div>;
   if (error) return <div className="naac-error">{error}</div>;
@@ -252,7 +267,7 @@ const NaacDashboardPage: React.FC = () => {
           <div className="naac-lb-grid">
             {data.map((dept, index) => {
               const rank = dept.rank || (index + 1);
-              const admin = dept.users.find(u => u.role === 'department_admin') || dept.users[0];
+              const admin = dept.users.find(u => u.role === 'department_admin');
               const avgRating = dept.averageRating || 0;
               const totalRatings = dept.totalRatings || 0;
 
@@ -273,11 +288,18 @@ const NaacDashboardPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <h4 className="naac-lb-dept-name">{dept.department}</h4>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap', marginBottom: '0.25rem' }}>
+                    <h4 className="naac-lb-dept-name" style={{ margin: 0 }}>{dept.department}</h4>
+                    {dept.code && (
+                      <span className="dept-code-badge" title={`Department Short Code: ${dept.code}`}>
+                        {dept.code}
+                      </span>
+                    )}
+                  </div>
                   
                   <div className="naac-lb-admin-line">
                     <Shield size={13} />
-                    <span>Admin: <strong>{admin ? admin.name : 'Unassigned'}</strong></span>
+                    <span>Admin: <strong>{admin ? admin.name : 'No Admin Assigned'}</strong></span>
                   </div>
 
                   <div className="naac-lb-stats-row">
@@ -310,36 +332,71 @@ const NaacDashboardPage: React.FC = () => {
 
         {/* Chart Section */}
         <div className="naac-section-card">
-          <div className="section-header-flex">
+          <div className="section-header-flex" style={{ flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
             <div>
               <h3 className="section-title">Task Progression & Completion Rate</h3>
-              <p className="section-subtitle">Comparison across major university schools</p>
+              <p className="section-subtitle">Comparison across university departments & schools</p>
+            </div>
+            <div className="naac-chart-header-controls">
+              {/* Legend */}
+              <div className="naac-chart-legend-group">
+                <span className="naac-legend-item">
+                  <span className="naac-legend-dot" style={{ backgroundColor: '#021c3b' }}></span> Completed
+                </span>
+                <span className="naac-legend-item">
+                  <span className="naac-legend-dot" style={{ backgroundColor: '#5c728a' }}></span> In Progress
+                </span>
+                <span className="naac-legend-item">
+                  <span className="naac-legend-dot" style={{ backgroundColor: '#dadddf' }}></span> Pending
+                </span>
+              </div>
+
+              {/* X-Axis Label Toggles */}
+              <div className="naac-axis-control-wrapper">
+                <span className="naac-toggle-lbl">X-Axis:</span>
+                <div className="naac-label-toggle-group">
+                  <button 
+                    type="button"
+                    className={`naac-toggle-btn ${chartLabelMode === 'short' ? 'active' : ''}`}
+                    onClick={() => setChartLabelMode('short')}
+                    title="Display Department Short Code set by Super Admin"
+                  >
+                    Short Code
+                  </button>
+                  <button 
+                    type="button"
+                    className={`naac-toggle-btn ${chartLabelMode === 'full' ? 'active' : ''}`}
+                    onClick={() => setChartLabelMode('full')}
+                    title="Display Full Department Name set by Super Admin"
+                  >
+                    Full Name
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
           
-          <div style={{ width: '100%', height: 350, marginTop: '20px' }}>
+          <div style={{ width: '100%', height: chartLabelMode === 'full' ? 390 : 360, marginTop: '20px' }}>
             <ResponsiveContainer>
               <BarChart
                 data={data}
-                margin={{ top: 20, right: 10, left: -20, bottom: 5 }}
+                margin={{ top: 20, right: 15, left: -15, bottom: chartLabelMode === 'full' ? 35 : 15 }}
                 barGap={4}
-                barSize={16}
+                barSize={18}
               >
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e9ecef" />
                 <XAxis 
                   dataKey="department" 
                   axisLine={false} 
                   tickLine={false} 
-                  tickFormatter={(val) => {
-                    if(val.includes('Engineering')) return 'ENGINEERING';
-                    if(val.includes('Management')) return 'MANAGEMENT';
-                    if(val.includes('Sciences')) return 'SCIENCES';
-                    if(val.includes('Arts')) return 'ARTS & HUM.';
-                    if(val.includes('Medicine') || val.includes('Health')) return 'MEDICINE';
-                    return val.substring(0, 10).toUpperCase();
+                  interval={0}
+                  tickFormatter={getChartTickLabel}
+                  tick={{ 
+                    fontSize: chartLabelMode === 'full' ? 9.5 : 10.5, 
+                    fill: '#475569', 
+                    fontWeight: 600 
                   }}
-                  tick={{ fontSize: 10, fill: '#6c757d', fontWeight: 600 }}
-                  dy={10}
+                  dy={chartLabelMode === 'full' ? 14 : 10}
                 />
                 <YAxis 
                   axisLine={false} 
@@ -349,12 +406,12 @@ const NaacDashboardPage: React.FC = () => {
                 <Tooltip 
                   cursor={{fill: '#f8f9fa'}}
                   contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                />
-                <Legend 
-                  verticalAlign="top" 
-                  align="right" 
-                  iconType="square" 
-                  wrapperStyle={{ top: -45, fontSize: '12px', color: '#495057' }}
+                  labelFormatter={(label: any) => {
+                    const deptName = String(label || '');
+                    const item = data.find(d => d.department.toLowerCase() === deptName.toLowerCase());
+                    const code = item?.code?.trim();
+                    return code ? `${deptName} (${code})` : deptName;
+                  }}
                 />
                 <Bar dataKey="totalTasksCompleted" name="Completed" fill="#021c3b" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="totalTasksInReview" name="In Progress" fill="#5c728a" radius={[4, 4, 0, 0]} />
@@ -388,8 +445,8 @@ const NaacDashboardPage: React.FC = () => {
               <tbody>
                 {data.map((dept, index) => {
                   const rank = dept.rank || (index + 1);
-                  const admin = dept.users.find(u => u.role === 'department_admin') || dept.users[0];
-                  const adminName = admin ? admin.name : 'Unassigned';
+                  const admin = dept.users.find(u => u.role === 'department_admin');
+                  const adminName = admin ? admin.name : 'No Admin Assigned';
                   const initials = admin ? getInitials(adminName) : dept.department.substring(0, 2).toUpperCase();
 
                   const progress = dept.completionRate || 0;
@@ -413,8 +470,15 @@ const NaacDashboardPage: React.FC = () => {
                             <span className={`naac-table-rank ${rank <= 3 ? `rank-${rank}` : ''}`}>#{rank}</span>
                             <div className={`avatar bg-color-${index % 5}`}>{initials}</div>
                             <div className="dept-admin-info">
-                              <span className="dept-name-full">{dept.department}</span>
-                              <span className="admin-name">{adminName} &bull; {admin?.role === 'department_admin' ? 'Admin' : 'Staff'}</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                                <span className="dept-name-full">{dept.department}</span>
+                                {dept.code && (
+                                  <span className="dept-code-badge" style={{ fontSize: '0.68rem', padding: '0.1rem 0.4rem' }} title={`Department Code: ${dept.code}`}>
+                                    {dept.code}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="admin-name">{adminName} {admin ? '• Admin' : ''}</span>
                             </div>
                           </div>
                         </td>

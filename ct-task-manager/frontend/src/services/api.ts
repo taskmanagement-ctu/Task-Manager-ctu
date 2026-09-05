@@ -122,6 +122,7 @@ export interface Task {
 export interface Department {
   _id: string;
   name: string;
+  code?: string;
   verifiedUserAccess?: 'none' | 'staff' | 'student' | 'both';
   canAddVerifiedUsers?: boolean;
   canUploadVerifiedUsers?: boolean;
@@ -207,6 +208,8 @@ export const api = {
     status?: string;
     userType?: string;
     department?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
   }): Promise<{ success: boolean; data: { users: VerifiedUser[]; pagination: Pagination } }> => {
     const query = new URLSearchParams();
     if (params.page) query.set('page', String(params.page));
@@ -215,6 +218,8 @@ export const api = {
     if (params.status) query.set('status', params.status);
     if (params.userType) query.set('userType', params.userType);
     if (params.department) query.set('department', params.department);
+    if (params.sortBy) query.set('sortBy', params.sortBy);
+    if (params.sortOrder) query.set('sortOrder', params.sortOrder);
 
     return fetchWithAuth(`/api/verified-users?${query.toString()}`);
   },
@@ -237,6 +242,17 @@ export const api = {
   deleteVerifiedUser: async (id: string): Promise<{ success: boolean; message: string }> => {
     return fetchWithAuth(`/api/verified-users/${id}`, {
       method: 'DELETE',
+    });
+  },
+
+  /**
+   * Bulk delete verified users.
+   */
+  bulkDeleteVerifiedUsers: async (ids: string[]): Promise<{ success: boolean; message: string; data?: { deletedCount: number } }> => {
+    return fetchWithAuth('/api/verified-users/bulk-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
     });
   },
 
@@ -276,11 +292,19 @@ export const api = {
     return fetchWithAuth('/api/departments/my-permissions');
   },
 
-  createDepartment: async (name: string): Promise<{ success: boolean; message: string; data: { department: Department } }> => {
+  createDepartment: async (name: string, code?: string): Promise<{ success: boolean; message: string; data: { department: Department } }> => {
     return fetchWithAuth('/api/departments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, code }),
+    });
+  },
+
+  updateDepartment: async (id: string, data: { name?: string; code?: string }): Promise<{ success: boolean; message: string; data: { department: Department } }> => {
+    return fetchWithAuth(`/api/departments/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
     });
   },
 
@@ -421,6 +445,26 @@ export const api = {
   },
 
   /**
+   * Change department admin smoothly, transferring active team and setting former admin to unassigned staff.
+   */
+  changeDepartmentAdmin: async (newAdminId: string, department?: string): Promise<{ success: boolean; message: string; data: { newAdmin: User; previousAdmin: User | null; transferredCount: number } }> => {
+    const response = await fetch(`${API_URL}/api/users/change-department-admin`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${tokenStorage.getToken()}`
+      },
+      body: JSON.stringify({ newAdminId, department }),
+    });
+
+    const json = await response.json();
+    if (!response.ok) {
+      throw new Error(json.message || 'Failed to change department admin');
+    }
+    return json;
+  },
+
+  /**
    * Update user status (activate/deactivate).
    */
   updateUserStatus: async (id: string, isActive: boolean): Promise<{ success: boolean; message: string; data: { user: User } }> => {
@@ -436,6 +480,24 @@ export const api = {
     const json = await response.json();
     if (!response.ok) {
       throw new Error(json.message || 'Failed to update user status');
+    }
+    return json;
+  },
+
+  /**
+   * Permanently delete a registered user from the database.
+   */
+  deleteUser: async (id: string): Promise<{ success: boolean; message: string }> => {
+    const response = await fetch(`${API_URL}/api/users/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${tokenStorage.getToken()}`
+      },
+    });
+
+    const json = await response.json();
+    if (!response.ok) {
+      throw new Error(json.message || 'Failed to delete user');
     }
     return json;
   },

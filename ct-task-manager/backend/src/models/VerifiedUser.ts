@@ -41,11 +41,11 @@ const verifiedUserSchema = new Schema<IVerifiedUser>(
 
     phone: {
       type: String,
-      required: [true, 'Phone number is required'],
+      default: '-',
       trim: true,
       validate: {
-        validator: (v: string) => /^\d{10}$/.test(v),
-        message: 'Phone number must be exactly 10 digits',
+        validator: (v: string) => !v || v === '-' || /^\d{10}$/.test(v),
+        message: 'Phone number must be exactly 10 digits or -',
       },
     },
 

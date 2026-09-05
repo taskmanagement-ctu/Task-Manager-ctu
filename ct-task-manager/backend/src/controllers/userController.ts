@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import User from '../models/User';
 import StaffAssignment from '../models/StaffAssignment';
 import Task from '../models/Task';
+import VerifiedUser from '../models/VerifiedUser';
 
 // GET /api/users
 export const getUsers = async (req: Request, res: Response) => {
@@ -146,31 +147,67 @@ export const updateUserRole = async (req: Request, res: Response) => {
     const oldRole = userToUpdate.role;
     userToUpdate.role = role;
     
-    // Update department if provided (useful for promoting staff to department_admin)
-    if (department !== undefined) {
-      userToUpdate.department = department;
+    // Check candidate's current active staff assignment to see who their admin is
+    const candidateAssignment = await StaffAssignment.findOne({ staffId: userToUpdate._id, isActive: true });
+    let previousAdminFromAssignment: any = null;
+    if (candidateAssignment) {
+      previousAdminFromAssignment = await User.findById(candidateAssignment.adminId);
+    }
+
+    // Update department if provided or infer from previous admin if promoting to department_admin
+    if (department !== undefined && department !== null && String(department).trim() !== '') {
+      userToUpdate.department = String(department).trim();
+    } else if (role === 'department_admin' && !userToUpdate.department && previousAdminFromAssignment?.department) {
+      userToUpdate.department = previousAdminFromAssignment.department;
     }
     
     await userToUpdate.save();
 
-    // Handle Single Admin Per Department rule
-    if (role === 'department_admin' && userToUpdate.department) {
-      // Find if there's already an admin for this department
-      const existingAdmin = await User.findOne({
-        role: 'department_admin',
-        department: userToUpdate.department,
-        _id: { $ne: userToUpdate._id }
-      });
+    let existingAdmin: any = null;
+
+    // Handle Single Admin Per Department rule and Team Transfer
+    if (role === 'department_admin') {
+      const targetDept = userToUpdate.department;
+
+      if (targetDept) {
+        existingAdmin = await User.findOne({
+          role: 'department_admin',
+          department: { $regex: new RegExp(`^${targetDept.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+          _id: { $ne: userToUpdate._id }
+        });
+      }
+
+      if (!existingAdmin && previousAdminFromAssignment && previousAdminFromAssignment.role === 'department_admin' && previousAdminFromAssignment._id.toString() !== userToUpdate._id.toString()) {
+        existingAdmin = previousAdminFromAssignment;
+      }
 
       if (existingAdmin) {
         // Demote existing admin to staff
         existingAdmin.role = 'staff';
         await existingAdmin.save();
 
-        // Transfer their team (active staff assignments) to the new admin
+        // Deactivate new admin's own subordinate staff assignment (cannot report to self)
         await StaffAssignment.updateMany(
-          { adminId: existingAdmin._id, isActive: true },
-          { $set: { adminId: userToUpdate._id } }
+          { staffId: userToUpdate._id, isActive: true },
+          { $set: { isActive: false } }
+        );
+
+        // Transfer all other active team members from existingAdmin to userToUpdate
+        await StaffAssignment.updateMany(
+          { adminId: existingAdmin._id, staffId: { $ne: userToUpdate._id }, isActive: true },
+          { $set: { adminId: userToUpdate._id, assignedBy: (req as any).user?._id || userToUpdate._id } }
+        );
+
+        // Ensure former admin has NO active staff assignment (former admin becomes UNASSIGNED STAFF)
+        await StaffAssignment.updateMany(
+          { staffId: existingAdmin._id, isActive: true },
+          { $set: { isActive: false } }
+        );
+      } else {
+        // Deactivate new admin's own subordinate staff assignment if promoted without an existing admin
+        await StaffAssignment.updateMany(
+          { staffId: userToUpdate._id, isActive: true },
+          { $set: { isActive: false } }
         );
       }
     }
@@ -179,7 +216,7 @@ export const updateUserRole = async (req: Request, res: Response) => {
     if (oldRole === 'department_admin' && role !== 'department_admin') {
       // Deactivate all staff assignments where this user was the admin
       // Note: If they were demoted because someone else was promoted, their team was already transferred above.
-      // This mainly applies to manual demotions by Super Admin.
+      // This mainly applies to manual demotions by Super Admin without a successor.
       await StaffAssignment.updateMany(
         { adminId: userId, isActive: true },
         { $set: { isActive: false } }
@@ -194,7 +231,9 @@ export const updateUserRole = async (req: Request, res: Response) => {
 
     return res.status(200).json({
       success: true,
-      message: 'User role updated successfully.',
+      message: existingAdmin
+        ? `Successfully promoted ${userToUpdate.name} to Department Admin. Replaced previous admin ${existingAdmin.name} and transferred team.`
+        : 'User role updated successfully.',
       data: { user: await User.findById(userId).select('-passwordHash') },
     });
   } catch (error) {
@@ -257,6 +296,62 @@ export const updateUserStatus = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error updating user status:', error);
     return res.status(500).json({ success: false, message: 'Server Error' });
+  }
+};
+
+// DELETE /api/users/:id
+// Permanently delete user from the database
+export const deleteUser = async (req: Request, res: Response) => {
+  try {
+    const userId = req.params.id;
+    const requestingUser = req.user;
+
+    // Prevent deleting own account
+    if (requestingUser && (requestingUser._id?.toString() === userId || requestingUser.id === userId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'You cannot delete your own account.',
+      });
+    }
+
+    const userToDelete = await User.findById(userId);
+    if (!userToDelete) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    // Safety: Prevent deleting the last active Super Admin
+    if (userToDelete.role === 'super_admin') {
+      const superAdminCount = await User.countDocuments({ role: 'super_admin' });
+      if (superAdminCount <= 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Cannot delete the last remaining Super Admin account.',
+        });
+      }
+    }
+
+    // Cascading cleanups:
+    // 1. Staff assignments: delete assignments associated with this user
+    await StaffAssignment.deleteMany({
+      $or: [{ staffId: userId }, { adminId: userId }],
+    });
+
+    // 2. VerifiedUser: mark as unregistered so pre-authorization record remains accurate
+    await VerifiedUser.updateMany(
+      { $or: [{ registeredUserId: userId }, { universityId: userToDelete.universityId }] },
+      { $set: { isRegistered: false, registeredUserId: null } }
+    );
+
+    // 3. Delete user document from database
+    await User.findByIdAndDelete(userId);
+
+    return res.status(200).json({
+      success: true,
+      message: `User "${userToDelete.name}" was permanently deleted from the database.`,
+    });
+  } catch (error: any) {
+    console.error('Error deleting user:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Server Error' });
   }
 };
 
@@ -521,6 +616,106 @@ export const updateUserProfile = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error updating user profile:', error);
     return res.status(500).json({ success: false, message: 'Server Error' });
+  }
+};
+
+// POST /api/users/change-department-admin
+export const changeDepartmentAdmin = async (req: Request, res: Response) => {
+  try {
+    const { newAdminId, department } = req.body;
+
+    if (!newAdminId) {
+      return res.status(400).json({ success: false, message: 'newAdminId is required.' });
+    }
+
+    const newAdmin = await User.findById(newAdminId);
+    if (!newAdmin) {
+      return res.status(404).json({ success: false, message: 'Selected user not found.' });
+    }
+
+    if (!newAdmin.isActive) {
+      return res.status(400).json({ success: false, message: 'Selected user is deactivated.' });
+    }
+
+    // 1. Check if newAdmin is currently assigned to a department admin
+    const candidateAssignment = await StaffAssignment.findOne({ staffId: newAdmin._id, isActive: true });
+    let previousAdminFromAssignment: any = null;
+    if (candidateAssignment) {
+      previousAdminFromAssignment = await User.findById(candidateAssignment.adminId);
+    }
+
+    // 2. Resolve target department
+    const targetDept = (department && String(department).trim()) ||
+      (newAdmin.department && String(newAdmin.department).trim()) ||
+      (previousAdminFromAssignment?.department && String(previousAdminFromAssignment.department).trim());
+
+    if (!targetDept) {
+      return res.status(400).json({ success: false, message: 'Department is required.' });
+    }
+
+    // 3. Find current department admin for this department
+    let currentAdmin = await User.findOne({
+      role: 'department_admin',
+      department: { $regex: new RegExp(`^${targetDept.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+      _id: { $ne: newAdmin._id }
+    });
+
+    if (!currentAdmin && previousAdminFromAssignment && previousAdminFromAssignment.role === 'department_admin' && previousAdminFromAssignment._id.toString() !== newAdmin._id.toString()) {
+      currentAdmin = previousAdminFromAssignment;
+    }
+
+    let transferredCount = 0;
+
+    if (currentAdmin) {
+      // Step A: Demote current admin to staff
+      currentAdmin.role = 'staff';
+      await currentAdmin.save();
+
+      // Step B: Deactivate new admin's own subordinate staff assignment (cannot report to self)
+      await StaffAssignment.updateMany(
+        { staffId: newAdmin._id, isActive: true },
+        { $set: { isActive: false } }
+      );
+
+      // Step C: Transfer all other active team members from currentAdmin to newAdmin
+      const transferResult = await StaffAssignment.updateMany(
+        { adminId: currentAdmin._id, staffId: { $ne: newAdmin._id }, isActive: true },
+        { $set: { adminId: newAdmin._id, assignedBy: (req as any).user?._id || newAdmin._id } }
+      );
+      transferredCount = transferResult.modifiedCount;
+
+      // Step D: Ensure currentAdmin has NO staff assignment (former admin becomes UNASSIGNED STAFF)
+      await StaffAssignment.updateMany(
+        { staffId: currentAdmin._id, isActive: true },
+        { $set: { isActive: false } }
+      );
+    } else {
+      // If no active admin was found, still deactivate new admin's subordinate assignment if any
+      await StaffAssignment.updateMany(
+        { staffId: newAdmin._id, isActive: true },
+        { $set: { isActive: false } }
+      );
+    }
+
+    // Step E: Promote newAdmin to department_admin
+    newAdmin.role = 'department_admin';
+    newAdmin.department = targetDept;
+    await newAdmin.save();
+
+    const previousAdminName = currentAdmin ? currentAdmin.name : 'Previous admin';
+
+    return res.status(200).json({
+      success: true,
+      message: `Department Admin changed successfully. ${transferredCount} team member(s) transferred to ${newAdmin.name}. ${currentAdmin ? `${previousAdminName} is now unassigned staff.` : ''}`,
+      data: {
+        newAdmin: await User.findById(newAdmin._id).select('-passwordHash'),
+        previousAdmin: currentAdmin ? await User.findById(currentAdmin._id).select('-passwordHash') : null,
+        transferredCount,
+      },
+    });
+  } catch (error: any) {
+    console.error('Error changing department admin:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Server Error' });
   }
 };
 
