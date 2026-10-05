@@ -1,10 +1,27 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 // ─── Token Management ─────────────────────────────────────
 export const tokenStorage = {
   getToken: () => localStorage.getItem('token'),
   setToken: (token: string) => localStorage.setItem('token', token),
   clearToken: () => localStorage.removeItem('token'),
+};
+
+export const parseSafeJson = async (response: Response, defaultErrorMessage: string) => {
+  const text = await response.text().catch(() => '');
+  let json: any = null;
+  if (text) {
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = null;
+    }
+  }
+  if (!response.ok) {
+    const errorMsg = json?.message || (response.status === 404 ? 'API route not found (404)' : `${defaultErrorMessage} (${response.status})`);
+    throw new Error(errorMsg);
+  }
+  return json || {};
 };
 
 const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
@@ -22,7 +39,16 @@ const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
     headers,
   });
 
-  const json = await response.json().catch(() => ({ message: 'API request failed' }));
+  const text = await response.text().catch(() => '');
+  let json: any = null;
+  if (text) {
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = null;
+    }
+  }
+
   if (!response.ok) {
     if (response.status === 401 && token) {
       tokenStorage.clearToken();
@@ -30,9 +56,9 @@ const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
         window.location.href = '/login';
       }
     }
-    throw new Error(json.message || 'API request failed');
+    throw new Error(json?.message || `API request failed (${response.status})`);
   }
-  return json;
+  return json || {};
 };
 
 // ─── Shared Types ─────────────────────────────────────────
@@ -343,11 +369,7 @@ export const api = {
       body: JSON.stringify(userData),
     });
 
-    const json = await response.json();
-    if (!response.ok) {
-      throw new Error(json.message || 'Registration failed');
-    }
-    return json;
+    return parseSafeJson(response, 'Registration failed');
   },
 
   /**
@@ -362,11 +384,7 @@ export const api = {
       body: JSON.stringify(credentials),
     });
 
-    const json = await response.json();
-    if (!response.ok) {
-      throw new Error(json.message || 'Invalid University ID or password.');
-    }
-    return json;
+    return parseSafeJson(response, 'Invalid University ID or password.');
   },
 
   /**

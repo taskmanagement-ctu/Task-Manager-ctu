@@ -277,7 +277,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ task: initialTask, onClose, onRef
 
     if (!fileIds || fileIds.length === 0) return null;
 
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const apiUrl = import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : (import.meta.env.DEV ? 'http://localhost:5000' : '');
 
     return (
       <div style={{ margin: '1rem 0', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', width: '100%', boxSizing: 'border-box' }}>
