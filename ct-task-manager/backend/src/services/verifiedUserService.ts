@@ -12,30 +12,60 @@ import {
   ImportResult,
 } from '../utils/validators';
 import VerifiedUser from '../models/VerifiedUser';
+import Department from '../models/Department';
+
+export interface ParsedSheet {
+  sheetName: string;
+  rows: Record<string, unknown>[];
+}
 
 /**
- * Parse an uploaded file buffer into raw row objects.
- * Supports .xlsx and .csv formats.
+ * Parse an uploaded file buffer into an array of sheets with their raw row objects.
+ * Supports .xlsx (multiple sheets/tabs) and .csv formats.
+ */
+export const parseAllSheets = (
+  buffer: Buffer,
+  originalName: string
+): ParsedSheet[] => {
+  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+    throw new Error('The uploaded file contains no sheets');
+  }
+
+  const sheets: ParsedSheet[] = [];
+
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) continue;
+
+    const rawRows: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, {
+      defval: '',
+    });
+
+    if (rawRows.length > 0) {
+      sheets.push({
+        sheetName,
+        rows: rawRows,
+      });
+    }
+  }
+
+  if (sheets.length === 0) {
+    throw new Error(`The uploaded file "${originalName}" contains no data rows in any sheet`);
+  }
+
+  return sheets;
+};
+
+/**
+ * Backwards-compatible parser returning flat array of rows from all sheets.
  */
 export const parseFile = (
   buffer: Buffer,
   originalName: string
 ): Record<string, unknown>[] => {
-  const workbook = XLSX.read(buffer, { type: 'buffer' });
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) {
-    throw new Error('The uploaded file contains no sheets');
-  }
-  const sheet = workbook.Sheets[sheetName];
-  const rawRows: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, {
-    defval: '',
-  });
-
-  if (rawRows.length === 0) {
-    throw new Error(`The uploaded file "${originalName}" contains no data rows`);
-  }
-
-  return rawRows;
+  const sheets = parseAllSheets(buffer, originalName);
+  return sheets.flatMap(s => s.rows);
 };
 
 /**
@@ -91,85 +121,181 @@ const validateHeaders = (rawRow: Record<string, unknown>): string[] => {
 };
 
 /**
- * Process the parsed rows: validate, normalize, and import into MongoDB.
+ * Process the parsed rows: validate, normalize, and import into MongoDB across all workbook sheets/tabs.
  */
 export const importVerifiedUsers = async (
   buffer: Buffer,
   originalName: string,
   options?: { departmentOverride?: string; defaultUserType?: 'staff' | 'student' }
 ): Promise<ImportResult> => {
-  const rawRows = parseFile(buffer, originalName);
+  const sheets = parseAllSheets(buffer, originalName);
 
-  // Validate required headers from the first row
-  const missingHeaders = validateHeaders(rawRows[0]);
-  if (missingHeaders.length > 0) {
+  // Fetch departments to smartly resolve sheet names matching department name or code
+  let existingDepartments: { name: string; code?: string }[] = [];
+  try {
+    existingDepartments = await Department.find({}, 'name code').lean();
+  } catch {
+    // If DB query fails, proceed without department name inference
+  }
+
+  const resolveDepartmentFromSheetName = (sheetName: string): string | null => {
+    const clean = sheetName.trim().toLowerCase();
+    for (const dept of existingDepartments) {
+      if (dept.name && dept.name.trim().toLowerCase() === clean) {
+        return dept.name;
+      }
+      if (dept.code && dept.code.trim().toLowerCase() === clean) {
+        return dept.name;
+      }
+    }
+    return null;
+  };
+
+  const resolveUserTypeFromSheetName = (sheetName: string): 'staff' | 'student' | null => {
+    const clean = sheetName.trim().toLowerCase();
+    if (clean.includes('student')) return 'student';
+    if (clean.includes('staff') || clean.includes('faculty') || clean.includes('teacher')) return 'staff';
+    return null;
+  };
+
+  interface ValidSheetInfo {
+    sheetName: string;
+    rows: Record<string, unknown>[];
+    sheetDepartment: string | null;
+    sheetUserType: 'staff' | 'student' | null;
+  }
+
+  const validSheets: ValidSheetInfo[] = [];
+
+  for (const sheet of sheets) {
+    const firstRow = sheet.rows[0];
+    const mappedFirstRow = mapHeaders(firstRow);
+    const hasAnyRecognizedColumn = Object.keys(mappedFirstRow).length > 0;
+
+    // If a sheet has zero recognized columns, skip it (e.g. Instructions, Summary tab)
+    if (!hasAnyRecognizedColumn) {
+      continue;
+    }
+
+    // Check required columns
+    const missingHeaders = validateHeaders(firstRow);
+    if (missingHeaders.length > 0) {
+      throw new Error(
+        `Sheet "${sheet.sheetName}" is missing required columns: ${missingHeaders.join(', ')}. ` +
+        `Required columns are: ID, Name, Email, Phone No.`
+      );
+    }
+
+    validSheets.push({
+      sheetName: sheet.sheetName,
+      rows: sheet.rows,
+      sheetDepartment: resolveDepartmentFromSheetName(sheet.sheetName),
+      sheetUserType: resolveUserTypeFromSheetName(sheet.sheetName),
+    });
+  }
+
+  if (validSheets.length === 0) {
     throw new Error(
-      `Missing required columns: ${missingHeaders.join(', ')}. ` +
+      `The uploaded file "${originalName}" contains no sheets with valid columns. ` +
       `Required columns are: ID, Name, Email, Phone No.`
     );
   }
 
   const result: ImportResult = {
-    totalRows: rawRows.length,
+    totalRows: 0,
     inserted: 0,
     updated: 0,
     skipped: 0,
     errors: [],
+    sheetsProcessed: validSheets.map(s => s.sheetName),
   };
 
-  // Phase 1: Parse, normalize, and validate all rows
-  const parsedRows: { rowNumber: number; data: ParsedVerifiedUser }[] = [];
-  const seenIds = new Map<string, number>(); // universityId → first row number
+  const isMultiSheet = validSheets.length > 1;
+  const seenIds = new Map<string, { sheetName: string; rowNumber: number }>();
+  const parsedRows: {
+    sheetName: string;
+    rowNumber: number;
+    data: ParsedVerifiedUser;
+  }[] = [];
 
-  for (let i = 0; i < rawRows.length; i++) {
-    const rowNumber = i + 2; // 1-indexed + header row
-    const mapped = mapHeaders(rawRows[i]);
+  // Phase 1: Parse, normalize, and validate all rows across all sheets
+  for (const sheetData of validSheets) {
+    const { sheetName, rows, sheetDepartment, sheetUserType } = sheetData;
+    result.totalRows += rows.length;
 
-    // Normalize specific fields
-    mapped.universityId = normalizeUniversityId(mapped.universityId);
-    mapped.phone = normalizePhone(mapped.phone);
-    mapped.email = (mapped.email || '').toLowerCase().trim();
+    for (let i = 0; i < rows.length; i++) {
+      const rowNumber = i + 2; // 1-indexed + header row
+      const mapped = mapHeaders(rows[i]);
 
-    // Validate row
-    const rowErrors = validateRow(mapped, rowNumber);
-    if (rowErrors.length > 0) {
-      result.errors.push(...rowErrors);
-      result.skipped++;
-      continue;
-    }
+      // Normalize specific fields
+      mapped.universityId = normalizeUniversityId(mapped.universityId);
+      mapped.phone = normalizePhone(mapped.phone);
+      mapped.email = (mapped.email || '').toLowerCase().trim();
 
-    // Check for duplicate University IDs within the file
-    if (seenIds.has(mapped.universityId)) {
-      result.errors.push({
-        row: rowNumber,
-        field: 'ID',
-        message: `Duplicate University ID "${mapped.universityId}" — first seen in row ${seenIds.get(mapped.universityId)}`,
+      // Validate row
+      const rowErrors = validateRow(mapped, rowNumber);
+      if (rowErrors.length > 0) {
+        for (const err of rowErrors) {
+          err.sheet = sheetName;
+          result.errors.push(err);
+        }
+        result.skipped++;
+        continue;
+      }
+
+      // Check for duplicate University IDs across the whole workbook
+      if (seenIds.has(mapped.universityId)) {
+        const firstSeen = seenIds.get(mapped.universityId)!;
+        const duplicateMsg = isMultiSheet && firstSeen.sheetName !== sheetName
+          ? `Duplicate University ID "${mapped.universityId}" — first seen in [${firstSeen.sheetName}] row ${firstSeen.rowNumber}`
+          : `Duplicate University ID "${mapped.universityId}" — first seen in row ${firstSeen.rowNumber}`;
+
+        result.errors.push({
+          row: rowNumber,
+          sheet: sheetName,
+          field: 'ID',
+          message: duplicateMsg,
+        });
+        result.skipped++;
+        continue;
+      }
+      seenIds.set(mapped.universityId, { sheetName, rowNumber });
+
+      // Determine userType
+      const rawType = (mapped.userType || '').toLowerCase().trim();
+      let userType: 'staff' | 'student';
+      if (rawType) {
+        userType = rawType.includes('student') ? 'student' : 'staff';
+      } else if (sheetUserType) {
+        userType = sheetUserType;
+      } else {
+        userType = options?.defaultUserType || 'staff';
+      }
+
+      // Determine department
+      const department =
+        options?.departmentOverride ||
+        mapped.department ||
+        sheetDepartment ||
+        null;
+
+      parsedRows.push({
+        sheetName,
+        rowNumber,
+        data: {
+          universityId: mapped.universityId,
+          name: mapped.name,
+          email: mapped.email,
+          phone: mapped.phone,
+          department,
+          userType,
+        },
       });
-      result.skipped++;
-      continue;
     }
-    seenIds.set(mapped.universityId, rowNumber);
-
-    const rawType = (mapped.userType || '').toLowerCase().trim();
-    const userType: 'staff' | 'student' = rawType.includes('student')
-      ? 'student'
-      : (options?.defaultUserType || 'staff');
-
-    parsedRows.push({
-      rowNumber,
-      data: {
-        universityId: mapped.universityId,
-        name: mapped.name,
-        email: mapped.email,
-        phone: mapped.phone,
-        department: options?.departmentOverride || mapped.department || null,
-        userType,
-      },
-    });
   }
 
   // Phase 2: Upsert valid rows into MongoDB
-  for (const { data } of parsedRows) {
+  for (const { sheetName, rowNumber, data } of parsedRows) {
     try {
       const existing = await VerifiedUser.findOne({
         universityId: data.universityId,
@@ -193,9 +319,10 @@ export const importVerifiedUsers = async (
       const message =
         err instanceof Error ? err.message : 'Unknown database error';
       result.errors.push({
-        row: 0,
+        row: rowNumber,
+        sheet: sheetName,
         field: 'database',
-        message: `Failed to save University ID "${data.universityId}": ${message}`,
+        message: `${isMultiSheet ? `[${sheetName}] ` : ''}Failed to save University ID "${data.universityId}": ${message}`,
       });
       result.skipped++;
     }

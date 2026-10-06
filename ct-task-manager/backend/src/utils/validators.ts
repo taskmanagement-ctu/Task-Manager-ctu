@@ -88,6 +88,7 @@ export const REQUIRED_FIELDS = ['universityId', 'name', 'email', 'phone'];
 
 export interface RowValidationError {
   row: number;
+  sheet?: string;
   field: string;
   message: string;
 }
@@ -107,6 +108,7 @@ export interface ImportResult {
   updated: number;
   skipped: number;
   errors: RowValidationError[];
+  sheetsProcessed?: string[];
 }
 
 /**

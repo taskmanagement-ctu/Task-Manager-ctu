@@ -10,9 +10,9 @@
 
 .nd-bell-btn {
   position: relative;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   color: #475569;
@@ -22,6 +22,7 @@
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  flex-shrink: 0;
 }
 
 .nd-bell-btn:hover {
@@ -489,10 +490,20 @@
 }
 
 /* ─── Mobile responsiveness ──────────────────────────────────── */
+@media (max-width: 640px) {
+  .nd-bell-btn {
+    width: 36px;
+    height: 36px;
+  }
 
-@media (max-width: 480px) {
   .nd-popover {
-    width: calc(100vw - 2rem);
-    right: -60px;
+    position: fixed;
+    top: 68px;
+    left: 0.75rem;
+    right: 0.75rem;
+    width: auto;
+    max-width: none;
+    max-height: calc(100vh - 80px);
+    border-radius: 14px;
   }
 }

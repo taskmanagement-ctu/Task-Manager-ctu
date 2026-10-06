@@ -6,7 +6,7 @@ import TaskCard from '../components/TaskCard';
 import TaskModal from '../components/TaskModal';
 import CreateTaskView from '../components/CreateTaskView';
 import TaskChatDrawer from '../components/TaskChatDrawer';
-import { Search, Plus } from 'lucide-react';
+import { Search, Plus, SlidersHorizontal, Maximize2, Minimize2 } from 'lucide-react';
 import { calculateUrgency } from '../utils/taskUrgency';
 import './TasksPage.css';
 
@@ -29,6 +29,10 @@ const TasksPage: React.FC = () => {
   const [schoolFilter, setSchoolFilter] = useState('All');     // Department/School filter
   const [taskTypeFilter, setTaskTypeFilter] = useState('All');
   const [teamOnlyFilter, setTeamOnlyFilter] = useState(false); // Super Admin Team Tasks toggle
+  
+  // View & Mobile Filter Controls
+  const [forceExpandedAll, setForceExpandedAll] = useState<boolean | null>(null);
+  const [showMobileFilters, setShowMobileFilters] = useState<boolean>(false);
   
   // Departments list for school filter
   const [departments, setDepartments] = useState<any[]>([]);
@@ -306,78 +310,103 @@ const TasksPage: React.FC = () => {
           </div>
         )}
 
-        {/* Desktop Filters Bar: Search | Color/Priority | School | Status | Type */}
+        {/* Desktop & Mobile Filters Bar */}
         <div className="tasks-filters-bar">
-          <div className="tasks-search-wrapper">
-            <Search className="tasks-search-icon" size={18} />
-            <input 
-              type="text" 
-              className="tasks-search-input" 
-              placeholder="Search by title, ID, or content..." 
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            />
+          <div className="tasks-search-row">
+            <div className="tasks-search-wrapper">
+              <Search className="tasks-search-icon" size={18} />
+              <input 
+                type="text" 
+                className="tasks-search-input" 
+                placeholder="Search by title, ID, or content..." 
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              />
+            </div>
+
+            {/* Mobile Filter Toggle Button */}
+            <button 
+              type="button" 
+              className={`mobile-filter-toggle-btn ${showMobileFilters ? 'active' : ''}`}
+              onClick={() => setShowMobileFilters(!showMobileFilters)}
+              aria-label="Toggle secondary filters"
+            >
+              <SlidersHorizontal size={14} />
+              <span>Filters</span>
+              {(
+                (priorityFilter !== 'All' ? 1 : 0) +
+                (schoolFilter !== 'All' ? 1 : 0) +
+                (taskTypeFilter !== 'All' ? 1 : 0) +
+                (teamOnlyFilter ? 1 : 0)
+              ) > 0 && (
+                <span className="mobile-filter-badge">
+                  {(priorityFilter !== 'All' ? 1 : 0) + (schoolFilter !== 'All' ? 1 : 0) + (taskTypeFilter !== 'All' ? 1 : 0) + (teamOnlyFilter ? 1 : 0)}
+                </span>
+              )}
+            </button>
           </div>
 
-          {/* Scope Selector: All Tasks vs My Team Tasks (Super Admin) */}
-          {user?.role === 'super_admin' && (
+          <div className={`tasks-dropdowns-group ${showMobileFilters ? 'mobile-show' : 'mobile-hide'}`}>
+            {/* Scope Selector: All Tasks vs My Team Tasks (Super Admin) */}
+            {user?.role === 'super_admin' && (
+              <select 
+                className="tasks-filter-select" 
+                value={teamOnlyFilter ? 'team' : 'all'} 
+                onChange={e => { setTeamOnlyFilter(e.target.value === 'team'); setPage(1); }}
+              >
+                <option value="all">All Tasks</option>
+                <option value="team">My Team</option>
+              </select>
+            )}
+            
+            {/* 1. Color / Priority Filter */}
             <select 
               className="tasks-filter-select" 
-              value={teamOnlyFilter ? 'team' : 'all'} 
-              onChange={e => { setTeamOnlyFilter(e.target.value === 'team'); setPage(1); }}
+              value={priorityFilter} 
+              onChange={e => { setPriorityFilter(e.target.value); setPage(1); }}
             >
-              <option value="all">All Tasks</option>
-              <option value="team">My Team</option>
+              <option value="All">Priority: All</option>
+              <option value="RED">🔴 High Priority</option>
+              <option value="YELLOW">🟡 Medium Priority</option>
+              <option value="GREEN">🟢 Low Priority</option>
+              <option value="OVERDUE">⚫ Overdue</option>
             </select>
-          )}
-          
-          {/* 1. Color / Priority Filter */}
-          <select 
-            className="tasks-filter-select" 
-            value={priorityFilter} 
-            onChange={e => { setPriorityFilter(e.target.value); setPage(1); }}
-          >
-            <option value="All">Priority: All</option>
-            <option value="RED">🔴 High Priority</option>
-            <option value="YELLOW">🟡 Medium Priority</option>
-            <option value="GREEN">🟢 Low Priority</option>
-            <option value="OVERDUE">⚫ Overdue</option>
-          </select>
 
-          {/* 2. School / Department Filter (Only for Super Admin) */}
-          {user?.role === 'super_admin' && (
-            <select 
-              className="tasks-filter-select" 
-              value={teamOnlyFilter ? 'All' : schoolFilter} 
-              onChange={e => { setSchoolFilter(e.target.value); setPage(1); }}
-              disabled={teamOnlyFilter}
-              style={teamOnlyFilter ? { opacity: 0.55, cursor: 'not-allowed', backgroundColor: '#f1f5f9' } : {}}
-              title={teamOnlyFilter ? 'Department filter is disabled for My Team' : undefined}
-            >
-              <option value="All">{teamOnlyFilter ? 'Department: N/A (My Team)' : 'School: All'}</option>
-              {!teamOnlyFilter && departments.map(dept => (
-                <option key={dept._id} value={dept.name}>{dept.name}</option>
-              ))}
+            {/* 2. School / Department Filter (Only for Super Admin) */}
+            {user?.role === 'super_admin' && (
+              <select 
+                className="tasks-filter-select" 
+                value={teamOnlyFilter ? 'All' : schoolFilter} 
+                onChange={e => { setSchoolFilter(e.target.value); setPage(1); }}
+                disabled={teamOnlyFilter}
+                style={teamOnlyFilter ? { opacity: 0.55, cursor: 'not-allowed', backgroundColor: '#f1f5f9' } : {}}
+                title={teamOnlyFilter ? 'Department filter is disabled for My Team' : undefined}
+              >
+                <option value="All">{teamOnlyFilter ? 'Department: N/A (My Team)' : 'School: All'}</option>
+                {!teamOnlyFilter && departments.map(dept => (
+                  <option key={dept._id} value={dept.name}>{dept.name}</option>
+                ))}
+              </select>
+            )}
+
+            {/* 3. Status Filter */}
+            <select className="tasks-filter-select" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
+              <option value="All">Status: All</option>
+              <option value="pending">Pending</option>
+              <option value="in_progress">In Progress</option>
+              <option value="submitted_for_review">In Review</option>
+              <option value="completed">Completed</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
             </select>
-          )}
 
-          {/* 3. Status Filter */}
-          <select className="tasks-filter-select" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
-            <option value="All">Status: All</option>
-            <option value="pending">Pending</option>
-            <option value="in_progress">In Progress</option>
-            <option value="submitted_for_review">In Review</option>
-            <option value="completed">Completed</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-          </select>
-
-          {/* 4. Type Filter: Main / Subtask */}
-          <select className="tasks-filter-select" value={taskTypeFilter} onChange={e => { setTaskTypeFilter(e.target.value); setPage(1); }}>
-            <option value="All">Type: All</option>
-            <option value="main">Main Task</option>
-            <option value="subtask">Subtask</option>
-          </select>
+            {/* 4. Type Filter: Main / Subtask */}
+            <select className="tasks-filter-select" value={taskTypeFilter} onChange={e => { setTaskTypeFilter(e.target.value); setPage(1); }}>
+              <option value="All">Type: All</option>
+              <option value="main">Main Task</option>
+              <option value="subtask">Subtask</option>
+            </select>
+          </div>
         </div>
 
         {error && <div className="error-message" style={{ marginBottom: '1rem' }}>{error}</div>}
@@ -398,12 +427,41 @@ const TasksPage: React.FC = () => {
                </div>
             )}
             
+            {/* View Controls Toolbar (Task count & Expand/Collapse All) */}
+            <div className="tasks-toolbar">
+              <span className="tasks-count-badge">
+                Showing <strong>{displayTasks.length}</strong> tasks
+              </span>
+
+              <div className="tasks-view-actions">
+                <button
+                  type="button"
+                  className="tasks-view-toggle-btn"
+                  onClick={() => setForceExpandedAll(prev => prev === true ? false : true)}
+                  title={forceExpandedAll === true ? "Collapse all task cards" : "Expand all task cards"}
+                >
+                  {forceExpandedAll === true ? (
+                    <>
+                      <Minimize2 size={13} />
+                      <span>Collapse All</span>
+                    </>
+                  ) : (
+                    <>
+                      <Maximize2 size={13} />
+                      <span>Expand All</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
             <div className="tasks-grid">
               {displayTasks.map(task => (
                 <TaskCard 
                   key={task._id} 
                   task={task} 
                   currentUser={user}
+                  forceExpanded={forceExpandedAll}
                   onClick={() => setSelectedTask(task)} 
                   onCreateSubtask={() => handleCreateSubtaskForTask(task._id)}
                   onOpenChat={(t) => setChatTask(t)}

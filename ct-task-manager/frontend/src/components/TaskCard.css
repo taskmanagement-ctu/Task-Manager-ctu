@@ -1,158 +1,164 @@
+/* ─── TaskCard Base ─────────────────────────────────────────── */
+
 .tc-card {
   background-color: #ffffff;
-  border-radius: 8px;
-  padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03);
   display: flex;
   flex-direction: column;
   position: relative;
   overflow: hidden;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   border-left: 4px solid #e2e8f0;
 }
 
 .tc-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+  box-shadow: 0 6px 14px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
 }
 
-/* Status Borders */
+/* ─── Status Border Accents ─── */
 .tc-border-red { border-left-color: #dc2626; }
 .tc-border-green { border-left-color: #10b981; }
 .tc-border-yellow { border-left-color: #f59e0b; }
 .tc-border-blue { border-left-color: #3b82f6; }
 .tc-border-gray { border-left-color: #94a3b8; }
 
+/* ─── Header ─── */
 .tc-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
+  gap: 0.5rem;
 }
 
 .tc-type {
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   color: #475569;
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.3rem;
   text-transform: uppercase;
 }
 
+.tc-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.tc-urgency-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .tc-status-pill {
-  padding: 0.2rem 0.6rem;
-  border-radius: 12px;
-  font-size: 0.7rem;
-  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: capitalize;
+  white-space: nowrap;
 }
 
 .tc-pill-red { background-color: #fee2e2; color: #b91c1c; }
 .tc-pill-green { background-color: #d1fae5; color: #047857; }
 .tc-pill-blue { background-color: #dbeafe; color: #1d4ed8; }
-.tc-pill-gray { background-color: #e2e8f0; color: #475569; }
+.tc-pill-gray { background-color: #f1f5f9; color: #475569; }
 
+/* ─── Title ─── */
 .tc-title {
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-size: 1.05rem;
+  font-weight: 700;
   color: #0f172a;
-  margin-bottom: 0.75rem;
-  line-height: 1.4;
+  margin: 0 0 0.5rem 0;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
 }
 
 .tc-title.completed {
   text-decoration: line-through;
+  color: #94a3b8;
+}
+
+/* ─── Collapsible Body ─── */
+.tc-collapsible-body {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.tc-parent-ref {
+  font-size: 0.75rem;
   color: #64748b;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  background-color: #f8fafc;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
 }
 
 .tc-desc {
   font-size: 0.85rem;
   color: #475569;
   line-height: 1.5;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  flex: 1;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.75rem;
+  word-break: break-word;
 }
 
-.tc-footer {
+/* Progress bar for subtasks */
+.tc-progress-container {
+  margin: 0.5rem 0 0.75rem 0;
+}
+
+.tc-progress-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 0.25rem;
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
-  border-top: 1px solid #f1f5f9;
-  padding-top: 1rem;
-  margin-top: auto;
 }
 
-.tc-footer-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.tc-footer-label {
-  font-size: 0.65rem;
-  font-weight: 700;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.tc-assignee {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.tc-avatar {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background-color: #0f172a;
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.55rem;
-  font-weight: 600;
+.tc-progress-bar {
+  height: 5px;
+  background-color: #e2e8f0;
+  border-radius: 3px;
   overflow: hidden;
 }
 
-.tc-avatar img {
-  width: 100%;
+.tc-progress-fill {
   height: 100%;
-  object-fit: cover;
+  background-color: #3b82f6;
+  border-radius: 3px;
+  transition: width 0.3s ease;
 }
 
-.tc-assignee-id {
-  font-size: 0.8rem;
-  color: #334155;
-  font-weight: 500;
-}
-
-.tc-deadline {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: #334155;
-}
-
-.tc-deadline.overdue {
-  font-weight: 700;
+/* Add Subtask Button */
+.tc-add-subtask-wrap {
+  margin: 0.5rem 0;
 }
 
 .tc-add-subtask-btn {
   background-color: transparent;
-  color: #3b82f6;
+  color: #2563eb;
   border: 1px dashed #bfdbfe;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
@@ -163,47 +169,131 @@
 
 .tc-add-subtask-btn:hover {
   background-color: #eff6ff;
-  border-color: #3b82f6;
+  border-color: #2563eb;
 }
 
-/* Progress bar for subtasks */
-.tc-progress-container {
-  margin-top: 1rem;
+/* Expanded Actions */
+.tc-expanded-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0.65rem 0 0.25rem 0;
 }
 
-.tc-progress-label {
+.tc-open-modal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #0f172a;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
   font-size: 0.75rem;
-  color: #64748b;
-  margin-bottom: 0.25rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.tc-open-modal-btn:hover {
+  background: #1e293b;
+}
+
+/* ─── Footer / Meta Bar ─── */
+.tc-footer {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 0.65rem;
+  margin-top: auto;
+  gap: 0.5rem;
 }
 
-.tc-progress-bar {
-  height: 4px;
-  background-color: #e2e8f0;
-  border-radius: 2px;
+.tc-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.tc-assignee {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.tc-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background-color: #0f172a;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  font-weight: 700;
   overflow: hidden;
+  border: 1px solid #cbd5e1;
+  flex-shrink: 0;
 }
 
-.tc-progress-fill {
+.tc-avatar img {
+  width: 100%;
   height: 100%;
-  background-color: #3b82f6;
-  border-radius: 2px;
-  transition: width 0.3s ease;
+  object-fit: cover;
 }
 
-/* Chat Button on Task Card */
+.tc-assignee-id {
+  font-size: 0.75rem;
+  color: #334155;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tc-deadline {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.tc-deadline.overdue {
+  font-weight: 700;
+  color: #dc2626 !important;
+}
+
+.tc-completion-timeline {
+  font-size: 0.68rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  width: 100%;
+}
+
+.tc-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+/* ─── Chat Button ─── */
 .tc-chat-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
+  gap: 0.25rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   color: #334155;
   font-size: 0.72rem;
   font-weight: 600;
-  padding: 0.2rem 0.55rem;
+  padding: 0.22rem 0.5rem;
   border-radius: 12px;
   cursor: pointer;
   position: relative;
@@ -211,10 +301,9 @@
 }
 
 .tc-chat-btn:hover {
-  background: #e0f2fe;
-  border-color: #38bdf8;
-  color: #0284c7;
-  transform: translateY(-1px);
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
 }
 
 .tc-chat-btn.has-unread {
@@ -223,32 +312,147 @@
   color: #92400e;
 }
 
-.tc-chat-btn.has-unread:hover {
-  background: #fde68a;
-}
-
 .tc-chat-count {
-  background: #0284c7;
+  background: #2563eb;
   color: #ffffff;
   font-size: 0.6rem;
   font-weight: 700;
-  padding: 0.05rem 0.35rem;
+  padding: 0.05rem 0.3rem;
   border-radius: 8px;
   line-height: 1.2;
 }
 
 .tc-unread-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background-color: #ef4444;
-  box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
-  animation: pulseDot 1.5s infinite;
+  box-shadow: 0 0 5px rgba(239, 68, 68, 0.6);
+  animation: tcDotPulse 1.5s infinite;
 }
 
-@keyframes pulseDot {
-  0% { transform: scale(0.9); opacity: 0.8; }
+@keyframes tcDotPulse {
+  0%, 100% { transform: scale(0.9); opacity: 0.8; }
   50% { transform: scale(1.2); opacity: 1; }
-  100% { transform: scale(0.9); opacity: 0.8; }
 }
 
+/* ─── Expand / Collapse Button ─── */
+.tc-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.22rem 0.55rem;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+
+.tc-expand-btn:hover {
+  background: #0f172a;
+  color: #ffffff;
+  border-color: #0f172a;
+}
+
+.tc-expand-btn.active {
+  background: #0f172a;
+  color: #ffffff;
+  border-color: #0f172a;
+}
+
+/* ─── Desktop View (> 768px) ─── */
+@media (min-width: 769px) {
+  /* On desktop, show collapsible body by default unless explicitly collapsed */
+  .tc-collapsible-body.collapsed {
+    display: block;
+  }
+  .tc-desc {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .tc-expanded-actions {
+    display: none;
+  }
+  .tc-expand-btn {
+    display: none;
+  }
+}
+
+/* ─── Mobile View (<= 768px) ─── */
+@media (max-width: 768px) {
+  .tc-card {
+    padding: 0.85rem 0.95rem;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  }
+
+  .tc-header {
+    margin-bottom: 0.35rem;
+  }
+
+  .tc-title {
+    font-size: 0.96rem;
+    margin-bottom: 0.35rem;
+    line-height: 1.3;
+  }
+
+  /* When collapsed on mobile, body is completely hidden */
+  .tc-collapsible-body.collapsed {
+    display: none;
+  }
+
+  /* When expanded on mobile, body opens with padding and soft background */
+  .tc-collapsible-body.expanded {
+    display: block;
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+    padding: 0.65rem;
+    background-color: #f8fafc;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    animation: tcExpandAnim 0.2s ease-out;
+  }
+
+  @keyframes tcExpandAnim {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .tc-desc {
+    font-size: 0.8rem;
+    margin-bottom: 0.5rem;
+    display: block;
+    -webkit-line-clamp: unset;
+  }
+
+  .tc-footer {
+    padding-top: 0.5rem;
+    margin-top: 0.25rem;
+  }
+
+  .tc-footer-left {
+    gap: 0.5rem;
+  }
+
+  .tc-assignee-id,
+  .tc-deadline {
+    font-size: 0.72rem;
+  }
+
+  .tc-expand-btn {
+    display: inline-flex;
+  }
+}

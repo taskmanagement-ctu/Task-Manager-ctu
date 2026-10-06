@@ -1,18 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   CheckSquare, 
   Users, 
-  Search, 
   Menu, 
-  ShieldCheck
+  ShieldCheck,
+  X
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import './DeptAdminLayout.css';
 import UserProfileDropdown from './UserProfileDropdown';
 import NotificationDropdown from './NotificationDropdown';
+import TopbarBreadcrumbs from './TopbarBreadcrumbs';
 import { useSettings } from '../context/SettingsContext';
 import PortalBrandLogo from './PortalBrandLogo';
 
@@ -21,6 +22,48 @@ const DeptAdminLayout: React.FC = () => {
   const { systemName } = useSettings();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [canAccessVerified, setCanAccessVerified] = useState(false);
+
+  // Background body scroll lock & ESC key listener
+  useEffect(() => {
+    if (!sidebarOpen) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSidebarOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [sidebarOpen]);
+
+  // Touch swipe left to close drawer
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const diffX = e.changedTouches[0].clientX - touchStartX.current;
+    const diffY = e.changedTouches[0].clientY - touchStartY.current;
+
+    // Swiped left by > 40px
+    if (diffX < -40 && Math.abs(diffX) > Math.abs(diffY)) {
+      setSidebarOpen(false);
+    }
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
 
   useEffect(() => {
     api.getMyDepartmentPermissions()
@@ -48,16 +91,31 @@ const DeptAdminLayout: React.FC = () => {
         <div 
           className="dept-sidebar-overlay" 
           onClick={() => setSidebarOpen(false)} 
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
         />
       )}
 
       {/* Sidebar */}
-      <aside className={`dept-sidebar ${sidebarOpen ? 'open' : ''}`}>
+      <aside 
+        className={`dept-sidebar ${sidebarOpen ? 'open' : ''}`}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
         <div className="dept-sidebar-header">
           <div className="dept-sidebar-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <PortalBrandLogo />
             <span>{systemName}</span>
           </div>
+          <button 
+            type="button"
+            className="dept-sidebar-close-btn" 
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close navigation menu"
+            title="Close menu"
+          >
+            <X size={20} />
+          </button>
         </div>
 
         <div className="dept-sidebar-content">
@@ -84,7 +142,7 @@ const DeptAdminLayout: React.FC = () => {
       <main className="dept-main">
         {/* Top Navbar */}
         <header className="dept-topbar">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', width: '100%' }}>
+          <div className="dept-topbar-left">
             <button 
               className="mobile-menu-btn"
               onClick={() => setSidebarOpen(true)}
@@ -92,10 +150,7 @@ const DeptAdminLayout: React.FC = () => {
               <Menu size={24} />
             </button>
             
-            <div className="dept-search">
-              <Search className="dept-search-icon" size={18} />
-              <input type="text" placeholder="Search department tasks or staff..." />
-            </div>
+            <TopbarBreadcrumbs roleLabel="Department Admin" departmentName={user?.department} />
           </div>
 
           <div className="dept-topbar-right">

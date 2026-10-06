@@ -91,9 +91,14 @@ export const importFile = async (req: Request, res: Response): Promise<void> => 
       defaultUserType,
     });
 
+    const sheetCount = result.sheetsProcessed?.length || 1;
+    const sheetInfo = result.sheetsProcessed && result.sheetsProcessed.length > 1
+      ? ` across ${sheetCount} tabs (${result.sheetsProcessed.join(', ')})`
+      : '';
+
     res.status(200).json({
       success: true,
-      message: 'Import completed',
+      message: `Import completed${sheetInfo}`,
       data: result,
     });
   } catch (error) {

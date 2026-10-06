@@ -18,7 +18,16 @@ export const parseSafeJson = async (response: Response, defaultErrorMessage: str
     }
   }
   if (!response.ok) {
-    const errorMsg = json?.message || (response.status === 404 ? 'API route not found (404)' : `${defaultErrorMessage} (${response.status})`);
+    let errorMsg = json?.message;
+    if (!errorMsg) {
+      if (response.status === 502 || response.status === 503 || response.status === 504) {
+        errorMsg = `Backend server is unavailable (${response.status} Bad Gateway). Please make sure the backend server is running.`;
+      } else if (response.status === 404) {
+        errorMsg = 'API route not found (404)';
+      } else {
+        errorMsg = `${defaultErrorMessage} (${response.status})`;
+      }
+    }
     throw new Error(errorMsg);
   }
   return json || {};
@@ -34,10 +43,15 @@ const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch (networkError: any) {
+    throw new Error('Unable to connect to the server. Please check your connection or verify the backend is running.');
+  }
 
   const text = await response.text().catch(() => '');
   let json: any = null;
@@ -56,7 +70,17 @@ const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
         window.location.href = '/login';
       }
     }
-    throw new Error(json?.message || `API request failed (${response.status})`);
+    let errorMsg = json?.message;
+    if (!errorMsg) {
+      if (response.status === 502 || response.status === 503 || response.status === 504) {
+        errorMsg = `Backend server is unavailable (${response.status} Bad Gateway). Please make sure the backend server is running.`;
+      } else if (response.status === 404) {
+        errorMsg = `API route not found (404): ${endpoint}`;
+      } else {
+        errorMsg = `API request failed (${response.status})`;
+      }
+    }
+    throw new Error(errorMsg);
   }
   return json || {};
 };
@@ -165,6 +189,7 @@ export interface Pagination {
 
 export interface ImportRowError {
   row: number;
+  sheet?: string;
   field: string;
   message: string;
 }
@@ -175,6 +200,7 @@ export interface ImportResult {
   updated: number;
   skipped: number;
   errors: ImportRowError[];
+  sheetsProcessed?: string[];
 }
 
 export interface VerifiedUserStats {
@@ -192,10 +218,7 @@ export const api = {
    */
   checkHealth: async (): Promise<HealthResponse> => {
     const response = await fetch(`${API_URL}/api/health`);
-    if (!response.ok) {
-      throw new Error(`Health check failed: ${response.status}`);
-    }
-    return response.json();
+    return parseSafeJson(response, 'Health check failed');
   },
 
   // ─── Verified Users ───────────────────────────────────
@@ -207,21 +230,10 @@ export const api = {
     const formData = new FormData();
     formData.append('file', file);
 
-    const token = tokenStorage.getToken();
-    const headers: any = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-
-    const response = await fetch(`${API_URL}/api/verified-users/import`, {
+    return fetchWithAuth('/api/verified-users/import', {
       method: 'POST',
-      headers,
       body: formData,
     });
-
-    const json = await response.json();
-    if (!response.ok) {
-      throw new Error(json.message || 'Import failed');
-    }
-    return json;
   },
 
   /**
@@ -301,9 +313,7 @@ export const api = {
   getDepartments: async (): Promise<{ success: boolean; data: { departments: Department[] } }> => {
     // Public endpoint for registration form
     const response = await fetch(`${API_URL}/api/departments`);
-    const json = await response.json();
-    if (!response.ok) throw new Error(json.message || 'Failed to fetch departments');
-    return json;
+    return parseSafeJson(response, 'Failed to fetch departments');
   },
 
   getMyDepartmentPermissions: async (): Promise<{
@@ -446,78 +456,42 @@ export const api = {
    * Update user role.
    */
   updateUserRole: async (id: string, role: string, department?: string): Promise<{ success: boolean; message: string; data: { user: User } }> => {
-    const response = await fetch(`${API_URL}/api/users/${id}/role`, {
+    return fetchWithAuth(`/api/users/${id}/role`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${tokenStorage.getToken()}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role, department }),
     });
-    
-    const json = await response.json();
-    if (!response.ok) {
-      throw new Error(json.message || 'Failed to update user role');
-    }
-    return json;
   },
 
   /**
    * Change department admin smoothly, transferring active team and setting former admin to unassigned staff.
    */
   changeDepartmentAdmin: async (newAdminId: string, department?: string): Promise<{ success: boolean; message: string; data: { newAdmin: User; previousAdmin: User | null; transferredCount: number } }> => {
-    const response = await fetch(`${API_URL}/api/users/change-department-admin`, {
+    return fetchWithAuth('/api/users/change-department-admin', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${tokenStorage.getToken()}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ newAdminId, department }),
     });
-
-    const json = await response.json();
-    if (!response.ok) {
-      throw new Error(json.message || 'Failed to change department admin');
-    }
-    return json;
   },
 
   /**
    * Update user status (activate/deactivate).
    */
   updateUserStatus: async (id: string, isActive: boolean): Promise<{ success: boolean; message: string; data: { user: User } }> => {
-    const response = await fetch(`${API_URL}/api/users/${id}/status`, {
+    return fetchWithAuth(`/api/users/${id}/status`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${tokenStorage.getToken()}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ isActive }),
     });
-
-    const json = await response.json();
-    if (!response.ok) {
-      throw new Error(json.message || 'Failed to update user status');
-    }
-    return json;
   },
 
   /**
    * Permanently delete a registered user from the database.
    */
   deleteUser: async (id: string): Promise<{ success: boolean; message: string }> => {
-    const response = await fetch(`${API_URL}/api/users/${id}`, {
+    return fetchWithAuth(`/api/users/${id}`, {
       method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${tokenStorage.getToken()}`
-      },
     });
-
-    const json = await response.json();
-    if (!response.ok) {
-      throw new Error(json.message || 'Failed to delete user');
-    }
-    return json;
   },
 
   // ─── Staff Assignments ────────────────────────────────
@@ -527,31 +501,19 @@ export const api = {
   },
   
   createAssignment: async (adminId: string, staffId: string): Promise<{ success: boolean; message: string; data: any }> => {
-    const response = await fetch(`${API_URL}/api/staff-assignments`, {
+    return fetchWithAuth('/api/staff-assignments', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${tokenStorage.getToken()}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ adminId, staffId }),
     });
-    const json = await response.json();
-    if (!response.ok) throw new Error(json.message || 'Failed to create assignment');
-    return json;
   },
 
   updateAssignmentStatus: async (assignmentId: string, isActive: boolean): Promise<{ success: boolean; message: string; data: any }> => {
-    const response = await fetch(`${API_URL}/api/staff-assignments/${assignmentId}`, {
+    return fetchWithAuth(`/api/staff-assignments/${assignmentId}`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${tokenStorage.getToken()}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ isActive }),
     });
-    const json = await response.json();
-    if (!response.ok) throw new Error(json.message || 'Failed to update assignment status');
-    return json;
   },
 
   getAdminAssignments: async (adminId: string): Promise<{ success: boolean; data: { assignments: any[] } }> => {
@@ -565,16 +527,10 @@ export const api = {
   // ─── Tasks ────────────────────────────────────────────
 
   createTask: async (taskData: FormData): Promise<{ success: boolean; message: string; data: any }> => {
-    const response = await fetch(`${API_URL}/api/tasks`, {
+    return fetchWithAuth('/api/tasks', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${tokenStorage.getToken()}`
-      },
       body: taskData,
     });
-    const json = await response.json();
-    if (!response.ok) throw new Error(json.message || 'Failed to create task');
-    return json;
   },
 
   getTasks: async (params: { page?: number; limit?: number; search?: string; status?: string; assignee?: string; sortBy?: string; workflow?: string; reviewStage?: string; taskType?: string; department?: string; teamOnly?: string }): Promise<{ success: boolean; data: { tasks: any[]; pagination: Pagination } }> => {
@@ -599,58 +555,34 @@ export const api = {
   },
 
   updateTask: async (id: string, updates: { title?: string; description?: string; deadline?: string }): Promise<{ success: boolean; message: string; data: any }> => {
-    const response = await fetch(`${API_URL}/api/tasks/${id}`, {
+    return fetchWithAuth(`/api/tasks/${id}`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${tokenStorage.getToken()}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     });
-    const json = await response.json();
-    if (!response.ok) throw new Error(json.message || 'Failed to update task');
-    return json;
   },
 
   assignTask: async (id: string, assignedTo: string | null): Promise<{ success: boolean; message: string; data: any }> => {
-    const response = await fetch(`${API_URL}/api/tasks/${id}/assign`, {
+    return fetchWithAuth(`/api/tasks/${id}/assign`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${tokenStorage.getToken()}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ assignedTo }),
     });
-    const json = await response.json();
-    if (!response.ok) throw new Error(json.message || 'Failed to assign task');
-    return json;
   },
 
   updateTaskStatus: async (id: string, status: string): Promise<{ success: boolean; message: string; data: any }> => {
-    const response = await fetch(`${API_URL}/api/tasks/${id}/status`, {
+    return fetchWithAuth(`/api/tasks/${id}/status`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${tokenStorage.getToken()}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
     });
-    const json = await response.json();
-    if (!response.ok) throw new Error(json.message || 'Failed to update task status');
-    return json;
   },
 
   submitTaskForReview: async (id: string, formData?: FormData): Promise<{ success: boolean; message: string; data: any }> => {
-    const response = await fetch(`${API_URL}/api/tasks/${id}/submit-review`, {
+    return fetchWithAuth(`/api/tasks/${id}/submit-review`, {
       method: 'PATCH',
-      headers: {
-        'Authorization': `Bearer ${tokenStorage.getToken()}`
-      },
       body: formData || new FormData(),
     });
-    const json = await response.json();
-    if (!response.ok) throw new Error(json.message || 'Failed to submit for review');
-    return json;
   },
 
   getNaacReport: async (): Promise<{ success: boolean; data: any }> => {
@@ -669,17 +601,11 @@ export const api = {
   },
 
   updateUserProfile: async (updates: { department?: string; phone?: string; name?: string }): Promise<{ success: boolean; message: string; data: { user: any } }> => {
-    const response = await fetch(`${API_URL}/api/users/profile`, {
+    return fetchWithAuth('/api/users/profile', {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${tokenStorage.getToken()}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     });
-    const json = await response.json();
-    if (!response.ok) throw new Error(json.message || 'Failed to update profile');
-    return json;
   },
 
   createSubtask: async (taskId: string, data: { title: string; description: string; deadline: string; assignedTo: string }): Promise<{ success: boolean; data: { task: any } }> => {
@@ -699,10 +625,7 @@ export const api = {
   },
 
   getFileMetadata: async (fileId: string): Promise<{ success: boolean; data: { file: any } }> => {
-    const response = await fetch(`${API_URL}/api/files/${fileId}/metadata`);
-    const json = await response.json();
-    if (!response.ok) throw new Error(json.message || 'Failed to fetch file metadata');
-    return json;
+    return fetchWithAuth(`/api/files/${fileId}/metadata`);
   },
 
   getTaskComments: async (taskId: string): Promise<{ success: boolean; data: TaskComment[] }> => {
@@ -753,39 +676,21 @@ export const api = {
   getSettings: async (): Promise<{ success: boolean; data: { systemName: string; [key: string]: any } }> => {
     try {
       const res = await fetch(`${API_URL}/api/settings`);
-      const json = await res.json();
-      if (res.ok && json.data) {
+      const json = await parseSafeJson(res, 'Failed to fetch settings');
+      if (json && json.data) {
         return json;
       }
       return { success: true, data: { systemName: 'Task-Manage' } };
-    } catch (e) {
+    } catch {
       return { success: true, data: { systemName: 'Task-Manage' } };
     }
   },
 
   updateSettings: async (settings: { systemName?: string; logoUrl?: string | null; logoShape?: string; logoSize?: string }): Promise<{ success: boolean; data: any; message: string }> => {
-    const response = await fetch(`${API_URL}/api/settings`, {
+    return fetchWithAuth('/api/settings', {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${tokenStorage.getToken()}`
-      },
-      body: JSON.stringify(settings)
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
     });
-
-    let json: any;
-    try {
-      json = await response.json();
-    } catch {
-      if (response.status === 413) {
-        throw new Error('Image is too large for the server. Please try a smaller image or re-crop.');
-      }
-      throw new Error(`Server returned error status ${response.status}`);
-    }
-
-    if (!response.ok) {
-      throw new Error(json.message || 'Failed to update system settings');
-    }
-    return json;
   }
 };

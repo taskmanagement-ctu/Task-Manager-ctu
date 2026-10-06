@@ -68,7 +68,7 @@ export const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({
       >
         <div className="upd-info">
           <span className="upd-name">
-            {user?.name || 'User'} {user?.universityId ? `(${user?.universityId})` : ''}
+            {user?.name || 'User'}
           </span>
           <span className="upd-role">
             {roleLabel}{user?.role !== 'super_admin' && user?.department ? ` : ${user?.department}` : ''}

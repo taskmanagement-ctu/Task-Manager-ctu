@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -9,12 +9,13 @@ import {
   UserCheck, 
   Building, 
   BarChart2,
-  Search,
-  Menu
+  Menu,
+  X
 } from 'lucide-react';
 import './SuperAdminLayout.css';
 import UserProfileDropdown from './UserProfileDropdown';
 import NotificationDropdown from './NotificationDropdown';
+import TopbarBreadcrumbs from './TopbarBreadcrumbs';
 import { useSettings } from '../context/SettingsContext';
 import PortalBrandLogo from './PortalBrandLogo';
 
@@ -22,6 +23,48 @@ const SuperAdminLayout: React.FC = () => {
   const { currentUser } = useAuth();
   const { systemName } = useSettings();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  // Background body scroll lock & ESC key listener
+  useEffect(() => {
+    if (!isMobileSidebarOpen) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsMobileSidebarOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isMobileSidebarOpen]);
+
+  // Touch swipe left to close drawer
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const diffX = e.changedTouches[0].clientX - touchStartX.current;
+    const diffY = e.changedTouches[0].clientY - touchStartY.current;
+
+    // Swiped left by > 40px
+    if (diffX < -40 && Math.abs(diffX) > Math.abs(diffY)) {
+      setIsMobileSidebarOpen(false);
+    }
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
 
   if (currentUser?.role !== 'super_admin') {
     return null; 
@@ -32,16 +75,33 @@ const SuperAdminLayout: React.FC = () => {
       {/* Mobile Backdrop */}
       {isMobileSidebarOpen && (
         <div 
-          className="sa-sidebar-backdrop" 
+          className="sa-sidebar-backdrop sa-sidebar-overlay" 
           onClick={() => setIsMobileSidebarOpen(false)} 
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
         />
       )}
 
       {/* Sidebar (Desktop & Mobile) */}
-      <aside className={`sa-sidebar ${isMobileSidebarOpen ? 'mobile-open' : ''}`}>
+      <aside 
+        className={`sa-sidebar ${isMobileSidebarOpen ? 'mobile-open' : ''}`}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
         <div className="sa-sidebar-header">
-          <PortalBrandLogo />
-          <span className="sa-sidebar-title">{systemName}</span>
+          <div className="sa-sidebar-brand-group">
+            <PortalBrandLogo />
+            <span className="sa-sidebar-title">{systemName}</span>
+          </div>
+          <button 
+            type="button"
+            className="sa-sidebar-close-btn" 
+            onClick={() => setIsMobileSidebarOpen(false)}
+            aria-label="Close navigation menu"
+            title="Close menu"
+          >
+            <X size={20} />
+          </button>
         </div>
         
         <div className="sa-sidebar-section-title">Super Admin</div>
@@ -81,10 +141,7 @@ const SuperAdminLayout: React.FC = () => {
             >
               <Menu size={24} />
             </button>
-            <div className="sa-search-wrapper">
-              <Search size={16} className="sa-search-icon" />
-              <input type="text" placeholder="Search tasks, staff, or departments..." className="sa-search-input" />
-            </div>
+            <TopbarBreadcrumbs roleLabel="Super Admin" />
           </div>
           <div className="sa-topbar-right">
             <NotificationDropdown />

@@ -1,0 +1,147 @@
+/* ─── Topbar Breadcrumbs & Context ─────────────────────────── */
+
+.tbc-container {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  user-select: none;
+}
+
+/* Section / Role Badge (Desktop) */
+.tbc-section-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.65rem;
+  background-color: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 9999px;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tbc-separator {
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+/* Active Page Title */
+.tbc-page-title-box {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.tbc-page-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+
+.tbc-dept-sub {
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Academic Session Badge */
+.tbc-session-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 600;
+  margin-left: 0.5rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tbc-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+  display: inline-block;
+  animation: tbcDotPulse 2s infinite ease-in-out;
+}
+
+@keyframes tbcDotPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.75;
+  }
+}
+
+.tbc-session-icon {
+  color: #94a3b8;
+}
+
+.tbc-session-text {
+  letter-spacing: 0.01em;
+}
+
+/* ─── Tablet View ─── */
+@media (max-width: 1024px) {
+  .tbc-session-badge {
+    display: none;
+  }
+}
+
+/* ─── Mobile View ─── */
+@media (max-width: 768px) {
+  .tbc-container {
+    gap: 0.35rem;
+  }
+
+  /* Hide section pill and separator on mobile to give full room to page title */
+  .tbc-section-badge,
+  .tbc-separator,
+  .tbc-session-badge {
+    display: none !important;
+  }
+
+  .tbc-page-title-box {
+    max-width: 180px;
+  }
+
+  .tbc-page-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+  }
+
+  .tbc-dept-sub {
+    display: none;
+  }
+}
+
+@media (max-width: 400px) {
+  .tbc-page-title-box {
+    max-width: 140px;
+  }
+  .tbc-page-title {
+    font-size: 0.88rem;
+  }
+}

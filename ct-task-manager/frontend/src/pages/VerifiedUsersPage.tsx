@@ -520,6 +520,11 @@ const VerifiedUsersPage = () => {
             {importResult && (
               <div className="vu-alert vu-alert-success">
                 <strong>Import completed successfully.</strong>
+                {importResult.sheetsProcessed && importResult.sheetsProcessed.length > 1 && (
+                  <div style={{ fontSize: '0.85rem', color: '#15803d', marginTop: '0.35rem', fontWeight: 500 }}>
+                    Processed across {importResult.sheetsProcessed.length} tabs: <strong>{importResult.sheetsProcessed.join(', ')}</strong>
+                  </div>
+                )}
                 <div className="vu-import-summary">
                   <span>{importResult.totalRows} rows processed</span>
                   <span>{importResult.inserted} new staff added</span>
@@ -532,7 +537,7 @@ const VerifiedUsersPage = () => {
                     <ul>
                       {importResult.errors.map((err, i) => (
                         <li key={i}>
-                          Row {err.row}: {err.message}
+                          {err.sheet ? `[${err.sheet}] ` : ''}Row {err.row}: {err.message}
                         </li>
                       ))}
                     </ul>
