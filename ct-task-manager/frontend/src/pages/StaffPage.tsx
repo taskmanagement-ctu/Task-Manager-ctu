@@ -13,6 +13,7 @@ import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import { calculateUrgency, getUrgencyCardStyle, getUrgencyLabel, getUrgencyColor } from '../utils/taskUrgency';
 import TaskModal from '../components/TaskModal';
+import TaskCalendarModal from '../components/TaskCalendarModal';
 import './StaffPage.css';
 
 const StaffPage: React.FC = () => {
@@ -20,6 +21,7 @@ const StaffPage: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   const fetchTasks = async () => {
     try {
@@ -224,13 +226,19 @@ const StaffPage: React.FC = () => {
                   </div>
                   <div className="deadline-info">
                     <div className="deadline-name">{task.title}</div>
-                    <div className="deadline-sub">{getUrgencyLabel(calculateUrgency(task))} Priority</div>
+                    <div className="deadline-sub">{getUrgencyLabel(calculateUrgency(task))}</div>
                   </div>
                 </div>
               ))
             )}
           </div>
-          <button className="btn-full-outline">View Calendar</button>
+          <button 
+            type="button" 
+            className="btn-full-outline"
+            onClick={() => setIsCalendarOpen(true)}
+          >
+            View Calendar
+          </button>
         </div>
 
         {/* Notifications */}
@@ -269,6 +277,14 @@ const StaffPage: React.FC = () => {
           }}
         />
       )}
+
+      {/* Task & Deadline Calendar Modal */}
+      <TaskCalendarModal 
+        isOpen={isCalendarOpen}
+        onClose={() => setIsCalendarOpen(false)}
+        tasks={tasks}
+        onSelectTask={(task) => setSelectedTask(task)}
+      />
     </div>
   );
 };
