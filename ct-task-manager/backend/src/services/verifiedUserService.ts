@@ -13,6 +13,10 @@ import {
 } from '../utils/validators';
 import VerifiedUser from '../models/VerifiedUser';
 import Department from '../models/Department';
+import {
+  findMatchingDepartment,
+  formatDepartmentDisplayName,
+} from '../utils/normalization';
 
 export interface ParsedSheet {
   sheetName: string;
@@ -139,16 +143,8 @@ export const importVerifiedUsers = async (
   }
 
   const resolveDepartmentFromSheetName = (sheetName: string): string | null => {
-    const clean = sheetName.trim().toLowerCase();
-    for (const dept of existingDepartments) {
-      if (dept.name && dept.name.trim().toLowerCase() === clean) {
-        return dept.name;
-      }
-      if (dept.code && dept.code.trim().toLowerCase() === clean) {
-        return dept.name;
-      }
-    }
-    return null;
+    const matched = findMatchingDepartment(existingDepartments, sheetName);
+    return matched ? matched.name : null;
   };
 
   const resolveUserTypeFromSheetName = (sheetName: string): 'staff' | 'student' | null => {
@@ -273,11 +269,16 @@ export const importVerifiedUsers = async (
       }
 
       // Determine department
-      const department =
+      let department =
         options?.departmentOverride ||
         mapped.department ||
         sheetDepartment ||
         null;
+
+      if (department) {
+        const matched = findMatchingDepartment(existingDepartments, department);
+        department = matched ? matched.name : formatDepartmentDisplayName(department);
+      }
 
       parsedRows.push({
         sheetName,

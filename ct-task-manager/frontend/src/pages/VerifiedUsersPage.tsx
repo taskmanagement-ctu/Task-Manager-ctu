@@ -14,8 +14,18 @@ import {
   X, 
   UploadCloud, 
   AlertCircle,
-  Check
+  Check,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  ChevronDown,
+  Loader2
 } from 'lucide-react';
+import {
+  exportVerifiedUsersToExcel,
+  exportVerifiedUsersToPdf,
+  exportVerifiedUsersToCsv,
+} from '../utils/verifiedUsersExport';
 import './VerifiedUsersPage.css';
 
 const VerifiedUsersPage = () => {
@@ -88,6 +98,93 @@ const VerifiedUsersPage = () => {
 
   // Debounce timer for search
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ─── Export State ───────────────────────────────────
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    if (showExportMenu) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [showExportMenu]);
+
+  const handleExport = async (format: 'excel' | 'pdf' | 'csv', scope: 'filtered' | 'selected' = 'filtered') => {
+    try {
+      setIsExporting(true);
+      setShowExportMenu(false);
+
+      let exportData: VerifiedUser[] = [];
+
+      if (scope === 'selected' && selectedIds.length > 0) {
+        const selectedUsers = users.filter((u) => selectedIds.includes(u._id));
+        if (selectedUsers.length === selectedIds.length) {
+          exportData = selectedUsers;
+        } else {
+          const deptParam = isDeptAdmin
+            ? currentUser?.department || undefined
+            : (departmentFilter !== 'All' ? departmentFilter : undefined);
+          const fullRes = await api.getVerifiedUsers({
+            export: true,
+            limit: 10000,
+            department: deptParam,
+            status: statusFilter || undefined,
+            search: search || undefined,
+            sortBy,
+            sortOrder,
+          });
+          exportData = fullRes.data.users.filter((u) => selectedIds.includes(u._id));
+        }
+      } else {
+        const deptParam = isDeptAdmin
+          ? currentUser?.department || undefined
+          : (departmentFilter !== 'All' ? departmentFilter : undefined);
+        const fullRes = await api.getVerifiedUsers({
+          export: true,
+          limit: 10000,
+          department: deptParam,
+          status: statusFilter || undefined,
+          search: search || undefined,
+          sortBy,
+          sortOrder,
+        });
+        exportData = fullRes.data.users;
+      }
+
+      if (exportData.length === 0) {
+        alert('No verified user records available to export.');
+        return;
+      }
+
+      const filterInfo = {
+        department: isDeptAdmin ? (currentUser?.department || undefined) : departmentFilter,
+        status: statusFilter,
+        search,
+      };
+
+      if (format === 'excel') {
+        await exportVerifiedUsersToExcel(exportData, filterInfo);
+      } else if (format === 'pdf') {
+        exportVerifiedUsersToPdf(exportData, filterInfo);
+      } else if (format === 'csv') {
+        exportVerifiedUsersToCsv(exportData);
+      }
+    } catch (err) {
+      console.error('Export error:', err);
+      alert('Failed to generate export file. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // ─── Fetch Department Permissions (For Dept Admin) ──
   useEffect(() => {
@@ -591,6 +688,89 @@ const VerifiedUsersPage = () => {
               <option value="not-registered">Not Registered</option>
             </select>
 
+            {/* Export Dropdown */}
+            <div className="vu-export-dropdown-wrapper" ref={exportMenuRef}>
+              <button
+                type="button"
+                className="vu-export-btn"
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                disabled={isExporting || users.length === 0}
+                title="Export verified users directory"
+              >
+                {isExporting ? (
+                  <>
+                    <Loader2 size={16} className="vu-spin-icon" />
+                    <span>Exporting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download size={16} />
+                    <span>Export</span>
+                    <ChevronDown size={14} className={showExportMenu ? 'vu-chevron-open' : ''} />
+                  </>
+                )}
+              </button>
+
+              {showExportMenu && (
+                <div className="vu-export-menu">
+                  <div className="vu-export-menu-header">
+                    <span>Export Format</span>
+                    {selectedIds.length > 0 && (
+                      <span className="vu-export-selected-badge">{selectedIds.length} Selected</span>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    className="vu-export-item"
+                    onClick={() => handleExport('excel', selectedIds.length > 0 ? 'selected' : 'filtered')}
+                  >
+                    <FileSpreadsheet size={16} className="vu-export-icon-excel" />
+                    <div className="vu-export-item-text">
+                      <strong>Excel Spreadsheet (.xlsx)</strong>
+                      <span>Formatted with CTU theme & status badges</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="vu-export-item"
+                    onClick={() => handleExport('pdf', selectedIds.length > 0 ? 'selected' : 'filtered')}
+                  >
+                    <FileText size={16} className="vu-export-icon-pdf" />
+                    <div className="vu-export-item-text">
+                      <strong>PDF Document (.pdf)</strong>
+                      <span>Official printable report with header</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="vu-export-item"
+                    onClick={() => handleExport('csv', selectedIds.length > 0 ? 'selected' : 'filtered')}
+                  >
+                    <Download size={16} className="vu-export-icon-csv" />
+                    <div className="vu-export-item-text">
+                      <strong>CSV Data (.csv)</strong>
+                      <span>Raw table data for external software</span>
+                    </div>
+                  </button>
+
+                  {selectedIds.length > 0 && (
+                    <div className="vu-export-menu-footer">
+                      <button
+                        type="button"
+                        className="vu-export-footer-link"
+                        onClick={() => handleExport('excel', 'filtered')}
+                      >
+                        Export all {pagination.total || users.length} matching instead
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {canAdd && (
               <button
                 type="button"
@@ -633,6 +813,15 @@ const VerifiedUsersPage = () => {
               )}
             </div>
             <div className="vu-bulk-banner-right">
+              <button
+                type="button"
+                className="btn btn-sm vu-bulk-export-btn"
+                onClick={() => handleExport('excel', 'selected')}
+                disabled={isExporting}
+                title="Export selected staff to Excel"
+              >
+                <Download size={14} /> Export Selected ({selectedIds.length})
+              </button>
               <button
                 type="button"
                 className="btn btn-secondary btn-sm vu-bulk-clear-btn"

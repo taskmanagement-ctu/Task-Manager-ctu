@@ -4,6 +4,10 @@ import User from '../models/User';
 import StaffAssignment from '../models/StaffAssignment';
 import mongoose from 'mongoose';
 import { createNotification } from './notificationController';
+import {
+  findMatchingDepartment,
+  formatDepartmentDisplayName,
+} from '../utils/normalization';
 
 /** Helper to check if a Department Admin can assign/manage a specific staff member */
 const checkAdminStaffPermission = async (adminId: string, staffId: string) => {
@@ -1133,30 +1137,6 @@ export const getNaacReport = async (req: Request, res: Response) => {
       };
     });
 
-    // Also include any department present on users
-    allUsers.forEach((u: any) => {
-      if (u.department && !deptMap[u.department]) {
-        // Look up if this department exists in Department model (case-insensitive)
-        const matchedDept = allDepartments.find(
-          (ad: any) => ad.name.trim().toLowerCase() === u.department.trim().toLowerCase()
-        );
-        const code = matchedDept && matchedDept.code ? matchedDept.code.trim().toUpperCase() : '';
-
-        deptMap[u.department] = {
-          department: u.department,
-          code,
-          totalTasksGiven: 0,
-          totalTasksPending: 0,
-          totalTasksInReview: 0,
-          totalTasksCompleted: 0,
-          totalRatings: 0,
-          averageRating: 0,
-          rank: 1,
-          users: []
-        };
-      }
-    });
-
     const allUserIdsToFetchTasks: mongoose.Types.ObjectId[] = [];
 
     // Map users to their respective department (skip unassigned staff)
@@ -1165,15 +1145,15 @@ export const getNaacReport = async (req: Request, res: Response) => {
       if (!u.department || !u.department.trim() || u.department === 'Unassigned Department' || u.department === 'No Department Assigned') {
         return; // Unassigned staff do not belong to an institutional department
       }
-      const deptName = u.department.trim();
-      if (!deptMap[deptName]) {
-        const matchedDept = allDepartments.find(
-          (ad: any) => ad.name.trim().toLowerCase() === deptName.toLowerCase()
-        );
-        const code = matchedDept && matchedDept.code ? matchedDept.code.trim().toUpperCase() : '';
+      
+      // Match department using robust normalization (& and and agnostic)
+      const matchedDept = findMatchingDepartment(allDepartments, u.department);
+      const canonicalDeptName = matchedDept ? matchedDept.name : formatDepartmentDisplayName(u.department.trim());
+      const code = (matchedDept && matchedDept.code && matchedDept.code.trim()) ? matchedDept.code.trim().toUpperCase() : '';
 
-        deptMap[deptName] = {
-          department: deptName,
+      if (!deptMap[canonicalDeptName]) {
+        deptMap[canonicalDeptName] = {
+          department: canonicalDeptName,
           code,
           totalTasksGiven: 0,
           totalTasksPending: 0,
@@ -1186,12 +1166,12 @@ export const getNaacReport = async (req: Request, res: Response) => {
         };
       }
 
-      deptMap[deptName].users.push({
+      deptMap[canonicalDeptName].users.push({
         _id: u._id,
         name: u.name,
         universityId: u.universityId || '',
         role: u.role,
-        department: u.department,
+        department: canonicalDeptName,
         email: u.email,
         phone: u.phone,
         tasksGiven: 0,
@@ -1201,7 +1181,7 @@ export const getNaacReport = async (req: Request, res: Response) => {
         totalRatings: 0,
         averageRating: 0,
         onTimeRate: 100,
-        rank: 0
+        rank: 0,
       });
       allUserIdsToFetchTasks.push(u._id);
     });

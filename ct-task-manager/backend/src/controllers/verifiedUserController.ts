@@ -9,6 +9,11 @@ import {
   normalizeUniversityId, 
   normalizePhone 
 } from '../utils/validators';
+import {
+  findMatchingDepartment,
+  formatDepartmentDisplayName,
+  normalizeDepartmentName,
+} from '../utils/normalization';
 
 /**
  * Helper to check Department Admin's verified user permissions
@@ -34,7 +39,8 @@ const getDeptAdminPermissions = async (user: any) => {
     };
   }
 
-  const dept = await Department.findOne({ name: user.department });
+  const allDepts = await Department.find({});
+  const dept = findMatchingDepartment(allDepts, user.department);
   if (!dept || dept.verifiedUserAccess === 'none') {
     return {
       allowed: false,
@@ -158,6 +164,11 @@ export const createVerifiedUser = async (req: Request, res: Response): Promise<v
     }
 
     let finalDepartment = department ? String(department).trim() : null;
+    if (finalDepartment) {
+      const allDepts = await Department.find({});
+      const matched = findMatchingDepartment(allDepts, finalDepartment);
+      finalDepartment = matched ? matched.name : formatDepartmentDisplayName(finalDepartment);
+    }
 
     if (user && user.role === 'department_admin') {
       const perms = await getDeptAdminPermissions(user);
@@ -313,8 +324,11 @@ export const bulkDeleteVerifiedUsers = async (req: Request, res: Response): Prom
 export const getVerifiedUsers = async (req: Request, res: Response): Promise<void> => {
   try {
     const user = req.user;
+    const isExport = req.query.export === 'true' || req.query.all === 'true';
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const limit = isExport
+      ? Math.min(10000, Math.max(1, parseInt(req.query.limit as string) || 10000))
+      : Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
     const search = (req.query.search as string || '').trim();
     const status = (req.query.status as string || '').trim().toLowerCase();
     const userType = (req.query.userType as string || '').trim().toLowerCase();
@@ -354,7 +368,14 @@ export const getVerifiedUsers = async (req: Request, res: Response): Promise<voi
     } else {
       // Super admin or public
       if (departmentQuery && departmentQuery !== 'All') {
-        filter.department = departmentQuery;
+        const allDepts = await Department.find({});
+        const matched = findMatchingDepartment(allDepts, departmentQuery);
+        if (matched) {
+          filter.department = matched.name;
+        } else {
+          const norm = normalizeDepartmentName(departmentQuery);
+          filter.department = { $regex: new RegExp(norm.replace(/\s+/g, '.*'), 'i') };
+        }
       }
       if (userType === 'staff') {
         filter.userType = { $in: ['staff', null, undefined] };
@@ -388,7 +409,7 @@ export const getVerifiedUsers = async (req: Request, res: Response): Promise<voi
     const users = await VerifiedUser.find(filter)
       .collation({ locale: 'en', strength: 2 })
       .sort({ [sortField]: sortOrder as 1 | -1 })
-      .skip((page - 1) * limit)
+      .skip(isExport ? 0 : (page - 1) * limit)
       .limit(limit)
       .select('-__v');
 

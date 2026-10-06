@@ -3,6 +3,12 @@ import User from '../models/User';
 import StaffAssignment from '../models/StaffAssignment';
 import Task from '../models/Task';
 import VerifiedUser from '../models/VerifiedUser';
+import Department from '../models/Department';
+import {
+  areDepartmentsEqual,
+  findMatchingDepartment,
+  formatDepartmentDisplayName,
+} from '../utils/normalization';
 
 // GET /api/users
 export const getUsers = async (req: Request, res: Response) => {
@@ -432,7 +438,7 @@ export const getUserProfile = async (req: Request, res: Response) => {
     if (user.department && user.role !== 'super_admin') {
       try {
         const allDeptUsers = await User.find({ isActive: true }).select('_id name role department universityId phone email');
-        const deptMembers = allDeptUsers.filter((u: any) => u.department === user.department);
+        const deptMembers = allDeptUsers.filter((u: any) => areDepartmentsEqual(u.department, user.department));
         
         // Fetch tasks for all active department users across the university to compute rankings
         const allActiveUserIds = allDeptUsers.map((u: any) => u._id);
@@ -550,7 +556,7 @@ export const getUserProfile = async (req: Request, res: Response) => {
           return b.completed - a.completed;
         });
 
-        const rankIndex = deptRankings.findIndex(d => d.department === user.department);
+        const rankIndex = deptRankings.findIndex(d => areDepartmentsEqual(d.department, user.department));
         const deptRank = rankIndex !== -1 ? rankIndex + 1 : 1;
 
         departmentStats = {
@@ -602,7 +608,15 @@ export const updateUserProfile = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    if (department !== undefined) user.department = department ? String(department).trim() : null;
+    if (department !== undefined) {
+      if (department) {
+        const allDepts = await Department.find({}).lean();
+        const matched = findMatchingDepartment(allDepts, String(department).trim());
+        user.department = matched ? matched.name : formatDepartmentDisplayName(String(department).trim());
+      } else {
+        user.department = null;
+      }
+    }
     if (phone !== undefined && phone) user.phone = String(phone).trim();
     if (name !== undefined && name) user.name = String(name).trim();
 

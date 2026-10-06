@@ -64,6 +64,11 @@ export const connectDatabase = async (): Promise<void> => {
     });
     console.log(`✅ MongoDB connected successfully`);
     console.log(`📦 Database: ${dbName}`);
+
+    // Run department normalization sync in background to heal any historical & vs and conflicts
+    import('../services/departmentSync')
+      .then((m) => m.syncAndNormalizeDepartments())
+      .catch((err) => console.warn('Department normalization sync error:', err.message));
   } catch (error) {
     if (error instanceof Error) {
       console.error(`❌ MongoDB connection failed: ${error.message}`);

@@ -3,8 +3,13 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
 import VerifiedUser from '../models/VerifiedUser';
+import Department from '../models/Department';
 import OTP from '../models/OTP';
 import { sendOtpEmail } from '../services/emailService';
+import {
+  findMatchingDepartment,
+  formatDepartmentDisplayName,
+} from '../utils/normalization';
 
 /**
  * Send OTP for Registration or Forgot Password
@@ -365,7 +370,15 @@ export const register = async (req: Request, res: Response) => {
       role = 'super_admin';
     }
 
-    // 7. Create User with the verified registration email
+    // 7. Resolve canonical department
+    let finalDepartment = department ? String(department).trim() : (verifiedUser.department ? String(verifiedUser.department).trim() : null);
+    if (finalDepartment) {
+      const allDepts = await Department.find({}).lean();
+      const matched = findMatchingDepartment(allDepts, finalDepartment);
+      finalDepartment = matched ? matched.name : formatDepartmentDisplayName(finalDepartment);
+    }
+
+    // Create User with the verified registration email
     let newUser;
     try {
       newUser = new User({
@@ -373,7 +386,7 @@ export const register = async (req: Request, res: Response) => {
         name: name.trim(),
         email: normalizedEmail,
         phone: phone.trim(),
-        department: department ? department.trim() : null,
+        department: finalDepartment,
         passwordHash,
         role,
       });
@@ -385,7 +398,7 @@ export const register = async (req: Request, res: Response) => {
           name: name.trim(),
           email: normalizedEmail,
           phone: phone.trim(),
-          department: department ? department.trim() : null,
+          department: finalDepartment,
           passwordHash,
           role: 'staff',
         });

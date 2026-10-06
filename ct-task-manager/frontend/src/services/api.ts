@@ -296,6 +296,7 @@ export const api = {
     department?: string;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
+    export?: boolean;
   }): Promise<{ success: boolean; data: { users: VerifiedUser[]; pagination: Pagination } }> => {
     const query = new URLSearchParams();
     if (params.page) query.set('page', String(params.page));
@@ -306,6 +307,7 @@ export const api = {
     if (params.department) query.set('department', params.department);
     if (params.sortBy) query.set('sortBy', params.sortBy);
     if (params.sortOrder) query.set('sortOrder', params.sortOrder);
+    if (params.export) query.set('export', 'true');
 
     return fetchWithAuth(`/api/verified-users?${query.toString()}`);
   },

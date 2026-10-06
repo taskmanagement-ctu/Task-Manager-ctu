@@ -1,6 +1,12 @@
 import { Request, Response } from 'express';
 import Department from '../models/Department';
 import User from '../models/User';
+import {
+  normalizeDepartmentName,
+  areDepartmentsEqual,
+  formatDepartmentDisplayName,
+  findMatchingDepartment,
+} from '../utils/normalization';
 
 // GET /api/departments
 export const getDepartments = async (req: Request, res: Response) => {
@@ -22,16 +28,27 @@ export const createDepartment = async (req: Request, res: Response) => {
     }
 
     const trimmedName = name.trim();
+    const formattedName = formatDepartmentDisplayName(trimmedName);
+    const normalized = normalizeDepartmentName(trimmedName);
+
+    // Check for duplicate matching via exact regex or '&' vs 'and' normalization
     const existing = await Department.findOne({ 
-      name: { $regex: new RegExp(`^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } 
+      $or: [
+        { name: { $regex: new RegExp(`^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
+        { normalizedName: normalized },
+      ],
     });
     if (existing) {
-      return res.status(400).json({ success: false, message: 'Department already exists' });
+      return res.status(400).json({
+        success: false,
+        message: `Department already exists as "${existing.name}" (matches with '&' / 'and' normalization)`,
+      });
     }
 
     const newDepartment = new Department({ 
-      name: trimmedName,
-      code: code ? String(code).trim().toUpperCase() : ''
+      name: formattedName,
+      normalizedName: normalized,
+      code: code ? String(code).trim().toUpperCase() : '',
     });
     await newDepartment.save();
 
@@ -61,17 +78,27 @@ export const updateDepartment = async (req: Request, res: Response) => {
         return res.status(400).json({ success: false, message: 'Department name cannot be empty' });
       }
 
-      // Check if another department has this name
+      const formattedName = formatDepartmentDisplayName(trimmedName);
+      const normalized = normalizeDepartmentName(trimmedName);
+
+      // Check if another department has this name or normalized equivalent
       const duplicate = await Department.findOne({
         _id: { $ne: id },
-        name: { $regex: new RegExp(`^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+        $or: [
+          { name: { $regex: new RegExp(`^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
+          { normalizedName: normalized },
+        ],
       });
       if (duplicate) {
-        return res.status(400).json({ success: false, message: 'Another department already has this name' });
+        return res.status(400).json({
+          success: false,
+          message: `Another department already exists as "${duplicate.name}" (matches with '&' / 'and' normalization)`,
+        });
       }
 
-      if (trimmedName !== oldName) {
-        department.name = trimmedName;
+      if (formattedName !== oldName) {
+        department.name = formattedName;
+        department.normalizedName = normalized;
         nameChanged = true;
       }
     }
@@ -85,10 +112,22 @@ export const updateDepartment = async (req: Request, res: Response) => {
     // If name changed, cascade update to users and verified users
     if (nameChanged) {
       const newName = department.name;
-      await User.updateMany({ department: oldName }, { $set: { department: newName } });
+      const allUsers = await User.find({ department: { $ne: null } });
+      for (const u of allUsers) {
+        if (areDepartmentsEqual(u.department, oldName)) {
+          u.department = newName;
+          await u.save();
+        }
+      }
       try {
         const VerifiedUser = require('../models/VerifiedUser').default;
-        await VerifiedUser.updateMany({ department: oldName }, { $set: { department: newName } });
+        const allVUsers = await VerifiedUser.find({ department: { $ne: null } });
+        for (const vu of allVUsers) {
+          if (areDepartmentsEqual(vu.department, oldName)) {
+            vu.department = newName;
+            await vu.save();
+          }
+        }
       } catch (err) {
         console.error('Error cascading department name to VerifiedUser:', err);
       }
@@ -97,7 +136,7 @@ export const updateDepartment = async (req: Request, res: Response) => {
     res.json({
       success: true,
       message: 'Department updated successfully',
-      data: { department }
+      data: { department },
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -108,22 +147,27 @@ export const updateDepartment = async (req: Request, res: Response) => {
 export const deleteDepartment = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const department = await Department.findById(id);
 
+    const department = await Department.findById(id);
     if (!department) {
       return res.status(404).json({ success: false, message: 'Department not found' });
     }
 
-    // Optional: check if users are assigned to this department
-    const usersInDept = await User.countDocuments({ department: department.name });
-    if (usersInDept > 0) {
+    const deptName = department.name;
+
+    // Check if any users belong to this department (checking exact and normalized)
+    const allUsers = await User.find({ department: { $ne: null } });
+    const userCount = allUsers.filter((u) => areDepartmentsEqual(u.department, deptName)).length;
+
+    if (userCount > 0) {
       return res.status(400).json({ 
         success: false, 
-        message: `Cannot delete department because ${usersInDept} users are assigned to it.` 
+        message: `Cannot delete department: ${userCount} user(s) are assigned to it. Reassign them first.` 
       });
     }
 
     await Department.findByIdAndDelete(id);
+
     res.json({ success: true, message: 'Department deleted successfully' });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -155,7 +199,7 @@ export const updateDepartmentPermissions = async (req: Request, res: Response) =
     return res.status(200).json({
       success: true,
       message: 'Department permissions updated successfully',
-      data: { department }
+      data: { department },
     });
   } catch (error: any) {
     console.error('Error updating department permissions:', error);
@@ -176,8 +220,8 @@ export const getMyDepartmentPermissions = async (req: Request, res: Response) =>
           department: null,
           verifiedUserAccess: 'both',
           canAddVerifiedUsers: true,
-          canUploadVerifiedUsers: true
-        }
+          canUploadVerifiedUsers: true,
+        },
       });
     }
 
@@ -188,12 +232,13 @@ export const getMyDepartmentPermissions = async (req: Request, res: Response) =>
           department: null,
           verifiedUserAccess: 'none',
           canAddVerifiedUsers: false,
-          canUploadVerifiedUsers: false
-        }
+          canUploadVerifiedUsers: false,
+        },
       });
     }
 
-    const dept = await Department.findOne({ name: user.department });
+    const allDepts = await Department.find({});
+    const dept = findMatchingDepartment(allDepts, user.department);
     if (!dept) {
       return res.status(200).json({
         success: true,
@@ -201,8 +246,8 @@ export const getMyDepartmentPermissions = async (req: Request, res: Response) =>
           department: user.department,
           verifiedUserAccess: 'none',
           canAddVerifiedUsers: false,
-          canUploadVerifiedUsers: false
-        }
+          canUploadVerifiedUsers: false,
+        },
       });
     }
 
@@ -212,12 +257,11 @@ export const getMyDepartmentPermissions = async (req: Request, res: Response) =>
         department: dept.name,
         verifiedUserAccess: dept.verifiedUserAccess || 'none',
         canAddVerifiedUsers: dept.canAddVerifiedUsers ?? true,
-        canUploadVerifiedUsers: dept.canUploadVerifiedUsers ?? true
-      }
+        canUploadVerifiedUsers: dept.canUploadVerifiedUsers ?? true,
+      },
     });
   } catch (error: any) {
     console.error('Error fetching my department permissions:', error);
     return res.status(500).json({ success: false, message: error.message || 'Server error' });
   }
 };
-

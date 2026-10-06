@@ -620,3 +620,184 @@
     justify-content: flex-end;
   }
 }
+
+/* ─── Export Dropdown & Controls ─── */
+.vu-export-dropdown-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.vu-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.95rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  border-radius: 8px;
+  background-color: #ffffff;
+  color: #1e293b;
+  border: 1px solid #cbd5e1;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  white-space: nowrap;
+}
+
+.vu-export-btn:hover:not(:disabled) {
+  background-color: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.vu-export-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.vu-chevron-open {
+  transform: rotate(180deg);
+  transition: transform 0.2s ease;
+}
+
+.vu-spin-icon {
+  animation: vuSpin 1s linear infinite;
+}
+
+@keyframes vuSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.vu-export-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 295px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.15), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
+  padding: 0.5rem;
+  z-index: 100;
+  animation: vuExportMenuIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes vuExportMenuIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.vu-export-menu-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.45rem 0.65rem 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 0.35rem;
+}
+
+.vu-export-selected-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  background-color: #eff6ff;
+  color: #2563eb;
+  padding: 0.15rem 0.45rem;
+  border-radius: 9999px;
+  border: 1px solid #bfdbfe;
+}
+
+.vu-export-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease;
+}
+
+.vu-export-item:hover {
+  background-color: #f8fafc;
+}
+
+.vu-export-icon-excel {
+  color: #16a34a;
+  flex-shrink: 0;
+}
+
+.vu-export-icon-pdf {
+  color: #dc2626;
+  flex-shrink: 0;
+}
+
+.vu-export-icon-csv {
+  color: #0284c7;
+  flex-shrink: 0;
+}
+
+.vu-export-item-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.vu-export-item-text strong {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.vu-export-item-text span {
+  font-size: 0.74rem;
+  color: #64748b;
+}
+
+.vu-export-menu-footer {
+  padding-top: 0.4rem;
+  margin-top: 0.4rem;
+  border-top: 1px solid #f1f5f9;
+  text-align: center;
+}
+
+.vu-export-footer-link {
+  background: transparent;
+  border: none;
+  font-size: 0.75rem;
+  color: #2563eb;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0.25rem 0.5rem;
+}
+
+.vu-export-footer-link:hover {
+  color: #1d4ed8;
+}
+
+.vu-bulk-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background-color: #ffffff;
+  color: #1e293b;
+  border: 1px solid #cbd5e1;
+}
+
+.vu-bulk-export-btn:hover:not(:disabled) {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
