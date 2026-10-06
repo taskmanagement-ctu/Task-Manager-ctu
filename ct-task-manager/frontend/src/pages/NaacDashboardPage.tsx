@@ -431,7 +431,8 @@ const NaacDashboardPage: React.FC = () => {
           </div>
 
           <div className="breakdown-table-container">
-            <table className="breakdown-table">
+            <div className="breakdown-table-desktop">
+              <table className="breakdown-table">
               <thead>
                 <tr>
                   <th>RANK & DEPARTMENT</th>
@@ -595,6 +596,156 @@ const NaacDashboardPage: React.FC = () => {
                 })}
               </tbody>
             </table>
+            </div>
+
+            {/* Mobile Department Cards View */}
+            <div className="breakdown-cards-mobile">
+              {data.map((dept, index) => {
+                const rank = dept.rank || (index + 1);
+                const admin = dept.users.find(u => u.role === 'department_admin');
+                const adminName = admin ? admin.name : 'No Admin Assigned';
+                const progress = dept.completionRate || 0;
+                let progressColor = '#021c3b';
+                if (progress < 40) progressColor = '#ef4444';
+                else if (progress < 75) progressColor = '#f59e0b';
+                else if (progress > 90) progressColor = '#10b981';
+                const avgRating = dept.averageRating || 0;
+                const isExpanded = expandedDept === dept.department;
+
+                return (
+                  <div key={`mobile-card-${dept.department}`} className="naac-mobile-dept-card">
+                    {/* Card Header: Rank, Dept Name & Code, Rating */}
+                    <div className="nmdc-header">
+                      <div className="nmdc-header-left">
+                        <div className="nmdc-title-row">
+                          <span className={`naac-table-rank ${rank <= 3 ? `rank-${rank}` : ''}`}>#{rank}</span>
+                          <span className="nmdc-dept-name">{dept.department}</span>
+                          {dept.code && (
+                            <span className="dept-code-badge" title={`Department Code: ${dept.code}`}>
+                              {dept.code}
+                            </span>
+                          )}
+                        </div>
+                        <div className="nmdc-admin-row">
+                          <Shield size={12} className="nmdc-admin-icon" />
+                          <span className="nmdc-admin-name">{adminName}</span>
+                          {admin && <span className="nmdc-admin-tag">Admin</span>}
+                        </div>
+                      </div>
+
+                      <div className="nmdc-rating-badge">
+                        <Star size={13} fill={avgRating > 0 ? '#eab308' : 'none'} color="#eab308" />
+                        <span className="nmdc-rating-val">{avgRating > 0 ? avgRating.toFixed(1) : '—'}</span>
+                        <span className="nmdc-rating-max">/5</span>
+                      </div>
+                    </div>
+
+                    {/* 4-Item Metrics Grid */}
+                    <div className="nmdc-metrics-grid">
+                      <div className="nmdc-metric-item">
+                        <span className="nmdc-metric-lbl">Total Tasks</span>
+                        <span className="nmdc-metric-num total">{dept.totalTasksGiven}</span>
+                      </div>
+                      <div className="nmdc-metric-item">
+                        <span className="nmdc-metric-lbl">Completed</span>
+                        <span className="nmdc-metric-num comp">{dept.totalTasksCompleted}</span>
+                      </div>
+                      <div className="nmdc-metric-item">
+                        <span className="nmdc-metric-lbl">In Review</span>
+                        <span className="nmdc-metric-num rev">{dept.totalTasksInReview}</span>
+                      </div>
+                      <div className="nmdc-metric-item">
+                        <span className="nmdc-metric-lbl">Pending</span>
+                        <span className="nmdc-metric-num pend">{dept.totalTasksPending}</span>
+                      </div>
+                    </div>
+
+                    {/* Overall Progress Section */}
+                    <div className="nmdc-progress-section">
+                      <div className="nmdc-progress-info">
+                        <span className="nmdc-progress-label">Overall Completion</span>
+                        <span className="nmdc-progress-pct" style={{ color: progressColor }}>{progress}%</span>
+                      </div>
+                      <div className="nmdc-progress-bar-bg">
+                        <div 
+                          className="nmdc-progress-bar-fill" 
+                          style={{ width: `${progress}%`, backgroundColor: progressColor }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="nmdc-actions-row">
+                      <button 
+                        type="button"
+                        className="nmdc-action-btn nmdc-btn-expand"
+                        onClick={() => toggleExpand(dept.department)}
+                      >
+                        <span>{isExpanded ? 'Hide Staff Details' : `Staff Breakdown (${dept.users.length})`}</span>
+                        <ChevronDown size={14} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                      </button>
+                      
+                      <button 
+                        type="button"
+                        className="nmdc-action-btn nmdc-btn-ratings"
+                        onClick={() => setSelectedDeptModal(dept)}
+                      >
+                        <Star size={13} fill="#f59e0b" color="#f59e0b" />
+                        <span>Staff Ratings</span>
+                      </button>
+                    </div>
+
+                    {/* Expanded Staff Details */}
+                    {isExpanded && (
+                      <div className="nmdc-expanded-staff-list">
+                        <div className="nmdc-staff-list-title">Staff Members & Performance</div>
+                        {dept.users.length === 0 ? (
+                          <div className="nmdc-no-staff">No staff assigned to this department.</div>
+                        ) : (
+                          dept.users.map(user => {
+                            const userCompletion = user.tasksGiven > 0 ? Math.round((user.tasksCompleted / user.tasksGiven) * 100) : 0;
+                            const uAvg = user.averageRating || 0;
+                            return (
+                              <div key={`mobile-user-${user._id}`} className="nmdc-staff-card">
+                                <div className="nmdc-staff-top">
+                                  <div className="nmdc-staff-identity">
+                                    <span className="nmdc-staff-name">{user.name}</span>
+                                    <span className={`user-role ${user.role === 'department_admin' ? 'admin' : ''}`}>
+                                      {user.role === 'department_admin' ? 'Dept Admin' : 'Staff'}
+                                    </span>
+                                  </div>
+                                  <div className="nmdc-staff-rating">
+                                    <Star size={12} fill={uAvg > 0 ? '#eab308' : 'none'} color="#eab308" />
+                                    <span>{uAvg > 0 ? uAvg.toFixed(1) : '—'}</span>
+                                  </div>
+                                </div>
+
+                                <div className="nmdc-staff-counts">
+                                  <span>Total: <strong>{user.tasksGiven}</strong></span>
+                                  <span className="text-pend">Pend: <strong>{user.tasksPending}</strong></span>
+                                  <span className="text-rev">Rev: <strong>{user.tasksInReview}</strong></span>
+                                  <span className="text-comp">Comp: <strong>{user.tasksCompleted}</strong></span>
+                                </div>
+
+                                <div className="nmdc-staff-progress">
+                                  <div className="nmdc-staff-bar-bg">
+                                    <div 
+                                      className="nmdc-staff-bar-fill" 
+                                      style={{ width: `${userCompletion}%`, backgroundColor: userCompletion === 100 ? '#10b981' : '#6366f1' }}
+                                    />
+                                  </div>
+                                  <span className="nmdc-staff-pct">{userCompletion}%</span>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

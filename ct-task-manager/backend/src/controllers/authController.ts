@@ -3,16 +3,276 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
 import VerifiedUser from '../models/VerifiedUser';
+import OTP from '../models/OTP';
+import { sendOtpEmail } from '../services/emailService';
 
-export const register = async (req: Request, res: Response) => {
+/**
+ * Send OTP for Registration or Forgot Password
+ */
+export const sendOTP = async (req: Request, res: Response) => {
   try {
-    const { universityId, name, phone, email, password, confirmPassword, department } = req.body;
+    const { email, purpose, universityId, name } = req.body;
 
-    // 1. Basic validation
-    if (!universityId || !name || !phone || !email || !password || !confirmPassword) {
+    if (!email || !purpose) {
       return res.status(400).json({
         success: false,
-        message: 'All required fields must be provided.',
+        message: 'Email and purpose are required.',
+      });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a valid email address.',
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    if (purpose === 'registration') {
+      // 1. Check if email is already in registered users
+      const existingEmail = await User.findOne({ email: normalizedEmail });
+      if (existingEmail) {
+        return res.status(409).json({
+          success: false,
+          message: 'An account with this email is already registered.',
+        });
+      }
+
+      // 2. If universityId is provided, validate against VerifiedUser list
+      if (universityId) {
+        if (universityId.length !== 5 || !/^\d+$/.test(universityId)) {
+          return res.status(400).json({
+            success: false,
+            message: 'University ID must contain exactly 5 digits.',
+          });
+        }
+
+        const existingId = await User.findOne({ universityId });
+        if (existingId) {
+          return res.status(409).json({
+            success: false,
+            message: 'This University ID is already registered.',
+          });
+        }
+
+        const verifiedRecord = await VerifiedUser.findOne({ universityId });
+        if (!verifiedRecord) {
+          return res.status(404).json({
+            success: false,
+            message: 'Your University ID could not be found in university records. Please contact IT admin.',
+          });
+        }
+
+        if (verifiedRecord.isRegistered) {
+          return res.status(409).json({
+            success: false,
+            message: 'This University ID is already registered.',
+          });
+        }
+      }
+    } else if (purpose === 'forgot_password') {
+      // For forgot password, user must exist
+      const existingUser = await User.findOne({ email: normalizedEmail });
+      if (!existingUser) {
+        return res.status(404).json({
+          success: false,
+          message: 'No registered account found with this email address.',
+        });
+      }
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid OTP purpose.',
+      });
+    }
+
+    // Generate random 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Remove any previous active OTP for this email and purpose
+    await OTP.deleteMany({ email: normalizedEmail, purpose });
+
+    // Save new OTP record
+    await OTP.create({
+      email: normalizedEmail,
+      otp,
+      purpose,
+      expiresAt,
+      attempts: 0,
+      verified: false,
+    });
+
+    // Send email using Nodemailer
+    await sendOtpEmail(normalizedEmail, otp, purpose, name);
+
+    return res.status(200).json({
+      success: true,
+      message: `A 6-digit verification code has been sent to ${normalizedEmail}.`,
+    });
+  } catch (error: any) {
+    console.error('Send OTP Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to send verification code. Please try again later.',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Verify OTP
+ */
+export const verifyOTP = async (req: Request, res: Response) => {
+  try {
+    const { email, otp, purpose } = req.body;
+
+    if (!email || !otp || !purpose) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email, OTP, and purpose are required.',
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const otpRecord = await OTP.findOne({
+      email: normalizedEmail,
+      purpose,
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (!otpRecord) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired verification code. Please request a new one.',
+      });
+    }
+
+    if (otpRecord.attempts >= 5) {
+      await OTP.deleteOne({ _id: otpRecord._id });
+      return res.status(400).json({
+        success: false,
+        message: 'Too many incorrect attempts. Please request a new verification code.',
+      });
+    }
+
+    if (otpRecord.otp !== otp.trim()) {
+      otpRecord.attempts += 1;
+      await otpRecord.save();
+      return res.status(400).json({
+        success: false,
+        message: `Incorrect verification code. (${5 - otpRecord.attempts} attempts remaining)`,
+      });
+    }
+
+    otpRecord.verified = true;
+    await otpRecord.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Verification code verified successfully.',
+    });
+  } catch (error: any) {
+    console.error('Verify OTP Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error verifying code.',
+    });
+  }
+};
+
+/**
+ * Reset Password using verified OTP
+ */
+export const resetPassword = async (req: Request, res: Response) => {
+  try {
+    const { email, otp, newPassword, confirmNewPassword } = req.body;
+
+    if (!email || !otp || !newPassword || !confirmNewPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'All fields are required.',
+      });
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'New passwords do not match.',
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters long.',
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Verify OTP
+    const otpRecord = await OTP.findOne({
+      email: normalizedEmail,
+      purpose: 'forgot_password',
+      otp: otp.trim(),
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (!otpRecord) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired verification code.',
+      });
+    }
+
+    // Find User
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User account not found.',
+      });
+    }
+
+    // Hash new password
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(newPassword, saltRounds);
+
+    user.passwordHash = passwordHash;
+    await user.save();
+
+    // Invalidate OTP
+    await OTP.deleteMany({ email: normalizedEmail, purpose: 'forgot_password' });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Password reset successful. You can now login with your new password.',
+    });
+  } catch (error: any) {
+    console.error('Reset Password Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to reset password. Please try again.',
+    });
+  }
+};
+
+/**
+ * Register a new user (with verified OTP)
+ */
+export const register = async (req: Request, res: Response) => {
+  try {
+    const { universityId, name, phone, email, password, confirmPassword, department, otp } = req.body;
+
+    // 1. Basic validation
+    if (!universityId || !name || !phone || !email || !password || !confirmPassword || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: 'All fields including email verification code (OTP) must be provided.',
       });
     }
 
@@ -44,7 +304,24 @@ export const register = async (req: Request, res: Response) => {
       });
     }
 
-    // 2. Check duplicates in User collection
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // 2. Validate OTP
+    const otpRecord = await OTP.findOne({
+      email: normalizedEmail,
+      purpose: 'registration',
+      otp: otp.trim(),
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (!otpRecord) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired email verification code. Please request a new code.',
+      });
+    }
+
+    // 3. Check duplicates in User collection
     const existingUserById = await User.findOne({ universityId });
     if (existingUserById) {
       return res.status(409).json({
@@ -53,7 +330,7 @@ export const register = async (req: Request, res: Response) => {
       });
     }
 
-    const existingUserByEmail = await User.findOne({ email: email.toLowerCase() });
+    const existingUserByEmail = await User.findOne({ email: normalizedEmail });
     if (existingUserByEmail) {
       return res.status(409).json({
         success: false,
@@ -61,13 +338,12 @@ export const register = async (req: Request, res: Response) => {
       });
     }
 
-    // 3. Verify against verified_users list
-    // Use an atomic findOneAndUpdate to ensure the same verified user can't be registered twice concurrently
+    // 4. Verify against verified_users list
     const verifiedUser = await VerifiedUser.findOne({ universityId });
     if (!verifiedUser) {
       return res.status(404).json({
         success: false,
-        message: 'Your University ID could not be verified. Please contact the university administrator.',
+        message: 'Your University ID could not be verified in university records. Please contact administrator.',
       });
     }
 
@@ -78,38 +354,24 @@ export const register = async (req: Request, res: Response) => {
       });
     }
 
-    // Check if the provided details reasonably match the verified record (name, email, phone)
-    if (
-      verifiedUser.name.toLowerCase() !== name.toLowerCase().trim() ||
-      verifiedUser.email.toLowerCase() !== email.toLowerCase().trim() ||
-      verifiedUser.phone !== phone.trim()
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: 'The provided information does not match the verified university records.',
-      });
-    }
-
-    // 4. Hash password
+    // 5. Hash password
     const saltRounds = 10;
     const passwordHash = await bcrypt.hash(password, saltRounds);
 
-    // 5. Determine Role (First Super Admin Logic)
+    // 6. Determine Role (First Super Admin Logic)
     let role: 'super_admin' | 'staff' = 'staff';
     const superAdminExists = await User.exists({ role: 'super_admin' });
     if (!superAdminExists) {
       role = 'super_admin';
     }
 
-    // 6. Create User
-    // If multiple concurrent requests try to become super_admin, the unique partial index on User schema
-    // will throw a MongoServerError (E11000 duplicate key error) for one of them, which we catch and retry as staff.
+    // 7. Create User with the verified registration email
     let newUser;
     try {
       newUser = new User({
         universityId,
         name: name.trim(),
-        email: email.toLowerCase().trim(),
+        email: normalizedEmail,
         phone: phone.trim(),
         department: department ? department.trim() : null,
         passwordHash,
@@ -117,13 +379,11 @@ export const register = async (req: Request, res: Response) => {
       });
       await newUser.save();
     } catch (error: any) {
-      // Handle the case where the race condition unique partial index throws a duplicate key error
       if (error.code === 11000 && error.keyPattern && error.keyPattern.role === 1) {
-        // Someone else just became the first super_admin! Fallback to staff.
         newUser = new User({
           universityId,
           name: name.trim(),
-          email: email.toLowerCase().trim(),
+          email: normalizedEmail,
           phone: phone.trim(),
           department: department ? department.trim() : null,
           passwordHash,
@@ -135,13 +395,16 @@ export const register = async (req: Request, res: Response) => {
       }
     }
 
-    // 7. Update the VerifiedUser record
+    // 8. Update VerifiedUser record
     await VerifiedUser.findByIdAndUpdate(verifiedUser._id, {
       isRegistered: true,
       registeredUserId: newUser._id,
     });
 
-    // 8. Return response without password hash
+    // 9. Clean up OTP record
+    await OTP.deleteMany({ email: normalizedEmail, purpose: 'registration' });
+
+    // 10. Return response
     return res.status(201).json({
       success: true,
       message: 'Registration successful',
@@ -245,7 +508,7 @@ export const login = async (req: Request, res: Response) => {
 
 export const getMe = async (req: Request, res: Response) => {
   try {
-    const user = req.user; // Attached by authenticate middleware
+    const user = req.user;
     if (!user) {
       return res.status(401).json({
         success: false,

@@ -411,3 +411,28 @@
   color: #475569;
   border: 1px solid #e2e8f0;
 }
+
+/* Mobile Responsiveness for Staff Assignments Page */
+@media (max-width: 768px) {
+  .sa-assignments-container {
+    padding: 0.5rem 0.15rem;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .saa-header {
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .saa-filter-card {
+    padding: 1rem 0.75rem;
+  }
+
+  .saa-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+}
+

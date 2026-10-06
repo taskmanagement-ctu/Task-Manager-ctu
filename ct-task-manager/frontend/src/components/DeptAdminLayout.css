@@ -341,6 +341,9 @@
   .dept-sidebar-close-btn {
     display: flex;
   }
+  .dept-content {
+    padding: 0.75rem 0.5rem;
+  }
 }
 
 /* Overlay for mobile sidebar */

@@ -368,6 +368,42 @@ export const api = {
   // ─── Authentication ───────────────────────────────────
 
   /**
+   * Send OTP to email for registration or password reset.
+   */
+  sendOTP: async (data: { email: string; purpose: 'registration' | 'forgot_password'; universityId?: string; name?: string }): Promise<{ success: boolean; message: string }> => {
+    const response = await fetch(`${API_URL}/api/auth/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return parseSafeJson(response, 'Failed to send verification code.');
+  },
+
+  /**
+   * Verify an OTP code.
+   */
+  verifyOTP: async (data: { email: string; otp: string; purpose: 'registration' | 'forgot_password' }): Promise<{ success: boolean; message: string }> => {
+    const response = await fetch(`${API_URL}/api/auth/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return parseSafeJson(response, 'Failed to verify code.');
+  },
+
+  /**
+   * Reset password with verified OTP.
+   */
+  resetPassword: async (data: { email: string; otp: string; newPassword: string; confirmNewPassword: string }): Promise<{ success: boolean; message: string }> => {
+    const response = await fetch(`${API_URL}/api/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return parseSafeJson(response, 'Failed to reset password.');
+  },
+
+  /**
    * Register a new user.
    */
   register: async (userData: any): Promise<{ success: boolean; message: string; data?: { user: User } }> => {

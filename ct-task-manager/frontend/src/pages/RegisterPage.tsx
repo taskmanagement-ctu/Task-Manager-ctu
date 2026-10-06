@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { api, Department } from '../services/api';
-import { Eye, EyeOff, Info } from 'lucide-react';
-import { useEffect } from 'react';
+import { Eye, EyeOff, Info, Mail, CheckCircle2, RefreshCw } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import PortalBrandLogo from '../components/PortalBrandLogo';
 import './RegisterPage.css';
@@ -27,6 +26,15 @@ const RegisterPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [departments, setDepartments] = useState<Department[]>([]);
 
+  // OTP State
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpCountdown, setOtpCountdown] = useState(0);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpVerifying, setOtpVerifying] = useState(false);
+  const [otpFeedback, setOtpFeedback] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
+
   useEffect(() => {
     const fetchDepartments = async () => {
       try {
@@ -41,12 +49,116 @@ const RegisterPage = () => {
     fetchDepartments();
   }, []);
 
+  // OTP countdown timer
+  useEffect(() => {
+    let timer: any;
+    if (otpCountdown > 0) {
+      timer = setInterval(() => {
+        setOtpCountdown((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [otpCountdown]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
       [name]: value,
     }));
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setFormData((prev) => ({ ...prev, email: val }));
+    // If email changes after OTP is sent/verified, reset OTP status
+    if (otpSent || otpVerified) {
+      setOtpSent(false);
+      setOtpVerified(false);
+      setOtp('');
+      setOtpFeedback(null);
+    }
+  };
+
+  const handleResetEmailVerification = () => {
+    setOtpSent(false);
+    setOtpVerified(false);
+    setOtp('');
+    setOtpFeedback(null);
+  };
+
+  const handleSendOTP = async () => {
+    setError(null);
+    setOtpFeedback(null);
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!formData.email.trim() || !emailRegex.test(formData.email.trim())) {
+      setOtpFeedback({ type: 'error', message: 'Please enter a valid institutional email address.' });
+      return;
+    }
+
+    if (!formData.universityId || formData.universityId.length !== 5 || !/^\d+$/.test(formData.universityId)) {
+      setOtpFeedback({ type: 'error', message: 'Please enter your 5-digit University ID before requesting a code.' });
+      return;
+    }
+
+    try {
+      setOtpSending(true);
+      const res = await api.sendOTP({
+        email: formData.email.trim(),
+        purpose: 'registration',
+        universityId: formData.universityId.trim(),
+        name: formData.name.trim(),
+      });
+
+      if (res.success) {
+        setOtpSent(true);
+        setOtpCountdown(60);
+        setOtpFeedback({
+          type: 'success',
+          message: res.message || `Verification code sent to ${formData.email}. Please check your inbox.`,
+        });
+      }
+    } catch (err: any) {
+      setOtpFeedback({
+        type: 'error',
+        message: err.message || 'Failed to send verification code. Please check your details.',
+      });
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
+  const handleVerifyOTP = async () => {
+    if (otp.trim().length !== 6) {
+      setOtpFeedback({ type: 'error', message: 'Please enter the complete 6-digit verification code.' });
+      return;
+    }
+
+    try {
+      setOtpVerifying(true);
+      setOtpFeedback(null);
+      const res = await api.verifyOTP({
+        email: formData.email.trim(),
+        otp: otp.trim(),
+        purpose: 'registration',
+      });
+
+      if (res.success) {
+        setOtpVerified(true);
+        setOtpFeedback({
+          type: 'success',
+          message: 'Email verified successfully! You can now proceed to complete registration.',
+        });
+      }
+    } catch (err: any) {
+      setOtpFeedback({
+        type: 'error',
+        message: err.message || 'Invalid or expired code.',
+      });
+    } finally {
+      setOtpVerifying(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -70,10 +182,24 @@ const RegisterPage = () => {
       return;
     }
 
+    if (!otpSent) {
+      setError('Please click "Send Code" to verify your email address before registering.');
+      return;
+    }
+
+    if (!otp || otp.trim().length !== 6) {
+      setError('Please enter the 6-digit verification code sent to your email.');
+      return;
+    }
+
     try {
       setLoading(true);
       
-      const payload = { ...formData };
+      const payload: any = {
+        ...formData,
+        email: formData.email.trim(),
+        otp: otp.trim(),
+      };
       if (!payload.department.trim()) {
         payload.department = '';
       }
@@ -118,7 +244,7 @@ const RegisterPage = () => {
             <div className="register-left-footer-title">
               <Info size={16} /> Authorization Required
             </div>
-            <p>Registration is only allowed for users in the Super Admin's verified list. Please ensure your details match university records exactly to avoid automated rejection.</p>
+            <p>Registration requires an active University ID present in university records. Only your University ID needs to match.</p>
           </div>
         </div>
 
@@ -137,7 +263,7 @@ const RegisterPage = () => {
           {/* Mobile Info Box (Hidden on Desktop) */}
           <div className="register-info-box-mobile">
             <Info size={18} />
-            <p>Your details must match the university's verified records to successfully create an account.</p>
+            <p>Your University ID must match university records to successfully create an account.</p>
           </div>
 
           {error && <div className="register-error-alert">{error}</div>}
@@ -162,7 +288,8 @@ const RegisterPage = () => {
                     name="universityId"
                     value={formData.universityId}
                     onChange={handleChange}
-                    placeholder="e.g. 12345"
+                    placeholder="e.g. 12345 (5 digits)"
+                    maxLength={5}
                     required
                   />
                 </div>
@@ -178,7 +305,7 @@ const RegisterPage = () => {
                       name="name"
                       value={formData.name}
                       onChange={handleChange}
-                      placeholder="Jane Doe"
+                      placeholder="e.g. Jane Doe"
                       required
                     />
                   </div>
@@ -193,27 +320,109 @@ const RegisterPage = () => {
                       name="phone"
                       value={formData.phone}
                       onChange={handleChange}
-                      placeholder="e.g. 555-012-3456"
+                      placeholder="e.g. 9876543210"
+                      maxLength={10}
                       required
                     />
                   </div>
                 </div>
               </div>
 
+              {/* Email with Send OTP Button */}
               <div className="register-form-group">
-                <label htmlFor="email">Institutional Email *</label>
-                <div className="register-input-wrapper">
-                  <input
-                    type="email"
-                    id="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="name@ctuniversity.edu"
-                    required
-                  />
+                <div className="register-label-between">
+                  <label htmlFor="email">Institutional Email *</label>
+                  {otpVerified && (
+                    <span className="otp-verified-badge">
+                      <CheckCircle2 size={14} /> Verified
+                    </span>
+                  )}
                 </div>
+                <div className="register-email-input-group">
+                  <div className="register-input-wrapper with-icon" style={{ flex: 1 }}>
+                    <Mail size={18} className="input-icon-left" />
+                    <input
+                      type="email"
+                      id="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleEmailChange}
+                      placeholder="Enter email for OTP"
+                      required
+                      readOnly={otpVerified}
+                      style={otpVerified ? { backgroundColor: '#f8fafc', color: '#334155' } : {}}
+                    />
+                  </div>
+                  {otpVerified ? (
+                    <button
+                      type="button"
+                      className="otp-change-email-btn"
+                      onClick={handleResetEmailVerification}
+                      title="Change email and verify again"
+                    >
+                      Change
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="otp-action-btn"
+                      onClick={handleSendOTP}
+                      disabled={otpSending || otpCountdown > 0 || !formData.email || !formData.universityId}
+                    >
+                      {otpSending ? (
+                        <>
+                          <RefreshCw size={14} className="spin-icon" /> Sending...
+                        </>
+                      ) : otpCountdown > 0 ? (
+                        `Resend (${otpCountdown}s)`
+                      ) : otpSent ? (
+                        'Resend Code'
+                      ) : (
+                        'Send Code'
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                {otpFeedback && (
+                  <div className={`otp-inline-feedback ${otpFeedback.type}`}>
+                    {otpFeedback.message}
+                  </div>
+                )}
               </div>
+
+              {/* OTP Input Section (Visible when code is sent and not yet verified) */}
+              {otpSent && !otpVerified && (
+                <div className="register-otp-box">
+                  <div className="register-otp-box-header">
+                    <div>
+                      <strong>Enter Verification Code</strong>
+                      <div className="otp-subtext">Check your inbox ({formData.email}) for the 6-digit code</div>
+                    </div>
+                  </div>
+                  <div className="register-otp-input-row">
+                    <input
+                      type="text"
+                      id="otp"
+                      name="otp"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="• • • • • •"
+                      maxLength={6}
+                      className="otp-code-input"
+                      autoComplete="one-time-code"
+                    />
+                    <button
+                      type="button"
+                      className="otp-verify-btn"
+                      onClick={handleVerifyOTP}
+                      disabled={otpVerifying || otp.trim().length !== 6}
+                    >
+                      {otpVerifying ? 'Verifying...' : 'Verify Code'}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="register-form-group">
                 <label htmlFor="department">Department (Optional)</label>
@@ -224,7 +433,7 @@ const RegisterPage = () => {
                     value={formData.department}
                     onChange={handleChange}
                     className="form-control"
-                    style={{ width: '100%', padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: 'var(--border-radius-sm)', fontFamily: 'var(--font-family)', fontSize: '0.938rem', outline: 'none' }}
+                    style={{ width: '100%', padding: '0.875rem 1rem', border: '1px solid #cbd5e1', borderRadius: '4px', fontFamily: 'inherit', fontSize: '0.95rem', outline: 'none' }}
                   >
                     <option value="">Select Department...</option>
                     {departments.map((d) => (
@@ -277,7 +486,7 @@ const RegisterPage = () => {
               </div>
 
               <button type="submit" className="register-btn" disabled={loading}>
-                {loading ? 'Processing...' : 'REGISTER ACCOUNT'}
+                {loading ? 'Creating Account...' : 'REGISTER ACCOUNT'}
               </button>
             </form>
           )}

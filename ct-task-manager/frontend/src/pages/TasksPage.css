@@ -336,6 +336,10 @@
     font-size: 0.8rem;
   }
   
+  .tasks-page-container {
+    padding: 0.5rem 0.25rem;
+  }
+
   .tasks-grid {
     grid-template-columns: 1fr;
     gap: 0.75rem;
@@ -401,3 +405,26 @@
   background: #e2e8f0;
   color: #0f172a;
 }
+
+@media (max-width: 640px) {
+  .modal-overlay {
+    padding: 0.5rem;
+  }
+
+  .modal {
+    padding: 1.25rem 1rem;
+    border-radius: 10px;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 94vh !important;
+  }
+
+  .modal-close {
+    top: 0.75rem;
+    right: 0.75rem;
+    width: 32px;
+    height: 32px;
+    font-size: 1.25rem;
+  }
+}
+

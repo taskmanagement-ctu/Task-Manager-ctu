@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { IdCard, Lock, Eye, EyeOff, ShieldCheck } from 'lucide-react';
+import { api } from '../services/api';
+import { IdCard, Lock, Eye, EyeOff, ShieldCheck, Mail, KeyRound, X, CheckCircle2, RefreshCw } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import PortalBrandLogo from '../components/PortalBrandLogo';
 import './LoginPage.css';
@@ -21,7 +22,30 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // Forgot Password Modal State
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotStep, setForgotStep] = useState<1 | 2 | 3>(1);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotOtp, setForgotOtp] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
+  const [showForgotNewPassword, setShowForgotNewPassword] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [forgotCountdown, setForgotCountdown] = useState(0);
+
   const from = location.state?.from?.pathname || '/';
+
+  // Countdown timer for Forgot Password OTP
+  useEffect(() => {
+    let timer: any;
+    if (forgotCountdown > 0) {
+      timer = setInterval(() => {
+        setForgotCountdown((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [forgotCountdown]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -48,6 +72,114 @@ const LoginPage = () => {
       setError(err.message || 'Invalid University ID or password.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openForgotModal = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setShowForgotModal(true);
+    setForgotStep(1);
+    setForgotEmail('');
+    setForgotOtp('');
+    setForgotNewPassword('');
+    setForgotConfirmPassword('');
+    setForgotError(null);
+  };
+
+  const closeForgotModal = () => {
+    setShowForgotModal(false);
+    setForgotStep(1);
+    setForgotEmail('');
+    setForgotOtp('');
+    setForgotNewPassword('');
+    setForgotConfirmPassword('');
+    setForgotError(null);
+  };
+
+  const handleSendResetOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError(null);
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!forgotEmail.trim() || !emailRegex.test(forgotEmail.trim())) {
+      setForgotError('Please enter a valid email address.');
+      return;
+    }
+
+    try {
+      setForgotLoading(true);
+      const res = await api.sendOTP({
+        email: forgotEmail.trim(),
+        purpose: 'forgot_password',
+      });
+
+      if (res.success) {
+        setForgotStep(2);
+        setForgotCountdown(60);
+      }
+    } catch (err: any) {
+      setForgotError(err.message || 'No registered account found with this email.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleResendResetOTP = async () => {
+    if (forgotCountdown > 0 || forgotLoading) return;
+    setForgotError(null);
+
+    try {
+      setForgotLoading(true);
+      const res = await api.sendOTP({
+        email: forgotEmail.trim(),
+        purpose: 'forgot_password',
+      });
+
+      if (res.success) {
+        setForgotCountdown(60);
+      }
+    } catch (err: any) {
+      setForgotError(err.message || 'Failed to resend code.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError(null);
+
+    if (!forgotOtp.trim() || forgotOtp.trim().length !== 6) {
+      setForgotError('Please enter the complete 6-digit verification code.');
+      return;
+    }
+
+    if (forgotNewPassword.length < 8) {
+      setForgotError('Password must be at least 8 characters long.');
+      return;
+    }
+
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      setForgotError('Passwords do not match.');
+      return;
+    }
+
+    try {
+      setForgotLoading(true);
+      const res = await api.resetPassword({
+        email: forgotEmail.trim(),
+        otp: forgotOtp.trim(),
+        newPassword: forgotNewPassword,
+        confirmNewPassword: forgotConfirmPassword,
+      });
+
+      if (res.success) {
+        setForgotStep(3);
+      }
+    } catch (err: any) {
+      setForgotError(err.message || 'Failed to reset password. Please verify the code.');
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -114,7 +246,9 @@ const LoginPage = () => {
             <div className="login-form-group">
               <div className="login-label-row">
                 <label htmlFor="password">Password</label>
-                <Link to="#" className="login-forgot-link">Forgot Password?</Link>
+                <a href="#forgot" className="login-forgot-link" onClick={openForgotModal}>
+                  Forgot Password?
+                </a>
               </div>
               <div className="login-input-wrapper">
                 <Lock size={18} className="input-icon-left" />
@@ -155,6 +289,176 @@ const LoginPage = () => {
 
         </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      {showForgotModal && (
+        <div className="login-modal-overlay" onClick={closeForgotModal}>
+          <div className="login-modal-card" onClick={(e) => e.stopPropagation()}>
+            <button className="login-modal-close-btn" onClick={closeForgotModal} aria-label="Close modal">
+              <X size={20} />
+            </button>
+
+            {/* Step 1: Request OTP */}
+            {forgotStep === 1 && (
+              <form onSubmit={handleSendResetOTP} className="forgot-modal-form">
+                <div className="forgot-modal-header">
+                  <div className="forgot-icon-wrap">
+                    <KeyRound size={26} />
+                  </div>
+                  <h2>Reset Password</h2>
+                  <p>Enter your registered institutional email to receive a 6-digit verification code.</p>
+                </div>
+
+                {forgotError && <div className="login-error-alert">{forgotError}</div>}
+
+                <div className="login-form-group" style={{ textAlign: 'left' }}>
+                  <label htmlFor="forgotEmail">Registered Email Address</label>
+                  <div className="login-input-wrapper">
+                    <Mail size={18} className="input-icon-left" />
+                    <input
+                      type="email"
+                      id="forgotEmail"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      placeholder="name@ctuniversity.in"
+                      required
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                <button type="submit" className="login-btn" disabled={forgotLoading || !forgotEmail}>
+                  {forgotLoading ? (
+                    <>
+                      <RefreshCw size={16} className="spin-icon" /> Sending Code...
+                    </>
+                  ) : (
+                    'Send Verification Code'
+                  )}
+                </button>
+              </form>
+            )}
+
+            {/* Step 2: Enter OTP & New Password */}
+            {forgotStep === 2 && (
+              <form onSubmit={handleResetPassword} className="forgot-modal-form">
+                <div className="forgot-modal-header">
+                  <div className="forgot-icon-wrap">
+                    <Lock size={26} />
+                  </div>
+                  <h2>Enter Reset Code</h2>
+                  <p>
+                    A 6-digit code has been sent to <strong>{forgotEmail}</strong>.{' '}
+                    <button
+                      type="button"
+                      className="forgot-change-email-btn"
+                      onClick={() => {
+                        setForgotStep(1);
+                        setForgotError(null);
+                      }}
+                    >
+                      Change email
+                    </button>
+                  </p>
+                </div>
+
+                {forgotError && <div className="login-error-alert">{forgotError}</div>}
+
+                <div className="login-form-group" style={{ textAlign: 'left' }}>
+                  <div className="login-label-row">
+                    <label htmlFor="forgotOtp">6-Digit Code</label>
+                    <button
+                      type="button"
+                      className="forgot-resend-link"
+                      onClick={handleResendResetOTP}
+                      disabled={forgotCountdown > 0 || forgotLoading}
+                    >
+                      {forgotCountdown > 0 ? `Resend in ${forgotCountdown}s` : 'Resend Code'}
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    id="forgotOtp"
+                    value={forgotOtp}
+                    onChange={(e) => setForgotOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="• • • • • •"
+                    maxLength={6}
+                    className="forgot-otp-input"
+                    autoFocus
+                    required
+                  />
+                </div>
+
+                <div className="login-form-group" style={{ textAlign: 'left' }}>
+                  <label htmlFor="forgotNewPassword">New Password (Min. 8 chars)</label>
+                  <div className="login-input-wrapper">
+                    <Lock size={18} className="input-icon-left" />
+                    <input
+                      type={showForgotNewPassword ? 'text' : 'password'}
+                      id="forgotNewPassword"
+                      value={forgotNewPassword}
+                      onChange={(e) => setForgotNewPassword(e.target.value)}
+                      placeholder="Enter new password"
+                      required
+                      minLength={8}
+                    />
+                    <button 
+                      type="button" 
+                      className="input-icon-right" 
+                      onClick={() => setShowForgotNewPassword(!showForgotNewPassword)}
+                      aria-label={showForgotNewPassword ? "Hide password" : "Show password"}
+                    >
+                      {showForgotNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="login-form-group" style={{ textAlign: 'left' }}>
+                  <label htmlFor="forgotConfirmPassword">Confirm New Password</label>
+                  <div className="login-input-wrapper">
+                    <Lock size={18} className="input-icon-left" />
+                    <input
+                      type={showForgotNewPassword ? 'text' : 'password'}
+                      id="forgotConfirmPassword"
+                      value={forgotConfirmPassword}
+                      onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                      placeholder="Re-type new password"
+                      required
+                      minLength={8}
+                    />
+                  </div>
+                </div>
+
+                <button type="submit" className="login-btn" disabled={forgotLoading || forgotOtp.length !== 6}>
+                  {forgotLoading ? (
+                    <>
+                      <RefreshCw size={16} className="spin-icon" /> Resetting Password...
+                    </>
+                  ) : (
+                    'Set New Password'
+                  )}
+                </button>
+              </form>
+            )}
+
+            {/* Step 3: Success State */}
+            {forgotStep === 3 && (
+              <div className="forgot-modal-success">
+                <div className="forgot-success-icon-wrap">
+                  <CheckCircle2 size={42} />
+                </div>
+                <h2>Password Reset Successful!</h2>
+                <p>Your password has been securely updated. You can now log in with your new credentials.</p>
+                <button type="button" className="login-btn" onClick={closeForgotModal} style={{ marginTop: '1.5rem' }}>
+                  Return to Sign In
+                </button>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

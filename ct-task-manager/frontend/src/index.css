@@ -714,7 +714,9 @@ a.btn {
 /* ─── Responsive: Verified Users ─── */
 @media (max-width: 768px) {
   .vu-page {
-    padding: 1rem;
+    padding: 0.5rem 0.15rem;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .vu-table-header {

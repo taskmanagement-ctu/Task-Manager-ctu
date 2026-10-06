@@ -271,9 +271,14 @@
 
 /* RESPONSIVE DESIGN */
 @media (max-width: 900px) {
+  .register-page-container {
+    padding: 1rem 0.75rem;
+  }
+
   .register-card {
     flex-direction: column;
-    max-width: 500px;
+    max-width: 550px;
+    width: 100%;
     border-radius: 8px;
   }
 
@@ -282,7 +287,7 @@
   }
 
   .register-right-panel {
-    padding: 2.5rem 2rem;
+    padding: 2rem 1.5rem;
   }
 
   .register-row {
@@ -337,3 +342,227 @@
     margin-top: 2px;
   }
 }
+
+/* ─── Email OTP Verification Styles ───────────────────────── */
+.register-label-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.otp-verified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #16a34a;
+  background-color: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  text-transform: none;
+}
+
+.register-email-input-group {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.otp-action-btn {
+  background-color: #031429;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  padding: 0.875rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all 0.2s;
+}
+
+.otp-action-btn:hover:not(:disabled) {
+  background-color: #0f2b54;
+}
+
+.otp-action-btn:disabled {
+  background-color: #94a3b8;
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.otp-change-email-btn {
+  background: none;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  padding: 0.875rem 0.875rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.otp-change-email-btn:hover {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+.otp-inline-feedback {
+  margin-top: 0.5rem;
+  font-size: 0.825rem;
+  line-height: 1.4;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+}
+
+.otp-inline-feedback.success {
+  background-color: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.otp-inline-feedback.error {
+  background-color: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.register-otp-box {
+  background-color: #f8fafc;
+  border: 1px dashed #94a3b8;
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+  animation: fadeIn 0.25s ease-out;
+}
+
+.register-otp-box-header {
+  margin-bottom: 0.75rem;
+}
+
+.register-otp-box-header strong {
+  font-size: 0.85rem;
+  color: #1e293b;
+  display: block;
+}
+
+.otp-subtext {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin-top: 0.15rem;
+}
+
+.register-otp-input-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.otp-code-input {
+  flex: 1;
+  padding: 0.75rem 1rem !important;
+  font-size: 1.15rem !important;
+  font-weight: 700;
+  letter-spacing: 4px;
+  text-align: center;
+  border: 2px solid #cbd5e1 !important;
+  border-radius: 4px;
+  background-color: #ffffff;
+  outline: none;
+  font-family: monospace;
+}
+
+.otp-code-input:focus {
+  border-color: #031429 !important;
+  box-shadow: 0 0 0 3px rgba(3, 20, 41, 0.1);
+}
+
+.otp-verify-btn {
+  background-color: #16a34a;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s;
+}
+
+.otp-verify-btn:hover:not(:disabled) {
+  background-color: #15803d;
+}
+
+.otp-verify-btn:disabled {
+  background-color: #86efac;
+  cursor: not-allowed;
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 600px) {
+  .register-page-container {
+    padding: 0.5rem;
+    align-items: flex-start;
+  }
+
+  .register-card {
+    max-width: 100%;
+    width: 100%;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  }
+
+  .register-right-panel {
+    padding: 1.5rem 1rem;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .register-email-input-group {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .otp-action-btn,
+  .otp-change-email-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 0.8rem 1rem;
+  }
+
+  .register-otp-input-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .otp-verify-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 0.8rem 1rem;
+  }
+}
+
+

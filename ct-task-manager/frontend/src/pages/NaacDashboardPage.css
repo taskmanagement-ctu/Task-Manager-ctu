@@ -425,6 +425,17 @@
 .breakdown-table-container {
   margin-top: 1.5rem;
   background: transparent;
+  width: 100%;
+}
+
+.breakdown-table-desktop {
+  width: 100%;
+  overflow-x: auto;
+  display: block;
+}
+
+.breakdown-cards-mobile {
+  display: none;
 }
 
 .breakdown-table {
@@ -1221,3 +1232,454 @@
   right: 0;
   top: calc(100% + 6px);
 }
+
+/* ─── Mobile Responsiveness for NAAC Dashboard ─────────────── */
+@media (max-width: 768px) {
+  .naac-dashboard-wrapper {
+    padding: 0.5rem 0.15rem;
+    width: 100%;
+    box-sizing: border-box;
+    background-color: transparent;
+  }
+
+  .naac-dashboard {
+    width: 100%;
+    margin: 0;
+  }
+
+  .naac-header {
+    margin-bottom: 1.25rem;
+    gap: 1rem;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .naac-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .naac-header-actions {
+    width: 100%;
+  }
+
+  .naac-unified-export-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .naac-kpi-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .naac-section-card {
+    padding: 1rem 0.75rem;
+    border-radius: 10px;
+    margin-bottom: 1.25rem;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .section-title {
+    font-size: 1.1rem;
+  }
+
+  .section-subtitle {
+    font-size: 0.8rem;
+  }
+
+  .naac-lb-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    width: 100%;
+  }
+
+  .naac-lb-card {
+    padding: 1rem 0.85rem;
+    border-radius: 10px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .naac-lb-dept-name {
+    font-size: 1rem;
+  }
+
+  .naac-lb-stats-row {
+    gap: 0.5rem;
+  }
+
+  .breakdown-table th,
+  .breakdown-row td {
+    padding: 0.6rem 0.5rem;
+    font-size: 0.78rem;
+  }
+
+  .avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 0.75rem;
+  }
+
+  /* Department Breakdown: Mobile Card View Switch */
+  .breakdown-table-desktop {
+    display: none !important;
+  }
+
+  .breakdown-cards-mobile {
+    display: flex !important;
+    flex-direction: column;
+    gap: 0.85rem;
+    width: 100%;
+    margin-top: 0.5rem;
+  }
+
+  /* Mobile Department Cards Styling */
+  .naac-mobile-dept-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 0.9rem 0.85rem;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    box-sizing: border-box;
+    width: 100%;
+  }
+
+  .nmdc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .nmdc-header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .nmdc-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+  }
+
+  .nmdc-dept-name {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.3;
+    word-break: break-word;
+  }
+
+  .nmdc-admin-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: #64748b;
+    font-size: 0.76rem;
+  }
+
+  .nmdc-admin-icon {
+    color: #021c3b;
+    flex-shrink: 0;
+  }
+
+  .nmdc-admin-name {
+    color: #475569;
+    font-weight: 500;
+  }
+
+  .nmdc-admin-tag {
+    font-size: 0.65rem;
+    padding: 0.1rem 0.35rem;
+    background: #e0e7ff;
+    color: #3730a3;
+    border-radius: 4px;
+    font-weight: 600;
+    margin-left: 0.2rem;
+  }
+
+  .nmdc-rating-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: #fef9c3;
+    border: 1px solid #fde047;
+    padding: 0.25rem 0.5rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #854d0e;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .nmdc-rating-val {
+    color: #854d0e;
+  }
+
+  .nmdc-rating-max {
+    font-size: 0.7rem;
+    color: #a16207;
+    font-weight: 500;
+  }
+
+  /* 4-Item Metrics Grid */
+  .nmdc-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.35rem;
+    background: #f8fafc;
+    border: 1px solid #f1f5f9;
+    border-radius: 8px;
+    padding: 0.5rem 0.3rem;
+    box-sizing: border-box;
+  }
+
+  .nmdc-metric-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 2px;
+  }
+
+  .nmdc-metric-lbl {
+    font-size: 0.62rem;
+    color: #64748b;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+
+  .nmdc-metric-num {
+    font-size: 0.95rem;
+    font-weight: 700;
+  }
+
+  .nmdc-metric-num.total {
+    color: #0f172a;
+  }
+
+  .nmdc-metric-num.comp {
+    color: #10b981;
+  }
+
+  .nmdc-metric-num.rev {
+    color: #f59e0b;
+  }
+
+  .nmdc-metric-num.pend {
+    color: #64748b;
+  }
+
+  /* Progress Section */
+  .nmdc-progress-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .nmdc-progress-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .nmdc-progress-label {
+    color: #64748b;
+  }
+
+  .nmdc-progress-pct {
+    font-weight: 700;
+  }
+
+  .nmdc-progress-bar-bg {
+    width: 100%;
+    height: 6px;
+    background: #f1f5f9;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .nmdc-progress-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+  }
+
+  /* Action Buttons */
+  .nmdc-actions-row {
+    display: flex;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .nmdc-action-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.55rem 0.6rem;
+    font-size: 0.76rem;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+  }
+
+  .nmdc-btn-expand {
+    background: #f1f5f9;
+    color: #1e293b;
+    border: 1px solid #e2e8f0;
+  }
+
+  .nmdc-btn-expand:hover,
+  .nmdc-btn-expand:active {
+    background: #e2e8f0;
+  }
+
+  .nmdc-btn-ratings {
+    background: #021c3b;
+    color: #ffffff;
+    border: 1px solid #021c3b;
+  }
+
+  .nmdc-btn-ratings:hover,
+  .nmdc-btn-ratings:active {
+    background: #032b5a;
+  }
+
+  /* Expanded Staff Details for Mobile */
+  .nmdc-expanded-staff-list {
+    margin-top: 0.25rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .nmdc-staff-list-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .nmdc-no-staff {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    text-align: center;
+    padding: 0.5rem 0;
+  }
+
+  .nmdc-staff-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 0.55rem 0.65rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    box-sizing: border-box;
+  }
+
+  .nmdc-staff-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .nmdc-staff-identity {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  .nmdc-staff-name {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #0f172a;
+    word-break: break-word;
+  }
+
+  .nmdc-staff-rating {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #b45309;
+    background: #fef9c3;
+    padding: 0.15rem 0.35rem;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+
+  .nmdc-staff-counts {
+    display: flex;
+    gap: 0.65rem;
+    font-size: 0.72rem;
+    color: #64748b;
+    flex-wrap: wrap;
+  }
+
+  .nmdc-staff-counts .text-comp {
+    color: #059669;
+  }
+
+  .nmdc-staff-counts .text-rev {
+    color: #d97706;
+  }
+
+  .nmdc-staff-counts .text-pend {
+    color: #4b5563;
+  }
+
+  .nmdc-staff-progress {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .nmdc-staff-bar-bg {
+    flex: 1;
+    height: 4px;
+    background: #e2e8f0;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .nmdc-staff-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+  }
+
+  .nmdc-staff-pct {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #475569;
+    min-width: 28px;
+    text-align: right;
+  }
+}
+
