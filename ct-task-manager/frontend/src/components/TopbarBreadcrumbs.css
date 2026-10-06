@@ -57,59 +57,6 @@
   text-overflow: ellipsis;
 }
 
-/* Academic Session Badge */
-.tbc-session-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.25rem 0.6rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  color: #64748b;
-  font-size: 0.72rem;
-  font-weight: 600;
-  margin-left: 0.5rem;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.tbc-status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: #10b981;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
-  display: inline-block;
-  animation: tbcDotPulse 2s infinite ease-in-out;
-}
-
-@keyframes tbcDotPulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.2);
-    opacity: 0.75;
-  }
-}
-
-.tbc-session-icon {
-  color: #94a3b8;
-}
-
-.tbc-session-text {
-  letter-spacing: 0.01em;
-}
-
-/* ─── Tablet View ─── */
-@media (max-width: 1024px) {
-  .tbc-session-badge {
-    display: none;
-  }
-}
-
 /* ─── Mobile View ─── */
 @media (max-width: 768px) {
   .tbc-container {
@@ -118,8 +65,7 @@
 
   /* Hide section pill and separator on mobile to give full room to page title */
   .tbc-section-badge,
-  .tbc-separator,
-  .tbc-session-badge {
+  .tbc-separator {
     display: none !important;
   }
 

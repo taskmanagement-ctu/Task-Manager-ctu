@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ctu-taskdesk-pwa-v1';
+const CACHE_NAME = 'ctu-taskdesk-pwa-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -35,6 +35,12 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Only handle HTTP/HTTPS schemes
+  if (!event.request.url.startsWith('http')) return;
+
+  // Only handle GET requests; never intercept POST, PUT, DELETE, etc.
+  if (event.request.method !== 'GET') return;
+
   const url = new URL(event.request.url);
 
   // Network-first for API endpoints
@@ -50,17 +56,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network-first for navigation requests
+  // Network-first with offline fallback for HTML navigation requests (SPA)
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(() => {
-        return caches.match('/index.html');
+      fetch(event.request).catch(async () => {
+        const cached = await caches.match('/index.html');
+        return cached || new Response('Offline', { status: 503, statusText: 'Offline' });
       })
     );
     return;
   }
 
-  // Cache-first for images and static assets
+  // Cache-first with network fallback for images and static assets
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) return cachedResponse;
@@ -72,15 +79,24 @@ self.addEventListener('fetch', (event) => {
            url.pathname.endsWith('.png') || 
            url.pathname.endsWith('.svg') || 
            url.pathname.endsWith('.css') || 
-           url.pathname.endsWith('.js'))
+           url.pathname.endsWith('.js') ||
+           url.pathname.endsWith('.ico') ||
+           url.pathname.endsWith('.woff2'))
         ) {
           const cloned = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, cloned);
-          });
+          }).catch(() => {});
         }
         return networkResponse;
       });
+    }).catch(async () => {
+      // Graceful fallback if network request fails (e.g. navigation aborted or network dropped)
+      if (event.request.mode === 'navigate') {
+        const cached = await caches.match('/index.html');
+        if (cached) return cached;
+      }
+      return new Response('', { status: 408, statusText: 'Request Failed' });
     })
   );
 });

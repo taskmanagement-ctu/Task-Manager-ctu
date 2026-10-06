@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
-import { ChevronRight, Calendar } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import './TopbarBreadcrumbs.css';
 
 interface TopbarBreadcrumbsProps {
@@ -68,13 +68,6 @@ export const TopbarBreadcrumbs: React.FC<TopbarBreadcrumbsProps> = ({
         {departmentName && (
           <span className="tbc-dept-sub">({departmentName})</span>
         )}
-      </div>
-
-      {/* CTU Academic Session Badge (Desktop/Tablet only) */}
-      <div className="tbc-session-badge" title="Active Institutional Academic Session">
-        <span className="tbc-status-dot" />
-        <Calendar size={12} className="tbc-session-icon" />
-        <span className="tbc-session-text">Session 2024–25</span>
       </div>
     </div>
   );

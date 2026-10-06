@@ -1260,11 +1260,33 @@
 
   .naac-header-actions {
     width: 100%;
+    display: flex;
+    justify-content: flex-start;
+  }
+
+  .naac-export-dropdown-wrapper {
+    position: relative;
+    display: inline-block;
   }
 
   .naac-unified-export-btn {
-    width: 100%;
-    justify-content: center;
+    width: auto;
+    display: inline-flex;
+  }
+
+  .naac-export-dropdown-menu {
+    left: 0;
+    right: auto;
+    width: min(320px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+    box-sizing: border-box;
+  }
+
+  .dept-modal-menu {
+    left: 0;
+    right: auto;
+    width: min(280px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
   }
 
   .naac-kpi-grid {

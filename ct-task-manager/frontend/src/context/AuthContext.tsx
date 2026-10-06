@@ -20,9 +20,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const refreshUser = async () => {
     try {
-      if (token) {
+      const activeToken = tokenStorage.getToken();
+      if (activeToken) {
         const response = await api.getCurrentUser();
-        if (response.success) {
+        if (response && response.success && response.data?.user) {
           setCurrentUser(response.data.user);
         } else {
           logout();
@@ -30,8 +31,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } else {
         setCurrentUser(null);
       }
-    } catch (error) {
-      console.error('Error refreshing user:', error);
+    } catch {
+      // Session has expired or is invalid; silently clear state
       logout();
     } finally {
       setLoading(false);

@@ -184,90 +184,95 @@ const SuperAdminTeamPage: React.FC = () => {
             </div>
           </div>
 
-          <table className="roster-table">
-            <thead>
-              <tr>
-                <th>Staff Member</th>
-                <th>Team & Contact</th>
-                <th>Status</th>
-                <th style={{ textAlign: 'center' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={4} style={{ textAlign: 'center', padding: '2rem' }}>Loading team roster...</td></tr>
-              ) : filteredRoster.length === 0 ? (
-                <tr>
-                  <td colSpan={4} style={{ textAlign: 'center', padding: '2.5rem', color: '#64748b' }}>
-                    {assignments.length === 0 
-                      ? 'No staff assigned to Super Admin team yet. Recruit members from the Directory Pool below.' 
-                      : 'No team members matching your search filter.'}
-                  </td>
-                </tr>
-              ) : (
-                filteredRoster.map(assignment => {
-                  const staff = assignment.staffId;
-                  if (!staff) return null;
-                  return (
-                    <tr key={assignment._id}>
-                      <td>
-                        <div className="staff-member-col">
-                          <div 
-                            className="staff-avatar" 
-                            style={{ backgroundImage: `url(https://ui-avatars.com/api/?name=${encodeURIComponent(staff.name)}&background=0f172a&color=ffffff)` }}
-                          ></div>
-                          <div>
-                            <div className="staff-name">{staff.name}</div>
-                            <div className="staff-id">ID: {staff.universityId || staff._id?.toString().substring(0, 6)}</div>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '3rem 1.5rem', color: '#64748b' }}>
+              Loading team roster...
+            </div>
+          ) : filteredRoster.length === 0 ? (
+            <div className="roster-empty-state">
+              <Users size={40} className="roster-empty-icon" />
+              <p className="roster-empty-text">
+                {assignments.length === 0 
+                  ? 'No staff assigned to Super Admin team yet. Recruit members from the Directory Pool below.' 
+                  : 'No team members matching your search filter.'}
+              </p>
+            </div>
+          ) : (
+            <div className="roster-table-container">
+              <table className="roster-table">
+                <thead>
+                  <tr>
+                    <th>Staff Member</th>
+                    <th>Team & Contact</th>
+                    <th>Status</th>
+                    <th style={{ textAlign: 'center' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRoster.map(assignment => {
+                    const staff = assignment.staffId;
+                    if (!staff) return null;
+                    return (
+                      <tr key={assignment._id}>
+                        <td>
+                          <div className="staff-member-col">
+                            <div 
+                              className="staff-avatar" 
+                              style={{ backgroundImage: `url(https://ui-avatars.com/api/?name=${encodeURIComponent(staff.name)}&background=0f172a&color=ffffff)` }}
+                            ></div>
+                            <div>
+                              <div className="staff-name">{staff.name}</div>
+                              <div className="staff-id">ID: {staff.universityId || staff._id?.toString().substring(0, 6)}</div>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
-                          <span className="role-tag" style={{ background: '#eff6ff', color: '#1d4ed8', borderColor: '#bfdbfe' }}>
-                            Super Admin Team
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
+                            <span className="role-tag" style={{ background: '#eff6ff', color: '#1d4ed8', borderColor: '#bfdbfe' }}>
+                              Super Admin Team
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{staff.email}</div>
+                          {staff.phone && <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>{staff.phone}</div>}
+                        </td>
+                        <td>
+                          <span className={`status-badge ${staff.isActive !== false ? 'active' : 'sabbatical'}`}>
+                            <div className="status-dot"></div> {staff.isActive !== false ? 'Active' : 'Inactive'}
                           </span>
-                        </div>
-                        <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{staff.email}</div>
-                        {staff.phone && <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>{staff.phone}</div>}
-                      </td>
-                      <td>
-                        <span className={`status-badge ${staff.isActive !== false ? 'active' : 'sabbatical'}`}>
-                          <div className="status-dot"></div> {staff.isActive !== false ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <button
-                          type="button"
-                          className="btn-danger-sm"
-                          style={{
-                            background: '#fee2e2',
-                            color: '#dc2626',
-                            border: '1px solid #fca5a5',
-                            padding: '0.35rem 0.75rem',
-                            borderRadius: '6px',
-                            cursor: removingId === assignment._id ? 'not-allowed' : 'pointer',
-                            fontSize: '0.8rem',
-                            fontWeight: 600,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.35rem',
-                            transition: 'all 0.15s ease'
-                          }}
-                          disabled={removingId === assignment._id}
-                          onClick={() => handleRemoveStaff(assignment._id, staff.name)}
-                          title="Remove staff member from Super Admin team"
-                        >
-                          <UserMinus size={14} />
-                          {removingId === assignment._id ? 'Removing...' : 'Remove'}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            className="btn-danger-sm"
+                            style={{
+                              background: '#fee2e2',
+                              color: '#dc2626',
+                              border: '1px solid #fca5a5',
+                              padding: '0.35rem 0.75rem',
+                              borderRadius: '6px',
+                              cursor: removingId === assignment._id ? 'not-allowed' : 'pointer',
+                              fontSize: '0.8rem',
+                              fontWeight: 600,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
+                              transition: 'all 0.15s ease'
+                            }}
+                            disabled={removingId === assignment._id}
+                            onClick={() => handleRemoveStaff(assignment._id, staff.name)}
+                            title="Remove staff member from Super Admin team"
+                          >
+                            <UserMinus size={14} />
+                            {removingId === assignment._id ? 'Removing...' : 'Remove'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Directory Pool Section */}

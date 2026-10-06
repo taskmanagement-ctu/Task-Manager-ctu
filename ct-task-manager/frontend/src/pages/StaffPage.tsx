@@ -189,18 +189,6 @@ const StaffPage: React.FC = () => {
           </table>
         </div>
 
-        {/* Bottom Banner */}
-        <div className="staff-banner">
-          <div className="staff-banner-content">
-            <h3 className="staff-banner-title">End of Semester Audit</h3>
-            <p className="staff-banner-desc">Prepare all departmental reports and finalize faculty evaluations before the upcoming audit cycle begins next month.</p>
-            <button className="staff-banner-btn">Start Preparation</button>
-          </div>
-          <div 
-            className="staff-banner-img"
-            style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&q=80&w=400)' }}
-          ></div>
-        </div>
 
       </div>
 
@@ -269,7 +257,6 @@ const StaffPage: React.FC = () => {
         <TaskModal 
           task={selectedTask} 
           currentUser={user}
-          availableAssignees={[]}
           onClose={() => setSelectedTask(null)}
           onRefresh={() => {
             fetchTasks();

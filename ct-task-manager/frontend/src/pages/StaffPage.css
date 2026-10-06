@@ -222,61 +222,6 @@
 .staff-badge-gray { background: #f1f5f9; color: #475569; }
 .staff-badge-blue { background: #e0e7ff; color: #4338ca; }
 
-/* Banner */
-.staff-banner {
-  background: white;
-  border-radius: 0.5rem;
-  overflow: hidden;
-  display: flex;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-  border: 1px dashed #cbd5e1;
-}
-
-.staff-banner-content {
-  padding: 1.5rem;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
-}
-
-.staff-banner-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #0f172a;
-  margin: 0 0 0.5rem 0;
-}
-
-.staff-banner-desc {
-  font-size: 0.875rem;
-  color: #64748b;
-  margin: 0 0 1rem 0;
-  line-height: 1.5;
-}
-
-.staff-banner-btn {
-  background: #0f172a;
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 0.375rem;
-  font-weight: 600;
-  font-size: 0.75rem;
-  cursor: pointer;
-}
-
-.staff-banner-img {
-  width: 150px;
-  background: #e2e8f0;
-  background-size: cover;
-  background-position: center;
-}
-@media (min-width: 768px) {
-  .staff-banner-img {
-    width: 250px;
-  }
-}
 
 /* Side Panels */
 .staff-side-panel {

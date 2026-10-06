@@ -3,18 +3,28 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import './index.css';
 
-// Register PWA Service Worker for app installability
-if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').then(
-      (reg) => {
-        console.log('PWA ServiceWorker registered with scope:', reg.scope);
-      },
-      (err) => {
-        console.error('PWA ServiceWorker registration failed:', err);
+// Manage PWA Service Worker: only register in production builds.
+// In development, automatically unregister any stale service workers to prevent intercepting Vite dev server requests.
+if ('serviceWorker' in navigator) {
+  if (import.meta.env.PROD) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').then(
+        (reg) => {
+          console.log('PWA ServiceWorker registered with scope:', reg.scope);
+        },
+        (err) => {
+          console.error('PWA ServiceWorker registration failed:', err);
+        }
+      );
+    });
+  } else {
+    // In development mode, automatically unregister any active service worker from localhost
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const registration of registrations) {
+        registration.unregister();
       }
-    );
-  });
+    }).catch(() => {});
+  }
 }
 
 // Suppress third-party browser extension / performance observer errors (e.g., reportAllChanges / reading 'startTime')

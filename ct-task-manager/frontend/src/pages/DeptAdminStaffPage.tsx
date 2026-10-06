@@ -127,48 +127,55 @@ const DeptAdminStaffPage: React.FC = () => {
             </div>
           </div>
 
-          <table className="roster-table">
-            <thead>
-              <tr>
-                <th>Staff Member</th>
-                <th>Role / Dept</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={3} style={{ textAlign: 'center', padding: '2rem' }}>Loading roster...</td></tr>
-              ) : roster.length === 0 ? (
-                <tr><td colSpan={3} style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>No staff assigned yet.</td></tr>
-              ) : (
-                roster.map(staff => (
-                  <tr key={staff._id || staff.id}>
-                    <td>
-                      <div className="staff-member-col">
-                        <div 
-                          className="staff-avatar" 
-                          style={{ backgroundImage: `url(https://ui-avatars.com/api/?name=${encodeURIComponent(staff.name)}&background=e2e8f0)` }}
-                        ></div>
-                        <div>
-                          <div className="staff-name">{staff.name}</div>
-                          <div className="staff-id">ID: {staff.universityId || staff._id?.toString().substring(0,6)}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="role-title">Staff</div>
-                      <span className="role-tag">{staff.department || 'General'}</span>
-                    </td>
-                    <td>
-                      <span className={`status-badge ${staff.isActive !== false ? 'active' : 'sabbatical'}`}>
-                        <div className="status-dot"></div> {staff.isActive !== false ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '3rem 1.5rem', color: '#64748b' }}>
+              Loading roster...
+            </div>
+          ) : roster.length === 0 ? (
+            <div className="roster-empty-state">
+              <Users size={40} className="roster-empty-icon" />
+              <p className="roster-empty-text">No staff assigned to your department yet. Recruit members from the Directory Pool below.</p>
+            </div>
+          ) : (
+            <div className="roster-table-container">
+              <table className="roster-table">
+                <thead>
+                  <tr>
+                    <th>Staff Member</th>
+                    <th>Role / Dept</th>
+                    <th>Status</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {roster.map(staff => (
+                    <tr key={staff._id || staff.id}>
+                      <td>
+                        <div className="staff-member-col">
+                          <div 
+                            className="staff-avatar" 
+                            style={{ backgroundImage: `url(https://ui-avatars.com/api/?name=${encodeURIComponent(staff.name)}&background=e2e8f0)` }}
+                          ></div>
+                          <div>
+                            <div className="staff-name">{staff.name}</div>
+                            <div className="staff-id">ID: {staff.universityId || staff._id?.toString().substring(0,6)}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="role-title">Staff</div>
+                        <span className="role-tag">{staff.department || 'General'}</span>
+                      </td>
+                      <td>
+                        <span className={`status-badge ${staff.isActive !== false ? 'active' : 'sabbatical'}`}>
+                          <div className="status-dot"></div> {staff.isActive !== false ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Directory Pool Section */}

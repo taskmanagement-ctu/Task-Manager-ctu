@@ -464,7 +464,6 @@ const SuperAdminPage = () => {
             api.getTasks({ limit: 1, status: 'completed' }).then(res => setTaskMetrics(prev => ({ ...prev, completed: res.data.pagination.total })));
           }}
           currentUser={currentUser}
-          availableAssignees={[]} // Assignees aren't edited directly from dashboard usually
           departments={departments}
           onOpenChat={(t) => setChatTask(t)}
         />

@@ -61,18 +61,108 @@ const formatDateTimeDDMMYYYY = (dateString: string) => {
   return `${day}/${month}/${year}, ${hours}:${mins}`;
 };
 
+const EMPTY_ARRAY: any[] = [];
+
+const AttachmentList: React.FC<{ fileIds: string[]; title: string }> = ({ fileIds, title }) => {
+  const [files, setFiles] = useState<any[]>([]);
+  const fileIdsKey = Array.isArray(fileIds) ? fileIds.join(',') : '';
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchFiles = async () => {
+      try {
+        const fetchedFiles = await Promise.all(
+          (fileIds || []).map(async (id) => {
+            try {
+              const res = await api.getFileMetadata(id);
+              return res.data?.file;
+            } catch (e) {
+              return null;
+            }
+          })
+        );
+        if (isMounted) {
+          setFiles(fetchedFiles.filter(Boolean));
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    if (fileIds && fileIds.length > 0) {
+      fetchFiles();
+    } else if (isMounted) {
+      setFiles([]);
+    }
+    return () => { isMounted = false; };
+  }, [fileIdsKey]);
+
+  if (!fileIds || fileIds.length === 0) return null;
+
+  const apiUrl = import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : (import.meta.env.DEV ? 'http://localhost:5000' : '');
+
+  return (
+    <div style={{ margin: '1rem 0', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', width: '100%', boxSizing: 'border-box' }}>
+      <div style={{ fontSize: '0.75rem', color: '#475569', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <Paperclip size={14} />
+        {title}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        {files.length === 0 ? (
+          <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Loading files...</span>
+        ) : (
+          files.map((file, i) => (
+            <a
+              key={file._id || i}
+              href={`${apiUrl}/api/files/${file._id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ 
+                display: 'inline-flex', 
+                alignItems: 'center', 
+                gap: '0.6rem', 
+                color: '#2563eb', 
+                textDecoration: 'none', 
+                fontSize: '0.875rem', 
+                backgroundColor: '#ffffff', 
+                padding: '0.6rem 0.85rem', 
+                borderRadius: '6px', 
+                border: '1px solid #cbd5e1',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+              }}
+            >
+              <FileText size={16} color="#3b82f6" style={{ flexShrink: 0 }} />
+              <span style={{ fontWeight: 600, color: '#0f172a', wordBreak: 'break-all' }}>{file.filename}</span>
+              <span style={{ color: '#64748b', fontSize: '0.8rem', marginLeft: 'auto', flexShrink: 0, paddingLeft: '0.5rem' }}>({Math.round((file.length || 0) / 1024)} KB)</span>
+            </a>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
 interface TaskModalProps {
   task: any | null;
   onClose: () => void;
   onRefresh: () => void;
   currentUser: any;
-  availableAssignees: any[];
+  availableAssignees?: any[];
   departments?: any[];
   onCreateSubtask?: () => void;
   onOpenChat?: (task: any) => void;
 }
 
-const TaskModal: React.FC<TaskModalProps> = ({ task: initialTask, onClose, onRefresh, currentUser, availableAssignees = [], departments = [], onCreateSubtask, onOpenChat }) => {
+const TaskModal: React.FC<TaskModalProps> = ({ 
+  task: initialTask, 
+  onClose, 
+  onRefresh, 
+  currentUser, 
+  availableAssignees = EMPTY_ARRAY, 
+  departments = EMPTY_ARRAY, 
+  onCreateSubtask, 
+  onOpenChat 
+}) => {
   const [task, setTask] = useState<any>(initialTask);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -98,29 +188,47 @@ const TaskModal: React.FC<TaskModalProps> = ({ task: initialTask, onClose, onRef
   const [departmentList, setDepartmentList] = useState<string[]>([]);
   const assignDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Stable keys for dependencies to avoid infinite loops from re-created array references
+  const deptPropKey = Array.isArray(departments)
+    ? departments.map(d => (typeof d === 'string' ? d : d?.name || '')).filter(Boolean).join(',')
+    : '';
+  const assigneesDeptKey = Array.isArray(availableAssignees)
+    ? availableAssignees.map(a => a?.department || '').filter(Boolean).join(',')
+    : '';
+  const currentUserRole = currentUser?.role;
+
   // Load / build department list for filtering
   useEffect(() => {
+    let isMounted = true;
     const updateDeptList = async () => {
       let depts: string[] = [];
       if (departments && departments.length > 0) {
-        depts = departments.map(d => typeof d === 'string' ? d : d.name).filter(Boolean);
-      } else if (currentUser?.role === 'super_admin') {
+        depts = departments.map(d => typeof d === 'string' ? d : d?.name).filter(Boolean);
+      } else if (currentUserRole === 'super_admin') {
         try {
           const res = await api.getDepartments();
-          if (res.success && res.data?.departments) {
+          if (isMounted && res.success && res.data?.departments) {
             depts = res.data.departments.map((d: any) => d.name).filter(Boolean);
           }
         } catch (err) {
           console.error('Failed to load departments', err);
         }
       }
-      const assigneeDepts = availableAssignees.map(a => a.department).filter(Boolean);
+      const assigneeDepts = (availableAssignees || []).map(a => a?.department).filter(Boolean);
       const unique = Array.from(new Set([...depts, ...assigneeDepts])).sort((a, b) => a.localeCompare(b));
-      setDepartmentList(unique);
+      if (isMounted) {
+        setDepartmentList(prev => {
+          if (prev.length === unique.length && prev.every((v, i) => v === unique[i])) {
+            return prev; // Bail out to avoid triggering a component re-render
+          }
+          return unique;
+        });
+      }
     };
 
     updateDeptList();
-  }, [departments, availableAssignees, currentUser]);
+    return () => { isMounted = false; };
+  }, [deptPropKey, assigneesDeptKey, currentUserRole]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -248,78 +356,6 @@ const TaskModal: React.FC<TaskModalProps> = ({ task: initialTask, onClose, onRef
   
   const canAssign = (currentUser.role === 'super_admin' || currentUser.role === 'department_admin') && 
     task.status !== 'submitted_for_review' && task.status !== 'approved';
-  
-  const AttachmentList = ({ fileIds, title }: { fileIds: string[], title: string }) => {
-    const [files, setFiles] = useState<any[]>([]);
-
-    useEffect(() => {
-      const fetchFiles = async () => {
-        try {
-          const fetchedFiles = await Promise.all(
-            fileIds.map(async (id) => {
-              try {
-                const res = await api.getFileMetadata(id);
-                return res.data.file;
-              } catch (e) {
-                return null;
-              }
-            })
-          );
-          setFiles(fetchedFiles.filter(Boolean));
-        } catch (err) {
-          console.error(err);
-        }
-      };
-      if (fileIds && fileIds.length > 0) {
-        fetchFiles();
-      }
-    }, [fileIds]);
-
-    if (!fileIds || fileIds.length === 0) return null;
-
-    const apiUrl = import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : (import.meta.env.DEV ? 'http://localhost:5000' : '');
-
-    return (
-      <div style={{ margin: '1rem 0', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', width: '100%', boxSizing: 'border-box' }}>
-        <div style={{ fontSize: '0.75rem', color: '#475569', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-          <Paperclip size={14} />
-          {title}
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {files.length === 0 ? (
-            <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Loading files...</span>
-          ) : (
-            files.map((file, i) => (
-              <a
-                key={i}
-                href={`${apiUrl}/api/files/${file._id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ 
-                  display: 'inline-flex', 
-                  alignItems: 'center', 
-                  gap: '0.6rem', 
-                  color: '#2563eb', 
-                  textDecoration: 'none', 
-                  fontSize: '0.875rem', 
-                  backgroundColor: '#ffffff', 
-                  padding: '0.6rem 0.85rem', 
-                  borderRadius: '6px', 
-                  border: '1px solid #cbd5e1',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-                }}
-              >
-                <FileText size={16} color="#3b82f6" style={{ flexShrink: 0 }} />
-                <span style={{ fontWeight: 600, color: '#0f172a', wordBreak: 'break-all' }}>{file.filename}</span>
-                <span style={{ color: '#64748b', fontSize: '0.8rem', marginLeft: 'auto', flexShrink: 0, paddingLeft: '0.5rem' }}>({Math.round(file.length / 1024)} KB)</span>
-              </a>
-            ))
-          )}
-        </div>
-      </div>
-    );
-  };
   
   const currentUserId = currentUser.id || currentUser._id;
   const isAssignedStaff = currentUser.role === 'staff' && Boolean(

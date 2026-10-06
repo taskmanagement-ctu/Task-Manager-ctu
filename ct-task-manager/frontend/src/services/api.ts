@@ -1,10 +1,58 @@
 const API_URL = import.meta.env.VITE_API_URL || '';
 
+export const isTokenExpired = (token: string | null): boolean => {
+  if (!token) return true;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return true;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const parsed = JSON.parse(jsonPayload);
+    if (!parsed || typeof parsed.exp !== 'number') {
+      return false;
+    }
+    // Expire 5 seconds early to avoid edge race conditions
+    return parsed.exp * 1000 <= Date.now() + 5000;
+  } catch {
+    return true;
+  }
+};
+
 // ─── Token Management ─────────────────────────────────────
 export const tokenStorage = {
-  getToken: () => localStorage.getItem('token'),
-  setToken: (token: string) => localStorage.setItem('token', token),
-  clearToken: () => localStorage.removeItem('token'),
+  getToken: (): string | null => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return null;
+      if (isTokenExpired(token)) {
+        localStorage.removeItem('token');
+        return null;
+      }
+      return token;
+    } catch {
+      return null;
+    }
+  },
+  setToken: (token: string) => {
+    try {
+      localStorage.setItem('token', token);
+    } catch {
+      // Ignore quota errors
+    }
+  },
+  clearToken: () => {
+    try {
+      localStorage.removeItem('token');
+    } catch {
+      // Ignore errors
+    }
+  },
 };
 
 export const parseSafeJson = async (response: Response, defaultErrorMessage: string) => {
