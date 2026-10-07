@@ -983,3 +983,148 @@
   }
 }
 
+/* ─── Left Column & Password Security Card Styles ────────── */
+.pp-left-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.pp-security-card {
+  border-top: 3px solid #0f172a;
+}
+
+.pp-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pp-input-has-toggle {
+  padding-right: 2.75rem !important;
+}
+
+.pp-input-pw-toggle {
+  position: absolute;
+  right: 0.75rem;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.15s ease;
+}
+
+.pp-input-pw-toggle:hover {
+  color: #1e293b;
+}
+
+/* Password Strength Meter */
+.pp-pw-strength-tag {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.pp-pw-strength-tag.too-short,
+.pp-pw-strength-tag.weak {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+
+.pp-pw-strength-tag.good {
+  background-color: #eff6ff;
+  color: #2563eb;
+}
+
+.pp-pw-strength-tag.strong {
+  background-color: #ecfdf5;
+  color: #16a34a;
+}
+
+.pp-pw-meter-bar {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.pp-pw-meter-segment {
+  height: 4px;
+  flex: 1;
+  border-radius: 2px;
+  background-color: #e2e8f0;
+  transition: background-color 0.25s ease;
+}
+
+.pp-pw-meter-segment.active.too-short,
+.pp-pw-meter-segment.active.weak {
+  background-color: #ef4444;
+}
+
+.pp-pw-meter-segment.active.good {
+  background-color: #3b82f6;
+}
+
+.pp-pw-meter-segment.active.strong {
+  background-color: #10b981;
+}
+
+/* Password Match Badge */
+.pp-pw-match-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.pp-pw-match-badge.ok {
+  color: #16a34a;
+}
+
+.pp-pw-match-badge.err {
+  color: #dc2626;
+}
+
+/* Change Password Button */
+.pp-btn-change-password {
+  background-color: #0f172a;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.7rem 1.4rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.pp-btn-change-password:hover:not(:disabled) {
+  background-color: #1e293b;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.12);
+}
+
+.pp-btn-change-password:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.pp-spin {
+  animation: ppSpin 1s linear infinite;
+}
+
+@keyframes ppSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+

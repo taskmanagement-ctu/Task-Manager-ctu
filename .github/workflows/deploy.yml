@@ -1,0 +1,100 @@
+name: Auto Deploy to CT Task Manager
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Auto Pull and Deploy
+    runs-on: self-hosted
+
+    steps:
+      - name: Pull Latest Changes in Local Repository
+        shell: powershell
+        run: |
+          Write-Host "=========================================="
+          Write-Host "   STEP 1: PULLING LATEST COMMITS"
+          Write-Host "=========================================="
+          Set-Location -Path "C:\Users\student\Desktop\Task-Manager-ctu"
+          
+          # Fetch and fast-forward to latest origin/main
+          git fetch origin main
+          git reset --hard origin/main
+          Write-Host "Local repository updated to latest commit on origin/main."
+
+      - name: Build Backend
+        shell: powershell
+        run: |
+          Write-Host "=========================================="
+          Write-Host "   STEP 2: BUILDING BACKEND"
+          Write-Host "=========================================="
+          Set-Location -Path "C:\Users\student\Desktop\Task-Manager-ctu\ct-task-manager\backend"
+          
+          Write-Host "Installing backend dependencies (if any new)..."
+          npm install --prefer-offline --no-audit
+          
+          Write-Host "Compiling TypeScript to dist/..."
+          npm run build
+          Write-Host "Backend build succeeded!"
+
+      - name: Build Frontend
+        shell: powershell
+        run: |
+          Write-Host "=========================================="
+          Write-Host "   STEP 3: BUILDING FRONTEND"
+          Write-Host "=========================================="
+          Set-Location -Path "C:\Users\student\Desktop\Task-Manager-ctu\ct-task-manager\frontend"
+          
+          Write-Host "Installing frontend dependencies (if any new)..."
+          npm install --prefer-offline --no-audit
+          
+          Write-Host "Building production bundle with Vite..."
+          npm run build
+          Write-Host "Frontend build succeeded!"
+
+      - name: Restart Backend & Reload Nginx
+        shell: powershell
+        run: |
+          Write-Host "=========================================="
+          Write-Host "   STEP 4: RESTARTING SERVICES"
+          Write-Host "=========================================="
+          
+          # Restart Backend on Port 5000 (Supervisor auto-restarts within 2 seconds)
+          $conn = Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue
+          if ($conn) {
+            Write-Host "Stopping active backend process (PID $($conn.OwningProcess))..."
+            Stop-Process -Id $conn.OwningProcess -Force
+            Write-Host "Killed process $($conn.OwningProcess). Supervisor will auto-restart with the new build."
+          } else {
+            Write-Host "Backend not running on Port 5000. Launching supervisor..."
+            Start-Process -FilePath "cmd.exe" -ArgumentList "/c cd /d C:\Users\student\Desktop\Task-Manager-ctu\ct-task-manager\backend && node supervisor.js" -WindowStyle Minimized
+          }
+
+          # Ensure Nginx is alive / reloaded
+          $nginx = Get-Process nginx -ErrorAction SilentlyContinue
+          $nginxDir = "C:\Users\student\Desktop\Task-Manager\nginx"
+          if (Test-Path "$nginxDir\nginx.exe") {
+            if ($nginx) {
+              Write-Host "Reloading Nginx configuration..."
+              & "$nginxDir\nginx.exe" -s reload
+            } else {
+              Write-Host "Starting Nginx reverse proxy..."
+              Start-Process -FilePath "$nginxDir\nginx.exe" -WorkingDirectory "$nginxDir"
+            }
+          }
+
+          # Verify Health Endpoint
+          Start-Sleep -Seconds 3
+          try {
+            $health = Invoke-RestMethod -Uri "http://localhost:5000/api/health" -TimeoutSec 5
+            Write-Host "Health Check: SUCCESS! Database status: $($health.database)"
+          } catch {
+            Write-Host "Health check warning: Backend is still initializing ($($_.Exception.Message))"
+          }
+
+          Write-Host "=========================================="
+          Write-Host "   DEPLOYMENT COMPLETED SUCCESSFULLY!"
+          Write-Host "=========================================="

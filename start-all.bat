@@ -32,6 +32,14 @@ if exist "%NGINX_DIR%\nginx.exe" (
     echo [WARNING] Nginx executable not found at "%NGINX_DIR%".
 )
 
+if exist "C:\actions-runner\.runner" (
+    tasklist /fi "imagename eq Runner.Listener.exe" 2>nul | find /i "Runner.Listener.exe" >nul
+    if errorlevel 1 (
+        echo Starting GitHub Actions Self-Hosted Runner in background...
+        start "GitHub-Actions-Runner" /min cmd /c "cd /d C:\actions-runner && run.cmd"
+    )
+)
+
 echo.
 echo Waiting for backend server to become ready on Port 5000...
 set /a attempts=0

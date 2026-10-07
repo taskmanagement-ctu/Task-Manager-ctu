@@ -420,7 +420,7 @@ export const api = {
   /**
    * Send OTP to email for registration or password reset.
    */
-  sendOTP: async (data: { email: string; purpose: 'registration' | 'forgot_password'; universityId?: string; name?: string }): Promise<{ success: boolean; message: string }> => {
+  sendOTP: async (data: { email?: string; identifier?: string; purpose: 'registration' | 'forgot_password'; universityId?: string; name?: string }): Promise<{ success: boolean; message: string; email?: string; maskedEmail?: string; universityId?: string }> => {
     const response = await fetch(`${API_URL}/api/auth/send-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -432,7 +432,7 @@ export const api = {
   /**
    * Verify an OTP code.
    */
-  verifyOTP: async (data: { email: string; otp: string; purpose: 'registration' | 'forgot_password' }): Promise<{ success: boolean; message: string }> => {
+  verifyOTP: async (data: { email?: string; identifier?: string; otp: string; purpose: 'registration' | 'forgot_password' }): Promise<{ success: boolean; message: string }> => {
     const response = await fetch(`${API_URL}/api/auth/verify-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -444,13 +444,24 @@ export const api = {
   /**
    * Reset password with verified OTP.
    */
-  resetPassword: async (data: { email: string; otp: string; newPassword: string; confirmNewPassword: string }): Promise<{ success: boolean; message: string }> => {
+  resetPassword: async (data: { email?: string; identifier?: string; otp: string; newPassword: string; confirmNewPassword: string }): Promise<{ success: boolean; message: string; universityId?: string }> => {
     const response = await fetch(`${API_URL}/api/auth/reset-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
     return parseSafeJson(response, 'Failed to reset password.');
+  },
+
+  /**
+   * Change password for the current authenticated user.
+   */
+  changePassword: async (data: { currentPassword: string; newPassword: string; confirmPassword: string }): Promise<{ success: boolean; message: string }> => {
+    return fetchWithAuth('/api/users/change-password', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
   },
 
   /**

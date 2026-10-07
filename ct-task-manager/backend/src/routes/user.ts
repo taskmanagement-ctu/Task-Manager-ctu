@@ -10,6 +10,7 @@ import {
   updateUserProfile,
   changeDepartmentAdmin,
 } from '../controllers/userController';
+import { changePassword } from '../controllers/authController';
 import { authenticate, authorizeRoles } from '../middleware/auth';
 
 const router = Router();
@@ -24,6 +25,11 @@ router.get('/profile/:id', getUserProfile);
 // @route   PATCH /api/users/profile
 // @desc    Update current user's profile (e.g. department, phone)
 router.patch('/profile', updateUserProfile);
+
+// @route   PATCH /api/users/change-password, POST /api/users/change-password
+// @desc    Change password for current user
+router.patch('/change-password', changePassword);
+router.post('/change-password', changePassword);
 
 // @route   GET /api/users
 // @desc    Get all registered users with pagination & filtering

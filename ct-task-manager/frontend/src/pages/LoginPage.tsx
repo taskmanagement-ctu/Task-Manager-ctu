@@ -25,11 +25,15 @@ const LoginPage = () => {
   // Forgot Password Modal State
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotStep, setForgotStep] = useState<1 | 2 | 3>(1);
-  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotIdentifier, setForgotIdentifier] = useState('');
+  const [forgotResolvedEmail, setForgotResolvedEmail] = useState('');
+  const [forgotDisplayEmail, setForgotDisplayEmail] = useState('');
+  const [forgotResolvedUniversityId, setForgotResolvedUniversityId] = useState('');
   const [forgotOtp, setForgotOtp] = useState('');
   const [forgotNewPassword, setForgotNewPassword] = useState('');
   const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
   const [showForgotNewPassword, setShowForgotNewPassword] = useState(false);
+  const [showForgotConfirmPassword, setShowForgotConfirmPassword] = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotError, setForgotError] = useState<string | null>(null);
   const [forgotCountdown, setForgotCountdown] = useState(0);
@@ -79,7 +83,11 @@ const LoginPage = () => {
     e.preventDefault();
     setShowForgotModal(true);
     setForgotStep(1);
-    setForgotEmail('');
+    // If universityId was already typed on login form, prefill it!
+    setForgotIdentifier(formData.universityId.trim() || '');
+    setForgotResolvedEmail('');
+    setForgotDisplayEmail('');
+    setForgotResolvedUniversityId('');
     setForgotOtp('');
     setForgotNewPassword('');
     setForgotConfirmPassword('');
@@ -89,36 +97,72 @@ const LoginPage = () => {
   const closeForgotModal = () => {
     setShowForgotModal(false);
     setForgotStep(1);
-    setForgotEmail('');
+    setForgotIdentifier('');
+    setForgotResolvedEmail('');
+    setForgotDisplayEmail('');
+    setForgotResolvedUniversityId('');
     setForgotOtp('');
     setForgotNewPassword('');
     setForgotConfirmPassword('');
     setForgotError(null);
   };
 
+  const handleReturnToSignInAfterReset = () => {
+    if (forgotResolvedUniversityId) {
+      setFormData((prev) => ({
+        ...prev,
+        universityId: forgotResolvedUniversityId,
+        password: '',
+      }));
+    }
+    closeForgotModal();
+    // Focus password input after modal closes
+    setTimeout(() => {
+      const pwInput = document.getElementById('password');
+      if (pwInput) pwInput.focus();
+    }, 100);
+  };
+
   const handleSendResetOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     setForgotError(null);
 
+    const trimmed = forgotIdentifier.trim();
+    if (!trimmed) {
+      setForgotError('Please enter your 5-digit University ID or registered email.');
+      return;
+    }
+
+    const is5DigitId = /^\d{5}$/.test(trimmed);
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!forgotEmail.trim() || !emailRegex.test(forgotEmail.trim())) {
-      setForgotError('Please enter a valid email address.');
+    const isEmail = emailRegex.test(trimmed);
+
+    if (!is5DigitId && !isEmail) {
+      setForgotError('Please enter a valid 5-digit University ID or registered email address.');
       return;
     }
 
     try {
       setForgotLoading(true);
       const res = await api.sendOTP({
-        email: forgotEmail.trim(),
+        identifier: trimmed,
+        email: isEmail ? trimmed : undefined,
         purpose: 'forgot_password',
       });
 
       if (res.success) {
+        setForgotResolvedEmail(res.email || trimmed);
+        setForgotDisplayEmail(res.maskedEmail || res.email || trimmed);
+        if (res.universityId) {
+          setForgotResolvedUniversityId(res.universityId);
+        } else if (is5DigitId) {
+          setForgotResolvedUniversityId(trimmed);
+        }
         setForgotStep(2);
         setForgotCountdown(60);
       }
     } catch (err: any) {
-      setForgotError(err.message || 'No registered account found with this email.');
+      setForgotError(err.message || 'No registered account found. Please check your University ID or email.');
     } finally {
       setForgotLoading(false);
     }
@@ -128,10 +172,13 @@ const LoginPage = () => {
     if (forgotCountdown > 0 || forgotLoading) return;
     setForgotError(null);
 
+    const target = forgotResolvedEmail || forgotIdentifier.trim();
+
     try {
       setForgotLoading(true);
       const res = await api.sendOTP({
-        email: forgotEmail.trim(),
+        identifier: target,
+        email: target.includes('@') ? target : undefined,
         purpose: 'forgot_password',
       });
 
@@ -166,18 +213,23 @@ const LoginPage = () => {
 
     try {
       setForgotLoading(true);
+      const target = forgotResolvedEmail || forgotIdentifier.trim();
       const res = await api.resetPassword({
-        email: forgotEmail.trim(),
+        email: target,
+        identifier: target,
         otp: forgotOtp.trim(),
         newPassword: forgotNewPassword,
         confirmNewPassword: forgotConfirmPassword,
       });
 
       if (res.success) {
+        if (res.universityId) {
+          setForgotResolvedUniversityId(res.universityId);
+        }
         setForgotStep(3);
       }
     } catch (err: any) {
-      setForgotError(err.message || 'Failed to reset password. Please verify the code.');
+      setForgotError(err.message || 'Failed to reset password. Please check your verification code.');
     } finally {
       setForgotLoading(false);
     }
@@ -306,28 +358,32 @@ const LoginPage = () => {
                     <KeyRound size={26} />
                   </div>
                   <h2>Reset Password</h2>
-                  <p>Enter your registered institutional email to receive a 6-digit verification code.</p>
+                  <p>Enter your 5-digit University ID or registered institutional email to receive a 6-digit verification code.</p>
                 </div>
 
                 {forgotError && <div className="login-error-alert">{forgotError}</div>}
 
                 <div className="login-form-group" style={{ textAlign: 'left' }}>
-                  <label htmlFor="forgotEmail">Registered Email Address</label>
+                  <label htmlFor="forgotIdentifier">University ID (5 Digits) or Registered Email</label>
                   <div className="login-input-wrapper">
-                    <Mail size={18} className="input-icon-left" />
+                    {/^\d+$/.test(forgotIdentifier) ? (
+                      <IdCard size={18} className="input-icon-left" />
+                    ) : (
+                      <Mail size={18} className="input-icon-left" />
+                    )}
                     <input
-                      type="email"
-                      id="forgotEmail"
-                      value={forgotEmail}
-                      onChange={(e) => setForgotEmail(e.target.value)}
-                      placeholder="name@ctuniversity.in"
+                      type="text"
+                      id="forgotIdentifier"
+                      value={forgotIdentifier}
+                      onChange={(e) => setForgotIdentifier(e.target.value)}
+                      placeholder="e.g. 10001 or name@ctuniversity.in"
                       required
                       autoFocus
                     />
                   </div>
                 </div>
 
-                <button type="submit" className="login-btn" disabled={forgotLoading || !forgotEmail}>
+                <button type="submit" className="login-btn" disabled={forgotLoading || !forgotIdentifier.trim()}>
                   {forgotLoading ? (
                     <>
                       <RefreshCw size={16} className="spin-icon" /> Sending Code...
@@ -348,7 +404,7 @@ const LoginPage = () => {
                   </div>
                   <h2>Enter Reset Code</h2>
                   <p>
-                    A 6-digit code has been sent to <strong>{forgotEmail}</strong>.{' '}
+                    A 6-digit code has been sent to <strong>{forgotDisplayEmail || forgotIdentifier}</strong>.{' '}
                     <button
                       type="button"
                       className="forgot-change-email-btn"
@@ -357,7 +413,7 @@ const LoginPage = () => {
                         setForgotError(null);
                       }}
                     >
-                      Change email
+                      Change ID / email
                     </button>
                   </p>
                 </div>
@@ -390,7 +446,12 @@ const LoginPage = () => {
                 </div>
 
                 <div className="login-form-group" style={{ textAlign: 'left' }}>
-                  <label htmlFor="forgotNewPassword">New Password (Min. 8 chars)</label>
+                  <div className="login-label-row">
+                    <label htmlFor="forgotNewPassword">New Password (Min. 8 chars)</label>
+                    {forgotNewPassword.length > 0 && forgotNewPassword.length < 8 && (
+                      <span style={{ color: '#ea580c', fontSize: '0.75rem', fontWeight: 500 }}>Min. 8 characters</span>
+                    )}
+                  </div>
                   <div className="login-input-wrapper">
                     <Lock size={18} className="input-icon-left" />
                     <input
@@ -414,11 +475,20 @@ const LoginPage = () => {
                 </div>
 
                 <div className="login-form-group" style={{ textAlign: 'left' }}>
-                  <label htmlFor="forgotConfirmPassword">Confirm New Password</label>
+                  <div className="login-label-row">
+                    <label htmlFor="forgotConfirmPassword">Confirm New Password</label>
+                    {forgotConfirmPassword.length > 0 && (
+                      forgotNewPassword === forgotConfirmPassword ? (
+                        <span style={{ color: '#16a34a', fontSize: '0.75rem', fontWeight: 600 }}>✓ Passwords match</span>
+                      ) : (
+                        <span style={{ color: '#dc2626', fontSize: '0.75rem', fontWeight: 600 }}>Passwords do not match</span>
+                      )
+                    )}
+                  </div>
                   <div className="login-input-wrapper">
                     <Lock size={18} className="input-icon-left" />
                     <input
-                      type={showForgotNewPassword ? 'text' : 'password'}
+                      type={showForgotConfirmPassword ? 'text' : 'password'}
                       id="forgotConfirmPassword"
                       value={forgotConfirmPassword}
                       onChange={(e) => setForgotConfirmPassword(e.target.value)}
@@ -426,10 +496,27 @@ const LoginPage = () => {
                       required
                       minLength={8}
                     />
+                    <button 
+                      type="button" 
+                      className="input-icon-right" 
+                      onClick={() => setShowForgotConfirmPassword(!showForgotConfirmPassword)}
+                      aria-label={showForgotConfirmPassword ? "Hide password" : "Show password"}
+                    >
+                      {showForgotConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
                   </div>
                 </div>
 
-                <button type="submit" className="login-btn" disabled={forgotLoading || forgotOtp.length !== 6}>
+                <button 
+                  type="submit" 
+                  className="login-btn" 
+                  disabled={
+                    forgotLoading || 
+                    forgotOtp.length !== 6 || 
+                    forgotNewPassword.length < 8 || 
+                    forgotNewPassword !== forgotConfirmPassword
+                  }
+                >
                   {forgotLoading ? (
                     <>
                       <RefreshCw size={16} className="spin-icon" /> Resetting Password...
@@ -449,7 +536,7 @@ const LoginPage = () => {
                 </div>
                 <h2>Password Reset Successful!</h2>
                 <p>Your password has been securely updated. You can now log in with your new credentials.</p>
-                <button type="button" className="login-btn" onClick={closeForgotModal} style={{ marginTop: '1.5rem' }}>
+                <button type="button" className="login-btn" onClick={handleReturnToSignInAfterReset} style={{ marginTop: '1.5rem' }}>
                   Return to Sign In
                 </button>
               </div>

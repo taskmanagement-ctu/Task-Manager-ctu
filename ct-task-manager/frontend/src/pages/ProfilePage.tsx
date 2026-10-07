@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   User, Mail, Phone, Building, Shield, Award, Star, CheckCircle, 
-  Clock, AlertTriangle, Calendar, Save, Check, Trophy, Crown
+  Clock, AlertTriangle, Calendar, Save, Check, Trophy, Crown,
+  Lock, Eye, EyeOff, KeyRound, ShieldCheck, RefreshCw
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -20,6 +21,77 @@ export const ProfilePage: React.FC = () => {
   const [department, setDepartment] = useState('');
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
+
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwSuccessMsg, setPwSuccessMsg] = useState('');
+  const [pwErrorMsg, setPwErrorMsg] = useState('');
+
+  const getPasswordStrength = (pass: string) => {
+    if (!pass) return { score: 0, label: '', color: '' };
+    if (pass.length < 6) return { score: 1, label: 'Too Short', color: '#ef4444' };
+    let score = 1;
+    if (pass.length >= 8) score++;
+    if (/[A-Z]/.test(pass) && /[a-z]/.test(pass)) score++;
+    if (/\d/.test(pass)) score++;
+    if (/[^A-Za-z0-9]/.test(pass)) score++;
+    if (score <= 2) return { score: 1, label: 'Weak', color: '#f59e0b' };
+    if (score <= 4) return { score: 2, label: 'Good', color: '#3b82f6' };
+    return { score: 3, label: 'Strong', color: '#10b981' };
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwErrorMsg('');
+    setPwSuccessMsg('');
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPwErrorMsg('All password fields are required.');
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setPwErrorMsg('New password must be at least 8 characters long.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPwErrorMsg('New password and confirmation do not match.');
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      setPwErrorMsg('New password must be different from current password.');
+      return;
+    }
+
+    try {
+      setPwLoading(true);
+      const res = await api.changePassword({
+        currentPassword,
+        newPassword,
+        confirmPassword,
+      });
+
+      if (res.success) {
+        setPwSuccessMsg(res.message || 'Password updated successfully!');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setTimeout(() => setPwSuccessMsg(''), 5000);
+      }
+    } catch (err: any) {
+      setPwErrorMsg(err.message || 'Failed to update password. Please check your current password.');
+    } finally {
+      setPwLoading(false);
+    }
+  };
 
   const fetchProfile = async () => {
     try {
@@ -200,119 +272,277 @@ export const ProfilePage: React.FC = () => {
       {/* Main Grid */}
       <div className="pp-grid">
         
-        {/* Left Column: Personal Information Form */}
-        <div className="pp-card pp-personal-card">
-          <div className="pp-card-header">
-            <h2 className="pp-card-title">
-              <User size={18} /> Personal Details
-            </h2>
-            <span className="pp-card-subtitle">Manage your account information</span>
-          </div>
-
-          {successMsg && (
-            <div className="pp-alert pp-alert-success">
-              <Check size={16} /> {successMsg}
-            </div>
-          )}
-
-          {errorMsg && (
-            <div className="pp-alert pp-alert-danger">
-              <AlertTriangle size={16} /> {errorMsg}
-            </div>
-          )}
-
-          <form onSubmit={handleSaveProfile} className="pp-form">
-            <div className="pp-form-group">
-              <label className="pp-label">Full Name</label>
-              <div className="pp-input-wrapper">
-                <User size={16} className="pp-input-icon" />
-                <input 
-                  type="text" 
-                  className="pp-input" 
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                />
-              </div>
+        {/* Left Column: Personal Details & Password Security */}
+        <div className="pp-left-column">
+          {/* Personal Information Form */}
+          <div className="pp-card pp-personal-card">
+            <div className="pp-card-header">
+              <h2 className="pp-card-title">
+                <User size={18} /> Personal Details
+              </h2>
+              <span className="pp-card-subtitle">Manage your account information</span>
             </div>
 
-            <div className="pp-form-group">
-              <label className="pp-label">University ID (Read-only)</label>
-              <div className="pp-input-wrapper">
-                <Shield size={16} className="pp-input-icon" />
-                <input 
-                  type="text" 
-                  className="pp-input pp-input-disabled" 
-                  value={user.universityId || ''} 
-                  disabled 
-                />
-              </div>
-            </div>
-
-            <div className="pp-form-group">
-              <label className="pp-label">Email Address (Read-only)</label>
-              <div className="pp-input-wrapper">
-                <Mail size={16} className="pp-input-icon" />
-                <input 
-                  type="email" 
-                  className="pp-input pp-input-disabled" 
-                  value={user.email || ''} 
-                  disabled 
-                />
-              </div>
-            </div>
-
-            <div className="pp-form-group">
-              <label className="pp-label">Phone Number</label>
-              <div className="pp-input-wrapper">
-                <Phone size={16} className="pp-input-icon" />
-                <input 
-                  type="tel" 
-                  className="pp-input" 
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                />
-              </div>
-            </div>
-
-            {user.role !== 'super_admin' && (
-              <div className="pp-form-group">
-                <label className="pp-label">
-                  Department / School
-                  {!user.department && <span className="pp-required-tag"> (Select your department)</span>}
-                </label>
-                <div className="pp-input-wrapper">
-                  <Building size={16} className="pp-input-icon" />
-                  <select 
-                    className="pp-input pp-select"
-                    value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
-                  >
-                    <option value="">-- Select Department --</option>
-                    {departments.map((d) => (
-                      <option key={d._id} value={d.name}>
-                        {d.name} {d.code ? `(${d.code})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <span className="pp-field-hint">
-                  Choose the department you are affiliated with.
-                </span>
+            {successMsg && (
+              <div className="pp-alert pp-alert-success">
+                <Check size={16} /> {successMsg}
               </div>
             )}
 
-            <div className="pp-form-actions">
-              <button 
-                type="submit" 
-                className="pp-btn-save" 
-                disabled={saving}
-              >
-                <Save size={16} />
-                {saving ? 'Saving...' : 'Save Profile'}
-              </button>
+            {errorMsg && (
+              <div className="pp-alert pp-alert-danger">
+                <AlertTriangle size={16} /> {errorMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveProfile} className="pp-form">
+              <div className="pp-form-group">
+                <label className="pp-label">Full Name</label>
+                <div className="pp-input-wrapper">
+                  <User size={16} className="pp-input-icon" />
+                  <input 
+                    type="text" 
+                    className="pp-input" 
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="pp-form-group">
+                <label className="pp-label">University ID (Read-only)</label>
+                <div className="pp-input-wrapper">
+                  <Shield size={16} className="pp-input-icon" />
+                  <input 
+                    type="text" 
+                    className="pp-input pp-input-disabled" 
+                    value={user.universityId || ''} 
+                    disabled 
+                  />
+                </div>
+              </div>
+
+              <div className="pp-form-group">
+                <label className="pp-label">Email Address (Read-only)</label>
+                <div className="pp-input-wrapper">
+                  <Mail size={16} className="pp-input-icon" />
+                  <input 
+                    type="email" 
+                    className="pp-input pp-input-disabled" 
+                    value={user.email || ''} 
+                    disabled 
+                  />
+                </div>
+              </div>
+
+              <div className="pp-form-group">
+                <label className="pp-label">Phone Number</label>
+                <div className="pp-input-wrapper">
+                  <Phone size={16} className="pp-input-icon" />
+                  <input 
+                    type="tel" 
+                    className="pp-input" 
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {user.role !== 'super_admin' && (
+                <div className="pp-form-group">
+                  <label className="pp-label">
+                    Department / School
+                    {!user.department && <span className="pp-required-tag"> (Select your department)</span>}
+                  </label>
+                  <div className="pp-input-wrapper">
+                    <Building size={16} className="pp-input-icon" />
+                    <select 
+                      className="pp-input pp-select"
+                      value={department}
+                      onChange={(e) => setDepartment(e.target.value)}
+                    >
+                      <option value="">-- Select Department --</option>
+                      {departments.map((d) => (
+                        <option key={d._id} value={d.name}>
+                          {d.name} {d.code ? `(${d.code})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <span className="pp-field-hint">
+                    Choose the department you are affiliated with.
+                  </span>
+                </div>
+              )}
+
+              <div className="pp-form-actions">
+                <button 
+                  type="submit" 
+                  className="pp-btn-save" 
+                  disabled={saving}
+                >
+                  <Save size={16} />
+                  {saving ? 'Saving...' : 'Save Profile'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Account Security & Change Password Card */}
+          <div className="pp-card pp-security-card">
+            <div className="pp-card-header">
+              <h2 className="pp-card-title">
+                <KeyRound size={18} /> Account Security & Password
+              </h2>
+              <span className="pp-card-subtitle">
+                Change your password to keep your institutional account secure
+              </span>
             </div>
-          </form>
+
+            {pwSuccessMsg && (
+              <div className="pp-alert pp-alert-success">
+                <Check size={16} /> {pwSuccessMsg}
+              </div>
+            )}
+
+            {pwErrorMsg && (
+              <div className="pp-alert pp-alert-danger">
+                <AlertTriangle size={16} /> {pwErrorMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleChangePassword} className="pp-form">
+              <div className="pp-form-group">
+                <label className="pp-label">Current Password</label>
+                <div className="pp-input-wrapper">
+                  <Lock size={16} className="pp-input-icon" />
+                  <input
+                    type={showCurrentPassword ? 'text' : 'password'}
+                    className="pp-input pp-input-has-toggle"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Enter current password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="pp-input-pw-toggle"
+                    onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                    aria-label={showCurrentPassword ? "Hide password" : "Show password"}
+                  >
+                    {showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="pp-form-group">
+                <div className="pp-label-row">
+                  <label className="pp-label">New Password</label>
+                  {newPassword.length > 0 && (
+                    <span className={`pp-pw-strength-tag ${getPasswordStrength(newPassword).label.toLowerCase().replace(' ', '-')}`}>
+                      {getPasswordStrength(newPassword).label}
+                    </span>
+                  )}
+                </div>
+                <div className="pp-input-wrapper">
+                  <KeyRound size={16} className="pp-input-icon" />
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    className="pp-input pp-input-has-toggle"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Minimum 8 characters"
+                    required
+                    minLength={8}
+                  />
+                  <button
+                    type="button"
+                    className="pp-input-pw-toggle"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    aria-label={showNewPassword ? "Hide password" : "Show password"}
+                  >
+                    {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+
+                {newPassword.length > 0 && (
+                  <div className="pp-pw-meter-bar">
+                    <div 
+                      className={`pp-pw-meter-segment ${getPasswordStrength(newPassword).score >= 1 ? 'active ' + getPasswordStrength(newPassword).label.toLowerCase().replace(' ', '-') : ''}`} 
+                    />
+                    <div 
+                      className={`pp-pw-meter-segment ${getPasswordStrength(newPassword).score >= 2 ? 'active ' + getPasswordStrength(newPassword).label.toLowerCase().replace(' ', '-') : ''}`} 
+                    />
+                    <div 
+                      className={`pp-pw-meter-segment ${getPasswordStrength(newPassword).score >= 3 ? 'active ' + getPasswordStrength(newPassword).label.toLowerCase().replace(' ', '-') : ''}`} 
+                    />
+                  </div>
+                )}
+                <span className="pp-field-hint">
+                  Password must be at least 8 characters long. Letters & numbers recommended.
+                </span>
+              </div>
+
+              <div className="pp-form-group">
+                <div className="pp-label-row">
+                  <label className="pp-label">Confirm New Password</label>
+                  {confirmPassword.length > 0 && (
+                    newPassword === confirmPassword ? (
+                      <span className="pp-pw-match-badge ok">✓ Passwords match</span>
+                    ) : (
+                      <span className="pp-pw-match-badge err">Passwords do not match</span>
+                    )
+                  )}
+                </div>
+                <div className="pp-input-wrapper">
+                  <ShieldCheck size={16} className="pp-input-icon" />
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    className="pp-input pp-input-has-toggle"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-type new password"
+                    required
+                    minLength={8}
+                  />
+                  <button
+                    type="button"
+                    className="pp-input-pw-toggle"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                  >
+                    {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="pp-form-actions">
+                <button
+                  type="submit"
+                  className="pp-btn-change-password"
+                  disabled={
+                    pwLoading || 
+                    !currentPassword || 
+                    !newPassword || 
+                    !confirmPassword || 
+                    newPassword !== confirmPassword || 
+                    newPassword.length < 8
+                  }
+                >
+                  {pwLoading ? (
+                    <>
+                      <RefreshCw size={16} className="pp-spin" /> Updating Password...
+                    </>
+                  ) : (
+                    <>
+                      <KeyRound size={16} /> Update Password
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
 
         {/* Right Column: Performance Analytics for Staff/Dept Admin OR System Administration for Super Admin */}

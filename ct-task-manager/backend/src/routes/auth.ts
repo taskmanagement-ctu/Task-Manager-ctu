@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { register, login, getMe, sendOTP, verifyOTP, resetPassword } from '../controllers/authController';
+import { register, login, getMe, sendOTP, verifyOTP, resetPassword, changePassword } from '../controllers/authController';
 import { authenticate, authorizeRoles } from '../middleware/auth';
 
 const router = Router();
@@ -18,6 +18,11 @@ router.post('/verify-otp', verifyOTP);
 // @desc    Reset password using verified OTP
 // @access  Public
 router.post('/reset-password', resetPassword);
+
+// @route   POST /api/auth/change-password
+// @desc    Change password for authenticated user
+// @access  Private
+router.post('/change-password', authenticate, changePassword);
 
 // @route   POST /api/auth/register
 // @desc    Register a new user (requires verified email OTP)

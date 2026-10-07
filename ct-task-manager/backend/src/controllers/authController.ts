@@ -11,33 +11,50 @@ import {
   formatDepartmentDisplayName,
 } from '../utils/normalization';
 
+const maskEmail = (emailStr: string): string => {
+  const parts = emailStr.split('@');
+  if (parts.length !== 2) return emailStr;
+  const [userPart, domain] = parts;
+  if (userPart.length <= 3) {
+    return `${userPart[0]}***@${domain}`;
+  }
+  const first = userPart.slice(0, 2);
+  const last = userPart.slice(-2);
+  return `${first}${'*'.repeat(Math.max(3, userPart.length - 4))}${last}@${domain}`;
+};
+
 /**
  * Send OTP for Registration or Forgot Password
  */
 export const sendOTP = async (req: Request, res: Response) => {
   try {
-    const { email, purpose, universityId, name } = req.body;
+    const { email, identifier, purpose, universityId, name } = req.body;
+    const rawInput = String(email || identifier || '').trim();
 
-    if (!email || !purpose) {
+    if (!rawInput || !purpose) {
       return res.status(400).json({
         success: false,
-        message: 'Email and purpose are required.',
+        message: 'Identifier (Email or University ID) and purpose are required.',
       });
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please enter a valid email address.',
-      });
-    }
-
-    const normalizedEmail = email.toLowerCase().trim();
+    let targetEmail = '';
+    let targetName = name || '';
+    let targetUniversityId = '';
 
     if (purpose === 'registration') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(rawInput)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please enter a valid email address.',
+        });
+      }
+
+      targetEmail = rawInput.toLowerCase();
+
       // 1. Check if email is already in registered users
-      const existingEmail = await User.findOne({ email: normalizedEmail });
+      const existingEmail = await User.findOne({ email: targetEmail });
       if (existingEmail) {
         return res.status(409).json({
           success: false,
@@ -76,15 +93,41 @@ export const sendOTP = async (req: Request, res: Response) => {
             message: 'This University ID is already registered.',
           });
         }
+
+        targetUniversityId = universityId;
+        if (!targetName) targetName = verifiedRecord.name;
       }
     } else if (purpose === 'forgot_password') {
-      // For forgot password, user must exist
-      const existingUser = await User.findOne({ email: normalizedEmail });
-      if (!existingUser) {
-        return res.status(404).json({
-          success: false,
-          message: 'No registered account found with this email address.',
-        });
+      // Allow 5-digit University ID or Email
+      if (/^\d{5}$/.test(rawInput)) {
+        const userById = await User.findOne({ universityId: rawInput });
+        if (!userById) {
+          return res.status(404).json({
+            success: false,
+            message: `No registered account found with University ID ${rawInput}.`,
+          });
+        }
+        targetEmail = userById.email.toLowerCase().trim();
+        targetName = userById.name;
+        targetUniversityId = userById.universityId;
+      } else {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(rawInput)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Please enter a valid 5-digit University ID or email address.',
+          });
+        }
+        const userByEmail = await User.findOne({ email: rawInput.toLowerCase().trim() });
+        if (!userByEmail) {
+          return res.status(404).json({
+            success: false,
+            message: 'No registered account found with this email address.',
+          });
+        }
+        targetEmail = userByEmail.email.toLowerCase().trim();
+        targetName = userByEmail.name;
+        targetUniversityId = userByEmail.universityId;
       }
     } else {
       return res.status(400).json({
@@ -98,11 +141,11 @@ export const sendOTP = async (req: Request, res: Response) => {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     // Remove any previous active OTP for this email and purpose
-    await OTP.deleteMany({ email: normalizedEmail, purpose });
+    await OTP.deleteMany({ email: targetEmail, purpose });
 
     // Save new OTP record
     await OTP.create({
-      email: normalizedEmail,
+      email: targetEmail,
       otp,
       purpose,
       expiresAt,
@@ -110,12 +153,27 @@ export const sendOTP = async (req: Request, res: Response) => {
       verified: false,
     });
 
-    // Send email using Nodemailer
-    await sendOtpEmail(normalizedEmail, otp, purpose, name);
+    console.log(`[OTP] Generated 6-digit code for ${targetEmail} (${purpose})`);
 
+    // Send email using Nodemailer
+    try {
+      await sendOtpEmail(targetEmail, otp, purpose, targetName);
+    } catch (mailError: any) {
+      console.error(`[OTP Error] Failed to send email to ${targetEmail}:`, mailError.message);
+      return res.status(500).json({
+        success: false,
+        message: 'Unable to deliver verification email. Please contact administrator.',
+        error: mailError.message,
+      });
+    }
+
+    const masked = maskEmail(targetEmail);
     return res.status(200).json({
       success: true,
-      message: `A 6-digit verification code has been sent to ${normalizedEmail}.`,
+      message: `A 6-digit verification code has been sent to ${masked}.`,
+      email: targetEmail,
+      maskedEmail: masked,
+      universityId: targetUniversityId,
     });
   } catch (error: any) {
     console.error('Send OTP Error:', error);
@@ -132,19 +190,24 @@ export const sendOTP = async (req: Request, res: Response) => {
  */
 export const verifyOTP = async (req: Request, res: Response) => {
   try {
-    const { email, otp, purpose } = req.body;
+    const { email, identifier, otp, purpose } = req.body;
+    const rawInput = String(email || identifier || '').trim();
 
-    if (!email || !otp || !purpose) {
+    if (!rawInput || !otp || !purpose) {
       return res.status(400).json({
         success: false,
-        message: 'Email, OTP, and purpose are required.',
+        message: 'Identifier, OTP, and purpose are required.',
       });
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    let targetEmail = rawInput.toLowerCase();
+    if (/^\d{5}$/.test(rawInput)) {
+      const user = await User.findOne({ universityId: rawInput });
+      if (user) targetEmail = user.email.toLowerCase().trim();
+    }
 
     const otpRecord = await OTP.findOne({
-      email: normalizedEmail,
+      email: targetEmail,
       purpose,
       expiresAt: { $gt: new Date() },
     });
@@ -164,7 +227,7 @@ export const verifyOTP = async (req: Request, res: Response) => {
       });
     }
 
-    if (otpRecord.otp !== otp.trim()) {
+    if (otpRecord.otp !== String(otp).trim()) {
       otpRecord.attempts += 1;
       await otpRecord.save();
       return res.status(400).json({
@@ -194,9 +257,10 @@ export const verifyOTP = async (req: Request, res: Response) => {
  */
 export const resetPassword = async (req: Request, res: Response) => {
   try {
-    const { email, otp, newPassword, confirmNewPassword } = req.body;
+    const { email, identifier, otp, newPassword, confirmNewPassword } = req.body;
+    const rawInput = String(email || identifier || '').trim();
 
-    if (!email || !otp || !newPassword || !confirmNewPassword) {
+    if (!rawInput || !otp || !newPassword || !confirmNewPassword) {
       return res.status(400).json({
         success: false,
         message: 'All fields are required.',
@@ -217,29 +281,51 @@ export const resetPassword = async (req: Request, res: Response) => {
       });
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    // Resolve user by ID or email
+    let user = null;
+    if (/^\d{5}$/.test(rawInput)) {
+      user = await User.findOne({ universityId: rawInput });
+    } else {
+      user = await User.findOne({ email: rawInput.toLowerCase().trim() });
+    }
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User account not found.',
+      });
+    }
+
+    const normalizedEmail = user.email.toLowerCase().trim();
 
     // Verify OTP
     const otpRecord = await OTP.findOne({
       email: normalizedEmail,
       purpose: 'forgot_password',
-      otp: otp.trim(),
       expiresAt: { $gt: new Date() },
     });
 
     if (!otpRecord) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid or expired verification code.',
+        message: 'Invalid or expired verification code. Please request a new code.',
       });
     }
 
-    // Find User
-    const user = await User.findOne({ email: normalizedEmail });
-    if (!user) {
-      return res.status(404).json({
+    if (otpRecord.attempts >= 5) {
+      await OTP.deleteOne({ _id: otpRecord._id });
+      return res.status(400).json({
         success: false,
-        message: 'User account not found.',
+        message: 'Too many incorrect attempts. Please request a new verification code.',
+      });
+    }
+
+    if (otpRecord.otp !== String(otp).trim()) {
+      otpRecord.attempts += 1;
+      await otpRecord.save();
+      return res.status(400).json({
+        success: false,
+        message: `Incorrect verification code. (${5 - otpRecord.attempts} attempts remaining)`,
       });
     }
 
@@ -256,12 +342,92 @@ export const resetPassword = async (req: Request, res: Response) => {
     return res.status(200).json({
       success: true,
       message: 'Password reset successful. You can now login with your new password.',
+      universityId: user.universityId,
     });
   } catch (error: any) {
     console.error('Reset Password Error:', error);
     return res.status(500).json({
       success: false,
       message: 'Failed to reset password. Please try again.',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Change Password for authenticated user
+ */
+export const changePassword = async (req: Request, res: Response) => {
+  try {
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+    const userId = req.user?._id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized. Please login again.',
+      });
+    }
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Current password, new password, and confirmation are required.',
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be at least 8 characters long.',
+      });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password and confirmation do not match.',
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User account not found.',
+      });
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isMatch) {
+      return res.status(400).json({
+        success: false,
+        message: 'Current password is incorrect.',
+      });
+    }
+
+    const isSame = await bcrypt.compare(newPassword, user.passwordHash);
+    if (isSame) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be different from current password.',
+      });
+    }
+
+    const saltRounds = 10;
+    user.passwordHash = await bcrypt.hash(newPassword, saltRounds);
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Password updated successfully. Your account is secured with the new password.',
+    });
+  } catch (error: any) {
+    console.error('Change Password Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update password. Please try again.',
+      error: error.message,
     });
   }
 };

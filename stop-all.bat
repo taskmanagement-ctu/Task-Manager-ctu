@@ -29,7 +29,12 @@ taskkill /F /FI "WINDOWTITLE eq Backend-Logs*" >nul 2>&1
 echo [3/3] Freeing Port 5000...
 for /f "tokens=5" %%a in ('netstat -aon ^| find ":5000" ^| find "LISTENING"') do taskkill /F /PID %%a >nul 2>&1
 
+echo Stopping GitHub Actions Runner (if running)...
+taskkill /F /FI "WINDOWTITLE eq *Runner*" >nul 2>&1
+taskkill /F /IM Runner.Listener.exe >nul 2>&1
+taskkill /F /IM Runner.Worker.exe >nul 2>&1
+
 echo.
-echo [OK] All servers (Nginx and Backend) have been safely stopped.
+echo [OK] All servers and runner processes have been safely stopped.
 ping 127.0.0.1 -n 2 >nul
 exit /b 0
