@@ -118,7 +118,11 @@ function ensureNginx() {
 setInterval(() => {
   if (isShuttingDown) return;
 
+  let responded = false;
   const req = http.get('http://127.0.0.1:5000/api/health', { timeout: 5000 }, (res) => {
+    responded = true;
+    res.resume();
+    req.setTimeout(0);
     if (res.statusCode === 200 || res.statusCode === 503) {
       restartAttempts = 0;
       failedHealthChecks = 0;
@@ -129,6 +133,7 @@ setInterval(() => {
   });
 
   req.on('error', (err) => {
+    if (responded) return;
     failedHealthChecks++;
     log(`⚠️ [Watchdog] Health check connection error: ${err.message} (consecutive failures: ${failedHealthChecks})`);
     if (failedHealthChecks >= 4 && child) {
@@ -141,6 +146,7 @@ setInterval(() => {
   });
 
   req.on('timeout', () => {
+    if (responded) return;
     req.destroy();
     failedHealthChecks++;
     log(`⚠️ [Watchdog] Health check timed out (consecutive failures: ${failedHealthChecks})`);
