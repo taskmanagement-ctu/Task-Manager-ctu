@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { api, User, Department } from '../services/api';
 import './SuperAdminStaffAssignmentsPage.css';
 import { Building, ShieldCheck, Mail, Phone, Search, Filter, X, Users, Shield, AlertTriangle } from 'lucide-react';
+import ExportDropdownMenu from '../components/ExportDropdownMenu';
+import { exportStaffAssignments } from '../utils/generalExport';
 
 const SuperAdminStaffAssignmentsPage: React.FC = () => {
   const [staff, setStaff] = useState<User[]>([]);
@@ -20,6 +22,23 @@ const SuperAdminStaffAssignmentsPage: React.FC = () => {
   const [departmentName, setDepartmentName] = useState('');
   const [departments, setDepartments] = useState<Department[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportAssignments = async (format: 'excel' | 'pdf' | 'csv') => {
+    try {
+      setIsExporting(true);
+      await exportStaffAssignments(filteredStaff, assignments, format, {
+        department: selectedDepartment !== 'all' ? selectedDepartment : undefined,
+        role: roleFilter !== 'all' ? roleFilter : undefined,
+        search: searchQuery || undefined,
+      });
+    } catch (err: any) {
+      console.error('Export error', err);
+      alert('Failed to export staff assignments: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // Fetch logic
   const fetchStaff = async () => {
@@ -204,11 +223,15 @@ const SuperAdminStaffAssignmentsPage: React.FC = () => {
     <>
       <div className="sa-assignments-container">
         {/* Header */}
-        <div className="saa-header">
+        <div className="saa-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <h1 className="saa-title">Manage Staff</h1>
             <p className="saa-subtitle">View active staff members, filter by department or role, and assign Department Admins.</p>
           </div>
+          <ExportDropdownMenu
+            onExport={handleExportAssignments}
+            isExporting={isExporting}
+          />
         </div>
 
         {error && <div className="alert alert-error">{error}</div>}

@@ -8,6 +8,8 @@ import CreateTaskView from '../components/CreateTaskView';
 import TaskChatDrawer from '../components/TaskChatDrawer';
 import { Search, Plus, SlidersHorizontal, Maximize2, Minimize2 } from 'lucide-react';
 import { calculateUrgency } from '../utils/taskUrgency';
+import ExportDropdownMenu from '../components/ExportDropdownMenu';
+import { exportTasks } from '../utils/generalExport';
 import './TasksPage.css';
 
 const TasksPage: React.FC = () => {
@@ -45,6 +47,40 @@ const TasksPage: React.FC = () => {
   const [chatTask, setChatTask] = useState<any | null>(null);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [creatingSubtaskFor, setCreatingSubtaskFor] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportTasks = async (format: 'excel' | 'pdf' | 'csv') => {
+    try {
+      setIsExporting(true);
+      let dataToExport = tasks;
+      try {
+        const fullRes = await api.getTasks({
+          limit: 2000,
+          search,
+          status: statusFilter !== 'All' ? statusFilter : undefined,
+          taskType: taskTypeFilter !== 'All' ? taskTypeFilter : undefined,
+          department: (!teamOnlyFilter && schoolFilter !== 'All') ? schoolFilter : undefined,
+          teamOnly: teamOnlyFilter ? 'true' : undefined,
+        });
+        if (fullRes.data?.tasks && fullRes.data.tasks.length > 0) {
+          dataToExport = fullRes.data.tasks;
+        }
+      } catch (err) {
+        console.warn('Could not fetch all tasks for export, falling back to current page', err);
+      }
+      await exportTasks(dataToExport, format, {
+        status: statusFilter,
+        department: schoolFilter,
+        search,
+        taskType: taskTypeFilter,
+      });
+    } catch (err: any) {
+      console.error('Export error', err);
+      alert('Failed to export tasks: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsExporting(false);
+    }
+  };
   
   const loadTasks = async () => {
     try {
@@ -296,11 +332,17 @@ const TasksPage: React.FC = () => {
             <p>Monitor and assign tasks across the university network. Track urgency, manage workloads, and ensure timely completion of critical institutional objectives.</p>
           </div>
           
-          {user?.role !== 'staff' && (
-            <button className="tasks-create-btn" onClick={() => setIsCreatingTask(true)}>
-              <Plus size={18} /> CREATE TASK
-            </button>
-          )}
+          <div className="tasks-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <ExportDropdownMenu
+              onExport={handleExportTasks}
+              isExporting={isExporting}
+            />
+            {user?.role !== 'staff' && (
+              <button className="tasks-create-btn" onClick={() => setIsCreatingTask(true)}>
+                <Plus size={18} /> CREATE TASK
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Mobile Filter Pills */}

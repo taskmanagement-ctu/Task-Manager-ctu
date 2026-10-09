@@ -15,6 +15,8 @@ import {
   CheckCircle,
   AlertTriangle
 } from 'lucide-react';
+import ExportDropdownMenu from '../components/ExportDropdownMenu';
+import { exportUsers } from '../utils/generalExport';
 import './UserManagementPage.css';
 
 const UserManagementPage: React.FC = () => {
@@ -46,6 +48,36 @@ const UserManagementPage: React.FC = () => {
   // Delete confirm State
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportUsers = async (format: 'excel' | 'pdf' | 'csv') => {
+    try {
+      setIsExporting(true);
+      let dataToExport = users;
+      try {
+        const fullRes = await api.getUsers({
+          limit: 5000,
+          search,
+          role: roleFilter,
+          status: statusFilter,
+        });
+        if (fullRes.data?.users && fullRes.data.users.length > 0) {
+          dataToExport = fullRes.data.users;
+        }
+      } catch (err) {
+        console.warn('Could not fetch all users for export, falling back to current page', err);
+      }
+      await exportUsers(dataToExport, format, {
+        role: roleFilter,
+        search,
+      });
+    } catch (err: any) {
+      console.error('Export error', err);
+      alert('Failed to export users: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -176,13 +208,19 @@ const UserManagementPage: React.FC = () => {
           </select>
         </div>
         
-        <button 
-          className="btn-add-user" 
-          onClick={() => navigate('/super-admin/verified-users')}
-          title="Open Verified Users Directory"
-        >
-          <ShieldCheck size={16} /> Verified Users
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <ExportDropdownMenu
+            onExport={handleExportUsers}
+            isExporting={isExporting}
+          />
+          <button 
+            className="btn-add-user" 
+            onClick={() => navigate('/super-admin/verified-users')}
+            title="Open Verified Users Directory"
+          >
+            <ShieldCheck size={16} /> Verified Users
+          </button>
+        </div>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}

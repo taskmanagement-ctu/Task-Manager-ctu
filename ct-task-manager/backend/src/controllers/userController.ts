@@ -160,6 +160,11 @@ export const updateUserRole = async (req: Request, res: Response) => {
       previousAdminFromAssignment = await User.findById(candidateAssignment.adminId);
     }
 
+    // If promoting to department_admin, preserve their current baseDepartment first
+    if (role === 'department_admin' && !userToUpdate.baseDepartment) {
+      userToUpdate.baseDepartment = userToUpdate.department || null;
+    }
+
     // Update department if provided or infer from previous admin if promoting to department_admin
     if (department !== undefined && department !== null && String(department).trim() !== '') {
       userToUpdate.department = String(department).trim();
@@ -188,8 +193,17 @@ export const updateUserRole = async (req: Request, res: Response) => {
       }
 
       if (existingAdmin) {
-        // Demote existing admin to staff
+        // Demote existing admin to staff and revert to their base department
         existingAdmin.role = 'staff';
+        const targetBase = existingAdmin.baseDepartment ||
+          (await VerifiedUser.findOne({ universityId: existingAdmin.universityId }))?.department ||
+          existingAdmin.department;
+        if (targetBase) {
+          existingAdmin.department = targetBase;
+          if (!existingAdmin.baseDepartment) {
+            existingAdmin.baseDepartment = targetBase;
+          }
+        }
         await existingAdmin.save();
 
         // Deactivate new admin's own subordinate staff assignment (cannot report to self)
@@ -204,7 +218,7 @@ export const updateUserRole = async (req: Request, res: Response) => {
           { $set: { adminId: userToUpdate._id, assignedBy: (req as any).user?._id || userToUpdate._id } }
         );
 
-        // Ensure former admin has NO active staff assignment (former admin becomes UNASSIGNED STAFF)
+        // Ensure former admin has NO active staff assignment (former admin becomes UNASSIGNED STAFF in their base department)
         await StaffAssignment.updateMany(
           { staffId: existingAdmin._id, isActive: true },
           { $set: { isActive: false } }
@@ -220,9 +234,13 @@ export const updateUserRole = async (req: Request, res: Response) => {
 
     // Cascading side-effects for Staff Assignment
     if (oldRole === 'department_admin' && role !== 'department_admin') {
+      // If manually demoted without replacement, revert department to baseDepartment
+      if (userToUpdate.baseDepartment && userToUpdate.department !== userToUpdate.baseDepartment) {
+        userToUpdate.department = userToUpdate.baseDepartment;
+        await userToUpdate.save();
+      }
+
       // Deactivate all staff assignments where this user was the admin
-      // Note: If they were demoted because someone else was promoted, their team was already transferred above.
-      // This mainly applies to manual demotions by Super Admin without a successor.
       await StaffAssignment.updateMany(
         { adminId: userId, isActive: true },
         { $set: { isActive: false } }
@@ -681,8 +699,17 @@ export const changeDepartmentAdmin = async (req: Request, res: Response) => {
     let transferredCount = 0;
 
     if (currentAdmin) {
-      // Step A: Demote current admin to staff
+      // Step A: Demote current admin to staff and revert to base department
       currentAdmin.role = 'staff';
+      const targetBase = currentAdmin.baseDepartment ||
+        (await VerifiedUser.findOne({ universityId: currentAdmin.universityId }))?.department ||
+        currentAdmin.department;
+      if (targetBase) {
+        currentAdmin.department = targetBase;
+        if (!currentAdmin.baseDepartment) {
+          currentAdmin.baseDepartment = targetBase;
+        }
+      }
       await currentAdmin.save();
 
       // Step B: Deactivate new admin's own subordinate staff assignment (cannot report to self)
@@ -698,7 +725,7 @@ export const changeDepartmentAdmin = async (req: Request, res: Response) => {
       );
       transferredCount = transferResult.modifiedCount;
 
-      // Step D: Ensure currentAdmin has NO staff assignment (former admin becomes UNASSIGNED STAFF)
+      // Step D: Ensure currentAdmin has NO staff assignment (former admin becomes UNASSIGNED STAFF in their base department)
       await StaffAssignment.updateMany(
         { staffId: currentAdmin._id, isActive: true },
         { $set: { isActive: false } }
@@ -711,7 +738,10 @@ export const changeDepartmentAdmin = async (req: Request, res: Response) => {
       );
     }
 
-    // Step E: Promote newAdmin to department_admin
+    // Step E: Promote newAdmin to department_admin (preserve their base department)
+    if (!newAdmin.baseDepartment) {
+      newAdmin.baseDepartment = newAdmin.department || targetDept;
+    }
     newAdmin.role = 'department_admin';
     newAdmin.department = targetDept;
     await newAdmin.save();
@@ -720,7 +750,7 @@ export const changeDepartmentAdmin = async (req: Request, res: Response) => {
 
     return res.status(200).json({
       success: true,
-      message: `Department Admin changed successfully. ${transferredCount} team member(s) transferred to ${newAdmin.name}. ${currentAdmin ? `${previousAdminName} is now unassigned staff.` : ''}`,
+      message: `Department Admin changed successfully. ${transferredCount} team member(s) transferred to ${newAdmin.name}. ${currentAdmin ? `${previousAdminName} reverted to staff in ${currentAdmin.department}.` : ''}`,
       data: {
         newAdmin: await User.findById(newAdmin._id).select('-passwordHash'),
         previousAdmin: currentAdmin ? await User.findById(currentAdmin._id).select('-passwordHash') : null,

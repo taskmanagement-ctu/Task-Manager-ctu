@@ -14,6 +14,8 @@ import {
   X,
   Edit2
 } from 'lucide-react';
+import ExportDropdownMenu from '../components/ExportDropdownMenu';
+import { exportDepartments } from '../utils/generalExport';
 
 const SuperAdminDepartmentsPage: React.FC = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -25,6 +27,19 @@ const SuperAdminDepartmentsPage: React.FC = () => {
   const [newDeptName, setNewDeptName] = useState('');
   const [newDeptCode, setNewDeptCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportDepartments = async (format: 'excel' | 'pdf' | 'csv') => {
+    try {
+      setIsExporting(true);
+      await exportDepartments(departments, format);
+    } catch (err: any) {
+      console.error('Export error', err);
+      alert('Failed to export departments: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // Edit Department Modal state
   const [editModalDept, setEditModalDept] = useState<Department | null>(null);
@@ -185,9 +200,15 @@ const SuperAdminDepartmentsPage: React.FC = () => {
             <h1 className="dept-title">Departments</h1>
             <p className="dept-subtitle">Manage university departments available for registration and staff assignments.</p>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowAddModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Plus size={16} /> Add Department
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <ExportDropdownMenu
+              onExport={handleExportDepartments}
+              isExporting={isExporting}
+            />
+            <button className="btn btn-primary" onClick={() => setShowAddModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Plus size={16} /> Add Department
+            </button>
+          </div>
         </div>
 
         {error && <div className="alert alert-error">{error}</div>}

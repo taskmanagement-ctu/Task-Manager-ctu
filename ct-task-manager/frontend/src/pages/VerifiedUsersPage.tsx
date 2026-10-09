@@ -103,9 +103,11 @@ const VerifiedUsersPage = () => {
 
   // ─── Export State ───────────────────────────────────
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showBulkExportMenu, setShowBulkExportMenu] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportMenuAlign, setExportMenuAlign] = useState<'left' | 'right'>('left');
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  const bulkExportMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (showExportMenu && exportMenuRef.current) {
@@ -125,19 +127,23 @@ const VerifiedUsersPage = () => {
       if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
         setShowExportMenu(false);
       }
+      if (bulkExportMenuRef.current && !bulkExportMenuRef.current.contains(e.target as Node)) {
+        setShowBulkExportMenu(false);
+      }
     };
-    if (showExportMenu) {
+    if (showExportMenu || showBulkExportMenu) {
       document.addEventListener('mousedown', handleOutsideClick);
     }
     return () => {
       document.removeEventListener('mousedown', handleOutsideClick);
     };
-  }, [showExportMenu]);
+  }, [showExportMenu, showBulkExportMenu]);
 
   const handleExport = async (format: 'excel' | 'pdf' | 'csv', scope: 'filtered' | 'selected' = 'filtered') => {
     try {
       setIsExporting(true);
       setShowExportMenu(false);
+      setShowBulkExportMenu(false);
 
       let exportData: VerifiedUser[] = [];
 
@@ -856,15 +862,65 @@ const VerifiedUsersPage = () => {
               )}
             </div>
             <div className="vu-bulk-banner-right">
-              <button
-                type="button"
-                className="btn btn-sm vu-bulk-export-btn"
-                onClick={() => handleExport('excel', 'selected')}
-                disabled={isExporting}
-                title="Export selected staff to Excel"
-              >
-                <Download size={14} /> Export Selected ({selectedIds.length})
-              </button>
+              <div className="vu-export-dropdown-wrapper" ref={bulkExportMenuRef}>
+                <button
+                  type="button"
+                  className="btn btn-sm vu-bulk-export-btn"
+                  onClick={() => setShowBulkExportMenu(!showBulkExportMenu)}
+                  disabled={isExporting}
+                  title="Export selected staff in multiple formats"
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap' }}
+                >
+                  <Download size={14} />
+                  <span>Export Selected ({selectedIds.length})</span>
+                  <ChevronDown size={13} className={showBulkExportMenu ? 'vu-chevron-open' : ''} />
+                </button>
+
+                {showBulkExportMenu && (
+                  <div className="vu-export-menu align-right">
+                    <div className="vu-export-menu-header">
+                      <span>Export Selected Format</span>
+                      <span className="vu-export-selected-badge">{selectedIds.length} Selected</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="vu-export-item"
+                      onClick={() => handleExport('excel', 'selected')}
+                    >
+                      <FileSpreadsheet size={16} className="vu-export-icon-excel" />
+                      <div className="vu-export-item-text">
+                        <strong>Excel Spreadsheet (.xlsx)</strong>
+                        <span>Formatted with CTU theme & status badges</span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="vu-export-item"
+                      onClick={() => handleExport('pdf', 'selected')}
+                    >
+                      <FileText size={16} className="vu-export-icon-pdf" />
+                      <div className="vu-export-item-text">
+                        <strong>PDF Document (.pdf)</strong>
+                        <span>Official printable report with header</span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="vu-export-item"
+                      onClick={() => handleExport('csv', 'selected')}
+                    >
+                      <Download size={16} className="vu-export-icon-csv" />
+                      <div className="vu-export-item-text">
+                        <strong>CSV Data (.csv)</strong>
+                        <span>Raw table data for external software</span>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 className="btn btn-secondary btn-sm vu-bulk-clear-btn"

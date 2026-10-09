@@ -6,6 +6,7 @@ export interface IUser extends Document {
   email: string;
   phone: string;
   department: string | null;
+  baseDepartment?: string | null;
   passwordHash: string;
   role: 'super_admin' | 'department_admin' | 'staff';
   isActive: boolean;
@@ -39,6 +40,11 @@ const userSchema = new Schema<IUser>(
       trim: true,
     },
     department: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    baseDepartment: {
       type: String,
       default: null,
       trim: true,

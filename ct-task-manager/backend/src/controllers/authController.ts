@@ -553,6 +553,7 @@ export const register = async (req: Request, res: Response) => {
         email: normalizedEmail,
         phone: phone.trim(),
         department: finalDepartment,
+        baseDepartment: finalDepartment,
         passwordHash,
         role,
       });
@@ -565,6 +566,7 @@ export const register = async (req: Request, res: Response) => {
           email: normalizedEmail,
           phone: phone.trim(),
           department: finalDepartment,
+          baseDepartment: finalDepartment,
           passwordHash,
           role: 'staff',
         });
