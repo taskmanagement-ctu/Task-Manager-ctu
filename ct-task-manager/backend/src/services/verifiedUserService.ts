@@ -7,6 +7,7 @@ import {
   normalizePhone,
   normalizeUniversityId,
   validateRow,
+  isValidUniversityId,
   ParsedVerifiedUser,
   RowValidationError,
   ImportResult,
@@ -22,6 +23,53 @@ export interface ParsedSheet {
   sheetName: string;
   rows: Record<string, unknown>[];
 }
+
+/**
+ * Propagate merged cell values across the entire merge range.
+ * In Excel (.xlsx), merged cells only store their value in the top-left cell.
+ * All subsequent cells in that merge block are left blank/undefined by SheetJS.
+ * This function replicates the top-left cell's value across all rows/cols within
+ * each merge range so that every row (e.g. Department spanning multiple users)
+ * properly inherits its value.
+ */
+export const fillMergedCells = (sheet: XLSX.WorkSheet): void => {
+  if (!sheet || !sheet['!merges'] || !Array.isArray(sheet['!merges'])) {
+    return;
+  }
+
+  for (const merge of sheet['!merges']) {
+    const startAddr = XLSX.utils.encode_cell(merge.s);
+    const startCell = sheet[startAddr];
+
+    // If start cell is empty or doesn't exist, nothing to propagate
+    if (!startCell || startCell.v === undefined || startCell.v === null || startCell.v === '') {
+      continue;
+    }
+
+    // Populate all cells in the merge range with the start cell's value and metadata
+    for (let r = merge.s.r; r <= merge.e.r; r++) {
+      for (let c = merge.s.c; c <= merge.e.c; c++) {
+        // Skip the start cell itself
+        if (r === merge.s.r && c === merge.s.c) {
+          continue;
+        }
+
+        // Avoid horizontal propagation on row 0 to prevent duplicating distinct column headers
+        if (merge.s.r === 0 && merge.s.c !== merge.e.c) {
+          continue;
+        }
+
+        const cellAddr = XLSX.utils.encode_cell({ r, c });
+        // Assign cell value while preserving formatting/type
+        sheet[cellAddr] = {
+          t: startCell.t,
+          v: startCell.v,
+          w: startCell.w !== undefined ? startCell.w : String(startCell.v),
+        };
+      }
+    }
+  }
+};
 
 /**
  * Parse an uploaded file buffer into an array of sheets with their raw row objects.
@@ -41,6 +89,9 @@ export const parseAllSheets = (
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
     if (!sheet) continue;
+
+    // Expand merged cells so every row inside a merged cell inherits the value
+    fillMergedCells(sheet);
 
     const rawRows: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, {
       defval: '',
@@ -99,7 +150,47 @@ const mapHeaders = (
       continue;
     }
 
-    const fieldName = COLUMN_MAP[normalizedKey];
+    let fieldName = COLUMN_MAP[normalizedKey];
+
+    // Smart fallback pattern matching for resilient header detection
+    if (!fieldName) {
+      if (
+        normalizedKey.includes('deapr') ||
+        normalizedKey.includes('depart') ||
+        normalizedKey.includes('dept') ||
+        normalizedKey.startsWith('school')
+      ) {
+        fieldName = 'department';
+      } else if (
+        normalizedKey.includes('mobile') ||
+        normalizedKey.includes('phone') ||
+        normalizedKey.includes('contact')
+      ) {
+        fieldName = 'phone';
+      } else if (
+        normalizedKey.includes('email') ||
+        normalizedKey.includes('mail')
+      ) {
+        fieldName = 'email';
+      } else if (
+        normalizedKey === 'id' ||
+        normalizedKey.endsWith(' id') ||
+        normalizedKey.startsWith('id ') ||
+        normalizedKey.includes('university id') ||
+        normalizedKey.includes('emp id') ||
+        normalizedKey.includes('roll no')
+      ) {
+        fieldName = 'universityId';
+      } else if (
+        normalizedKey.includes('name') &&
+        !normalizedKey.includes('dept') &&
+        !normalizedKey.includes('school') &&
+        !normalizedKey.includes('institution')
+      ) {
+        fieldName = 'name';
+      }
+    }
+
     if (fieldName) {
       mapped[fieldName] = normalizeString(rawValue);
     }
@@ -150,8 +241,33 @@ export const importVerifiedUsers = async (
   const resolveUserTypeFromSheetName = (sheetName: string): 'staff' | 'student' | null => {
     const clean = sheetName.trim().toLowerCase();
     if (clean.includes('student')) return 'student';
-    if (clean.includes('staff') || clean.includes('faculty') || clean.includes('teacher')) return 'staff';
+    if (clean.includes('staff') || clean.includes('faculty') || clean.includes('teacher') || clean.includes('admin')) return 'staff';
     return null;
+  };
+
+  const resolveCategoryFromSheetName = (sheetName: string): string | null => {
+    const clean = sheetName.trim();
+    const lower = clean.toLowerCase();
+
+    // Ignore generic sheet names
+    if (
+      /^sheet\s*\d+$/i.test(lower) ||
+      lower === 'data' ||
+      lower === 'template' ||
+      lower === 'verified users' ||
+      lower === 'users' ||
+      lower === 'export'
+    ) {
+      return null;
+    }
+
+    if (lower.includes('facult')) return 'Faculty';
+    if (lower.includes('admin')) return 'Admin';
+    if (lower.includes('staff')) return 'Staff';
+    if (lower.includes('student')) return 'Student';
+
+    // Title case the sheet name for custom tabs
+    return clean.replace(/\b\w/g, l => l.toUpperCase());
   };
 
   interface ValidSheetInfo {
@@ -159,6 +275,7 @@ export const importVerifiedUsers = async (
     rows: Record<string, unknown>[];
     sheetDepartment: string | null;
     sheetUserType: 'staff' | 'student' | null;
+    sheetCategory: string | null;
   }
 
   const validSheets: ValidSheetInfo[] = [];
@@ -187,6 +304,7 @@ export const importVerifiedUsers = async (
       rows: sheet.rows,
       sheetDepartment: resolveDepartmentFromSheetName(sheet.sheetName),
       sheetUserType: resolveUserTypeFromSheetName(sheet.sheetName),
+      sheetCategory: resolveCategoryFromSheetName(sheet.sheetName),
     });
   }
 
@@ -216,7 +334,7 @@ export const importVerifiedUsers = async (
 
   // Phase 1: Parse, normalize, and validate all rows across all sheets
   for (const sheetData of validSheets) {
-    const { sheetName, rows, sheetDepartment, sheetUserType } = sheetData;
+    const { sheetName, rows, sheetDepartment, sheetUserType, sheetCategory } = sheetData;
     result.totalRows += rows.length;
 
     for (let i = 0; i < rows.length; i++) {
@@ -227,6 +345,18 @@ export const importVerifiedUsers = async (
       mapped.universityId = normalizeUniversityId(mapped.universityId);
       mapped.phone = normalizePhone(mapped.phone);
       mapped.email = (mapped.email || '').toLowerCase().trim();
+
+      // Check if this row is a section divider row (e.g. "Academic Support Staff")
+      if (
+        !isValidUniversityId(mapped.universityId) &&
+        /academic|support|staff|faculty|admin|department|school|section|designation/i.test(mapped.universityId) &&
+        (!mapped.email || mapped.email === '-') &&
+        (!mapped.phone || mapped.phone === '-')
+      ) {
+        // Gracefully ignore divider / section header row
+        result.skipped++;
+        continue;
+      }
 
       // Validate row
       const rowErrors = validateRow(mapped, rowNumber);
@@ -239,24 +369,6 @@ export const importVerifiedUsers = async (
         continue;
       }
 
-      // Check for duplicate University IDs across the whole workbook
-      if (seenIds.has(mapped.universityId)) {
-        const firstSeen = seenIds.get(mapped.universityId)!;
-        const duplicateMsg = isMultiSheet && firstSeen.sheetName !== sheetName
-          ? `Duplicate University ID "${mapped.universityId}" — first seen in [${firstSeen.sheetName}] row ${firstSeen.rowNumber}`
-          : `Duplicate University ID "${mapped.universityId}" — first seen in row ${firstSeen.rowNumber}`;
-
-        result.errors.push({
-          row: rowNumber,
-          sheet: sheetName,
-          field: 'ID',
-          message: duplicateMsg,
-        });
-        result.skipped++;
-        continue;
-      }
-      seenIds.set(mapped.universityId, { sheetName, rowNumber });
-
       // Determine userType
       const rawType = (mapped.userType || '').toLowerCase().trim();
       let userType: 'staff' | 'student';
@@ -266,6 +378,20 @@ export const importVerifiedUsers = async (
         userType = sheetUserType;
       } else {
         userType = options?.defaultUserType || 'staff';
+      }
+
+      // Determine category (e.g. "Faculty", "Admin" from tab or column)
+      let category = mapped.category || sheetCategory || null;
+      if (category) {
+        const cleanCat = category.trim();
+        const lowerCat = cleanCat.toLowerCase();
+        if (lowerCat.includes('facult')) category = 'Faculty';
+        else if (lowerCat.includes('admin')) category = 'Admin';
+        else if (lowerCat.includes('staff')) category = 'Staff';
+        else if (lowerCat.includes('student')) category = 'Student';
+        else {
+          category = cleanCat.replace(/\b\w/g, l => l.toUpperCase());
+        }
       }
 
       // Determine department
@@ -280,6 +406,36 @@ export const importVerifiedUsers = async (
         department = matched ? matched.name : formatDepartmentDisplayName(department);
       }
 
+      // Check for duplicate University IDs across the whole workbook (e.g. same person in Faculty & Admin tabs)
+      if (seenIds.has(mapped.universityId)) {
+        const existingRow = parsedRows.find(p => p.data.universityId === mapped.universityId);
+        if (existingRow) {
+          // Merge categories (e.g. Faculty + Admin -> "Faculty, Admin")
+          if (category && existingRow.data.category) {
+            if (!existingRow.data.category.includes(category)) {
+              existingRow.data.category = `${existingRow.data.category}, ${category}`;
+            }
+          } else if (category && !existingRow.data.category) {
+            existingRow.data.category = category;
+          }
+
+          // If current row has email/phone/department and previous row was empty, populate them
+          if ((!existingRow.data.email || existingRow.data.email === '-') && mapped.email && mapped.email !== '-') {
+            existingRow.data.email = mapped.email;
+          }
+          if ((!existingRow.data.phone || existingRow.data.phone === '-') && mapped.phone && mapped.phone !== '-') {
+            existingRow.data.phone = mapped.phone;
+          }
+          if (!existingRow.data.department && department) {
+            existingRow.data.department = department;
+          }
+
+          // Successfully merged across sheets, no error
+          continue;
+        }
+      }
+      seenIds.set(mapped.universityId, { sheetName, rowNumber });
+
       parsedRows.push({
         sheetName,
         rowNumber,
@@ -290,6 +446,7 @@ export const importVerifiedUsers = async (
           phone: mapped.phone,
           department,
           userType,
+          category,
         },
       });
     }
@@ -309,6 +466,7 @@ export const importVerifiedUsers = async (
         existing.phone = data.phone;
         existing.department = data.department;
         existing.userType = data.userType;
+        if (data.category !== undefined) existing.category = data.category;
         await existing.save();
         result.updated++;
       } else {

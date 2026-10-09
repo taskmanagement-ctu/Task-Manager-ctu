@@ -18,7 +18,25 @@ const checkAdminStaffPermission = async (adminId: string, staffId: string) => {
     staffId,
     isActive: true
   });
-  return !!assignment;
+  if (assignment) return true;
+
+  // Also allow if admin and staff belong to the same department
+  const [adminUser, staffUser] = await Promise.all([
+    User.findById(adminId).select('department role'),
+    User.findById(staffId).select('department role')
+  ]);
+  if (
+    adminUser &&
+    staffUser &&
+    adminUser.role === 'department_admin' &&
+    adminUser.department &&
+    staffUser.department &&
+    adminUser.department.trim().toLowerCase() === staffUser.department.trim().toLowerCase()
+  ) {
+    return true;
+  }
+
+  return false;
 };
 
 // POST /api/tasks
@@ -56,8 +74,6 @@ export const createTask = async (req: Request, res: Response) => {
       }
     }
 
-    let workflowType = undefined;
-    let finalAssignee = null;
     let parsedIsSubtask = isSubtask === 'true' || isSubtask === true;
 
     if (parsedIsSubtask) {
@@ -70,35 +86,90 @@ export const createTask = async (req: Request, res: Response) => {
       }
     }
 
-    if (assignedTo) {
-      const targetUser = await User.findById(assignedTo);
-      if (!targetUser || !targetUser.isActive) {
-        return res.status(400).json({ success: false, message: 'Target assigned user is invalid or inactive.' });
-      }
-
-      if (user.role === 'super_admin') {
-        finalAssignee = assignedTo;
-        if (targetUser.role === 'department_admin') {
-          workflowType = 'department_admin';
-        } else {
-          workflowType = 'super_admin_direct';
+    // Parse assignees (can be single ID string, array of ID strings, JSON array string, or comma-separated)
+    let rawAssignees: string[] = [];
+    if (Array.isArray(assignedTo)) {
+      rawAssignees = assignedTo.flatMap(item => {
+        if (typeof item === 'string') {
+          const t = item.trim();
+          if (t.startsWith('[') && t.endsWith(']')) {
+            try { return JSON.parse(t); } catch { return t; }
+          }
+          if (t.includes(',')) return t.split(',').map(s => s.trim());
+          return t;
         }
-      } else if (user.role === 'department_admin') {
-        const hasPermission = await checkAdminStaffPermission(user._id.toString(), assignedTo);
-        if (!hasPermission) {
-          return res.status(403).json({ success: false, message: 'Forbidden. You can only assign tasks to yourself or your active staff.' });
+        return String(item || '').trim();
+      });
+    } else if (typeof assignedTo === 'string' && assignedTo.trim()) {
+      const trimmed = assignedTo.trim();
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          rawAssignees = Array.isArray(parsed) ? parsed : [trimmed];
+        } catch {
+          rawAssignees = trimmed.split(',').map(s => s.trim());
         }
-        finalAssignee = assignedTo;
-        workflowType = 'department_admin';
-      }
-    } else {
-      // Unassigned
-      if (user.role === 'department_admin') {
-        workflowType = 'department_admin';
+      } else if (trimmed.includes(',')) {
+        rawAssignees = trimmed.split(',').map(s => s.trim());
+      } else {
+        rawAssignees = [trimmed];
       }
     }
 
-    // Handle File Uploads via GridFSBucket
+    const uniqueAssigneeIds = Array.from(
+      new Set(rawAssignees.map(id => String(id || '').trim()).filter(Boolean))
+    );
+
+    interface ValidatedAssigneeInfo {
+      assigneeId: string | null;
+      workflowType?: 'super_admin_direct' | 'department_admin';
+    }
+
+    const validatedAssignees: ValidatedAssigneeInfo[] = [];
+
+    if (uniqueAssigneeIds.length === 0) {
+      let wf: 'department_admin' | undefined = undefined;
+      if (user.role === 'department_admin') {
+        wf = 'department_admin';
+      }
+      validatedAssignees.push({ assigneeId: null, workflowType: wf });
+    } else {
+      for (const targetId of uniqueAssigneeIds) {
+        const targetUser = await User.findById(targetId);
+        if (!targetUser || !targetUser.isActive) {
+          return res.status(400).json({
+            success: false,
+            message: `Target assigned user (${targetId}) is invalid or inactive.`
+          });
+        }
+
+        let workflowType: 'super_admin_direct' | 'department_admin' | undefined = undefined;
+
+        if (user.role === 'super_admin') {
+          if (targetUser.role === 'department_admin') {
+            workflowType = 'department_admin';
+          } else {
+            workflowType = 'super_admin_direct';
+          }
+        } else if (user.role === 'department_admin') {
+          const hasPermission = await checkAdminStaffPermission(user._id.toString(), targetId);
+          if (!hasPermission) {
+            return res.status(403).json({
+              success: false,
+              message: `Forbidden. You can only assign tasks to yourself or your active staff (${targetUser.name}).`
+            });
+          }
+          workflowType = 'department_admin';
+        }
+
+        validatedAssignees.push({
+          assigneeId: targetId,
+          workflowType
+        });
+      }
+    }
+
+    // Handle File Uploads via GridFSBucket (stored once for all task copies)
     const attachmentIds: mongoose.Types.ObjectId[] = [];
     if (req.files && Array.isArray(req.files) && req.files.length > 0) {
       const db = mongoose.connection.db;
@@ -123,39 +194,51 @@ export const createTask = async (req: Request, res: Response) => {
       }
     }
 
-    const task = new Task({
-      title,
-      description,
-      deadline: parsedDeadline,
-      createdBy: user._id,
-      assignedTo: finalAssignee,
-      workflowType,
-      attachments: attachmentIds,
-      requiredCompletionExtensions: parsedExtensions,
-      isSubtask: parsedIsSubtask,
-      parentTaskId: parsedIsSubtask ? parentTaskId : null
-    });
+    const createdTasks = [];
 
-    await task.save();
+    for (const info of validatedAssignees) {
+      const task = new Task({
+        title,
+        description,
+        deadline: parsedDeadline,
+        createdBy: user._id,
+        assignedTo: info.assigneeId,
+        workflowType: info.workflowType,
+        attachments: attachmentIds,
+        requiredCompletionExtensions: parsedExtensions,
+        isSubtask: parsedIsSubtask,
+        parentTaskId: parsedIsSubtask ? parentTaskId : null
+      });
 
-    const populatedTask = await Task.findById(task._id)
-      .populate('createdBy', 'name role universityId')
-      .populate('assignedTo', 'name role department universityId')
-      .populate('parentTaskId', 'taskId title');
+      await task.save();
 
-    // Notify assignee about new task
-    if (finalAssignee && finalAssignee.toString() !== user._id.toString()) {
-      createNotification(
-        finalAssignee,
-        'task_assigned',
-        'New Task Assigned',
-        `Task #${populatedTask?.taskId || ''} "${title}" has been assigned to you.`,
-        task._id,
-        user._id
-      );
+      const populatedTask = await Task.findById(task._id)
+        .populate('createdBy', 'name role universityId')
+        .populate('assignedTo', 'name role department universityId')
+        .populate('parentTaskId', 'taskId title');
+
+      // Notify assignee about new task
+      if (info.assigneeId && info.assigneeId.toString() !== user._id.toString()) {
+        createNotification(
+          info.assigneeId,
+          'task_assigned',
+          'New Task Assigned',
+          `Task #${populatedTask?.taskId || ''} "${title}" has been assigned to you.`,
+          task._id,
+          user._id
+        );
+      }
+
+      createdTasks.push(populatedTask);
     }
 
-    return res.status(201).json({ success: true, data: { task: populatedTask } });
+    return res.status(201).json({
+      success: true,
+      data: {
+        task: createdTasks[0],
+        tasks: createdTasks
+      }
+    });
   } catch (error) {
     console.error('Error creating task:', error);
     return res.status(500).json({ success: false, message: 'Server Error' });
@@ -943,8 +1026,8 @@ export const createSubtask = async (req: Request, res: Response) => {
       return res.status(403).json({ success: false, message: 'Forbidden. Staff cannot create subtasks.' });
     }
 
-    if (!title || !description || !deadline || !assignedTo) {
-      return res.status(400).json({ success: false, message: 'Title, description, deadline, and assignedTo are required.' });
+    if (!title || !description || !deadline) {
+      return res.status(400).json({ success: false, message: 'Title, description, and deadline are required.' });
     }
 
     const parentTask = await Task.findById(req.params.id);
@@ -969,22 +1052,8 @@ export const createSubtask = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'Subtask deadline cannot exceed parent task deadline.' });
     }
 
-    const targetUser = await User.findById(assignedTo);
-    if (!targetUser || !targetUser.isActive) {
-      return res.status(400).json({ success: false, message: 'Target assigned user is invalid or inactive.' });
-    }
-
-    let workflowType = undefined;
-    
-    // Auth Check
-    if (user.role === 'super_admin') {
-      if (targetUser.role === 'department_admin') {
-        workflowType = 'department_admin';
-      } else {
-        workflowType = 'super_admin_direct';
-      }
-    } else if (user.role === 'department_admin') {
-      // Check if Dept Admin can create subtasks on this parent
+    // Check if Dept Admin can create subtasks on this parent
+    if (user.role === 'department_admin') {
       const canManageParent = 
         parentTask.createdBy.toString() === user._id.toString() ||
         (parentTask.assignedTo && parentTask.assignedTo.toString() === user._id.toString()) ||
@@ -993,35 +1062,123 @@ export const createSubtask = async (req: Request, res: Response) => {
       if (!canManageParent) {
         return res.status(403).json({ success: false, message: 'Forbidden. You do not manage this parent task.' });
       }
-
-      // Check if Dept Admin can assign to this specific targetUser
-      const hasPermission = await checkAdminStaffPermission(user._id.toString(), assignedTo);
-      if (!hasPermission) {
-        return res.status(403).json({ success: false, message: 'Forbidden. Can only assign to yourself or your active staff.' });
-      }
-      
-      workflowType = 'department_admin';
     }
 
-    const subtask = new Task({
-      title,
-      description,
-      deadline: parsedDeadline,
-      createdBy: user._id,
-      assignedTo: assignedTo,
-      workflowType,
-      isSubtask: true,
-      parentTaskId: parentTask._id
+    // Parse assignees
+    let rawAssignees: string[] = [];
+    if (Array.isArray(assignedTo)) {
+      rawAssignees = assignedTo.flatMap(item => {
+        if (typeof item === 'string') {
+          const t = item.trim();
+          if (t.startsWith('[') && t.endsWith(']')) {
+            try { return JSON.parse(t); } catch { return t; }
+          }
+          if (t.includes(',')) return t.split(',').map(s => s.trim());
+          return t;
+        }
+        return String(item || '').trim();
+      });
+    } else if (typeof assignedTo === 'string' && assignedTo.trim()) {
+      const trimmed = assignedTo.trim();
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          rawAssignees = Array.isArray(parsed) ? parsed : [trimmed];
+        } catch {
+          rawAssignees = trimmed.split(',').map(s => s.trim());
+        }
+      } else if (trimmed.includes(',')) {
+        rawAssignees = trimmed.split(',').map(s => s.trim());
+      } else {
+        rawAssignees = [trimmed];
+      }
+    }
+
+    const uniqueAssigneeIds = Array.from(
+      new Set(rawAssignees.map(id => String(id || '').trim()).filter(Boolean))
+    );
+
+    interface ValidatedAssigneeInfo {
+      assigneeId: string | null;
+      workflowType?: 'super_admin_direct' | 'department_admin';
+    }
+
+    const validatedAssignees: ValidatedAssigneeInfo[] = [];
+
+    if (uniqueAssigneeIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'At least one assignee is required for subtasks.' });
+    }
+
+    for (const targetId of uniqueAssigneeIds) {
+      const targetUser = await User.findById(targetId);
+      if (!targetUser || !targetUser.isActive) {
+        return res.status(400).json({ success: false, message: `Target assigned user (${targetId}) is invalid or inactive.` });
+      }
+
+      let workflowType: 'super_admin_direct' | 'department_admin' | undefined = undefined;
+
+      if (user.role === 'super_admin') {
+        if (targetUser.role === 'department_admin') {
+          workflowType = 'department_admin';
+        } else {
+          workflowType = 'super_admin_direct';
+        }
+      } else if (user.role === 'department_admin') {
+        const hasPermission = await checkAdminStaffPermission(user._id.toString(), targetId);
+        if (!hasPermission) {
+          return res.status(403).json({ success: false, message: `Forbidden. Can only assign to yourself or your active staff (${targetUser.name}).` });
+        }
+        workflowType = 'department_admin';
+      }
+
+      validatedAssignees.push({
+        assigneeId: targetId,
+        workflowType
+      });
+    }
+
+    const createdSubtasks = [];
+
+    for (const info of validatedAssignees) {
+      const subtask = new Task({
+        title,
+        description,
+        deadline: parsedDeadline,
+        createdBy: user._id,
+        assignedTo: info.assigneeId,
+        workflowType: info.workflowType,
+        isSubtask: true,
+        parentTaskId: parentTask._id
+      });
+
+      await subtask.save();
+
+      const populatedSubtask = await Task.findById(subtask._id)
+        .populate('createdBy', 'name role universityId')
+        .populate('assignedTo', 'name role department universityId')
+        .populate('parentTaskId', 'taskId title');
+
+      if (info.assigneeId && info.assigneeId.toString() !== user._id.toString()) {
+        createNotification(
+          info.assigneeId,
+          'task_assigned',
+          'New Subtask Assigned',
+          `Subtask #${populatedSubtask?.taskId || ''} "${title}" has been assigned to you.`,
+          subtask._id,
+          user._id
+        );
+      }
+
+      createdSubtasks.push(populatedSubtask);
+    }
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        task: createdSubtasks[0],
+        tasks: createdSubtasks
+      }
     });
-
-    await subtask.save();
-
-    const populatedSubtask = await Task.findById(subtask._id)
-      .populate('createdBy', 'name role universityId')
-      .populate('assignedTo', 'name role department universityId')
-      .populate('parentTaskId', 'taskId title');
-
-    return res.status(201).json({ success: true, data: { task: populatedSubtask } });
   } catch (error) {
     console.error('Error creating subtask:', error);
     return res.status(500).json({ success: false, message: 'Server Error' });

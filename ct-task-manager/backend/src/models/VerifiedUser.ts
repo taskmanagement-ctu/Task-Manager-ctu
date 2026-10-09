@@ -7,6 +7,7 @@ export interface IVerifiedUser extends Document {
   phone: string;
   department: string | null;
   userType: 'staff' | 'student';
+  category: string | null;
   isRegistered: boolean;
   registeredUserId: mongoose.Types.ObjectId | null;
   createdAt: Date;
@@ -34,7 +35,7 @@ const verifiedUserSchema = new Schema<IVerifiedUser>(
 
     email: {
       type: String,
-      required: [true, 'Email is required'],
+      default: '-',
       trim: true,
       lowercase: true,
     },
@@ -59,6 +60,13 @@ const verifiedUserSchema = new Schema<IVerifiedUser>(
       type: String,
       enum: ['staff', 'student'],
       default: 'staff',
+      index: true,
+    },
+
+    category: {
+      type: String,
+      default: null,
+      trim: true,
       index: true,
     },
 

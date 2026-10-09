@@ -123,7 +123,7 @@ export const importFile = async (req: Request, res: Response): Promise<void> => 
 export const createVerifiedUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const user = req.user;
-    const { name, email, phone, userType, department } = req.body;
+    const { name, email, phone, userType, department, category } = req.body;
     let { universityId } = req.body;
 
     if (!universityId || !name || !email) {
@@ -213,6 +213,7 @@ export const createVerifiedUser = async (req: Request, res: Response): Promise<v
       phone: normalizedPhone,
       department: finalDepartment,
       userType: finalUserType,
+      category: category ? String(category).trim() : null,
     });
 
     res.status(201).json({
@@ -333,6 +334,7 @@ export const getVerifiedUsers = async (req: Request, res: Response): Promise<voi
     const status = (req.query.status as string || '').trim().toLowerCase();
     const userType = (req.query.userType as string || '').trim().toLowerCase();
     const departmentQuery = (req.query.department as string || '').trim();
+    const categoryQuery = (req.query.category as string || '').trim();
 
     // Backfill legacy records where userType is missing or null
     await VerifiedUser.updateMany(
@@ -342,6 +344,11 @@ export const getVerifiedUsers = async (req: Request, res: Response): Promise<voi
 
     // Build filter
     const filter: Record<string, unknown> = {};
+
+    // Category filter (e.g. "Faculty", "Admin")
+    if (categoryQuery && categoryQuery !== 'All') {
+      filter.category = { $regex: new RegExp(`^${categoryQuery}$`, 'i') };
+    }
 
     // Department Admin scoping & permission enforcement
     if (user && user.role === 'department_admin') {
@@ -390,6 +397,7 @@ export const getVerifiedUsers = async (req: Request, res: Response): Promise<voi
         { email: { $regex: search, $options: 'i' } },
         { universityId: { $regex: search, $options: 'i' } },
         { department: { $regex: search, $options: 'i' } },
+        { category: { $regex: search, $options: 'i' } },
       ];
     }
 
@@ -466,6 +474,13 @@ export const getStats = async (req: Request, res: Response): Promise<void> => {
       department: { $nin: [null, ''] },
     });
 
+    // Get distinct categories (e.g. Faculty, Admin)
+    const rawCategories = await VerifiedUser.distinct('category', {
+      ...filter,
+      category: { $nin: [null, ''] },
+    });
+    const categories = (rawCategories || []).filter(Boolean).sort();
+
     res.status(200).json({
       success: true,
       data: {
@@ -475,6 +490,7 @@ export const getStats = async (req: Request, res: Response): Promise<void> => {
         staffCount,
         studentCount,
         departments: departments.length,
+        categories,
       },
     });
   } catch (error) {

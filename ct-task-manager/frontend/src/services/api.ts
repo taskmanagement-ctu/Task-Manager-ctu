@@ -149,6 +149,7 @@ export interface VerifiedUser {
   phone: string;
   department: string | null;
   userType?: 'staff' | 'student';
+  category?: string | null;
   isRegistered: boolean;
   createdAt: string;
   updatedAt: string;
@@ -256,6 +257,7 @@ export interface VerifiedUserStats {
   registered: number;
   notRegistered: number;
   departments: number;
+  categories?: string[];
 }
 
 // ─── API Methods ──────────────────────────────────────────
@@ -294,6 +296,7 @@ export const api = {
     status?: string;
     userType?: string;
     department?: string;
+    category?: string;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
     export?: boolean;
@@ -305,6 +308,7 @@ export const api = {
     if (params.status) query.set('status', params.status);
     if (params.userType) query.set('userType', params.userType);
     if (params.department) query.set('department', params.department);
+    if (params.category && params.category !== 'All') query.set('category', params.category);
     if (params.sortBy) query.set('sortBy', params.sortBy);
     if (params.sortOrder) query.set('sortOrder', params.sortOrder);
     if (params.export) query.set('export', 'true');
@@ -319,6 +323,7 @@ export const api = {
     phone: string;
     department?: string | null;
     userType?: 'staff' | 'student';
+    category?: string | null;
   }): Promise<{ success: boolean; message: string; data: { user: VerifiedUser } }> => {
     return fetchWithAuth('/api/verified-users', {
       method: 'POST',
@@ -511,6 +516,7 @@ export const api = {
     limit?: number;
     search?: string;
     role?: string;
+    department?: string;
     status?: string;
     unassignedOnly?: boolean;
   }): Promise<{ success: boolean; data: { users: User[]; pagination: Pagination } }> => {
@@ -519,6 +525,7 @@ export const api = {
     if (params.limit) query.set('limit', String(params.limit));
     if (params.search) query.set('search', params.search);
     if (params.role) query.set('role', params.role);
+    if (params.department) query.set('department', params.department);
     if (params.status) query.set('status', params.status);
     if (params.unassignedOnly) query.set('unassignedOnly', 'true');
 
@@ -705,7 +712,7 @@ export const api = {
     });
   },
 
-  createSubtask: async (taskId: string, data: { title: string; description: string; deadline: string; assignedTo: string }): Promise<{ success: boolean; data: { task: any } }> => {
+  createSubtask: async (taskId: string, data: { title: string; description: string; deadline: string; assignedTo: string | string[] }): Promise<{ success: boolean; data: { task: any; tasks?: any[] } }> => {
     return fetchWithAuth(`/api/tasks/${taskId}/subtasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

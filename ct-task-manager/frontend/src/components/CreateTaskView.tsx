@@ -84,14 +84,21 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
   const [isSubtaskMode, setIsSubtaskMode] = useState(!!preselectedParentTask);
   const [parentTaskId, setParentTaskId] = useState(preselectedParentTask || '');
   
-  const [tasksToCreate, setTasksToCreate] = useState([
+  const [tasksToCreate, setTasksToCreate] = useState<Array<{
+    title: string;
+    description: string;
+    deadline: string;
+    assignedTo: string[];
+    files: File[];
+    requiredExtensions: string[];
+  }>>([
     {
       title: '',
       description: '',
       deadline: '',
-      assignedTo: '',
-      files: [] as File[],
-      requiredExtensions: [] as string[]
+      assignedTo: [],
+      files: [],
+      requiredExtensions: []
     }
   ]);
   const [activeTab, setActiveTab] = useState(0);
@@ -116,6 +123,7 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
   const dropdownRef = useRef<HTMLDivElement>(null);
   
   const [isAssignDropdownOpen, setIsAssignDropdownOpen] = useState(false);
+  const [isChipsExpanded, setIsChipsExpanded] = useState(false);
   const [assignSearchQuery, setAssignSearchQuery] = useState('');
   const [assignRoleFilter, setAssignRoleFilter] = useState<'all' | 'team' | 'admin' | 'staff'>('all');
   const [assignDeptFilter, setAssignDeptFilter] = useState<string>('all');
@@ -174,6 +182,38 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
     fetchMainTasks();
   }, []);
 
+  // Helpers for multi-assignee selection
+  const currentAssignedIds: string[] = Array.isArray(tasksToCreate[activeTab]?.assignedTo)
+    ? (tasksToCreate[activeTab]?.assignedTo as string[])
+    : (tasksToCreate[activeTab]?.assignedTo ? [tasksToCreate[activeTab]?.assignedTo as string] : []);
+
+  const toggleAssignee = (userId: string) => {
+    setTasksToCreate(prev => {
+      const copy = [...prev];
+      const cur = { ...copy[activeTab] };
+      const list = Array.isArray(cur.assignedTo) ? [...cur.assignedTo] : (cur.assignedTo ? [cur.assignedTo] : []);
+      const idx = list.indexOf(userId);
+      if (idx >= 0) {
+        list.splice(idx, 1);
+      } else {
+        list.push(userId);
+      }
+      cur.assignedTo = list;
+      copy[activeTab] = cur;
+      return copy;
+    });
+  };
+
+  const clearAssignees = () => {
+    setTasksToCreate(prev => {
+      const copy = [...prev];
+      const cur = { ...copy[activeTab] };
+      cur.assignedTo = [];
+      copy[activeTab] = cur;
+      return copy;
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -187,8 +227,14 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
         if (isSubtaskMode && parentTaskId) {
           formData.append('parentTaskId', parentTaskId);
         }
-        if (task.assignedTo) {
-          formData.append('assignedTo', task.assignedTo);
+        const assignees = Array.isArray(task.assignedTo)
+          ? task.assignedTo
+          : (task.assignedTo ? [task.assignedTo] : []);
+
+        if (assignees.length > 0) {
+          assignees.forEach(id => {
+            formData.append('assignedTo', id);
+          });
         }
         task.files.forEach(file => {
           formData.append('attachments', file);
@@ -246,6 +292,29 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
     }
     return true;
   });
+
+  const selectedAssignees = availableAssignees.filter(a =>
+    currentAssignedIds.includes(a.id || a._id)
+  );
+
+  const isAllFilteredSelected = filteredAssignees.length > 0 && filteredAssignees.every(a => currentAssignedIds.includes(a.id || a._id));
+
+  const selectAllFiltered = () => {
+    setTasksToCreate(prev => {
+      const copy = [...prev];
+      const cur = { ...copy[activeTab] };
+      const currentSet = new Set(Array.isArray(cur.assignedTo) ? cur.assignedTo : (cur.assignedTo ? [cur.assignedTo] : []));
+      
+      if (isAllFilteredSelected) {
+        filteredAssignees.forEach(a => currentSet.delete(a.id || a._id));
+      } else {
+        filteredAssignees.forEach(a => currentSet.add(a.id || a._id));
+      }
+      cur.assignedTo = Array.from(currentSet);
+      copy[activeTab] = cur;
+      return copy;
+    });
+  };
 
   return (
     <div className="create-task-view">
@@ -318,7 +387,7 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
                   className="ct-add-tab-btn"
                   onClick={() => {
                     setTasksToCreate([...tasksToCreate, {
-                      title: '', description: '', deadline: '', assignedTo: '', files: [], requiredExtensions: []
+                      title: '', description: '', deadline: '', assignedTo: [], files: [], requiredExtensions: []
                     }]);
                     setActiveTab(tasksToCreate.length);
                   }}
@@ -416,16 +485,68 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
 
           <div className="ct-row">
             <div className="ct-input-group">
-              <label className="ct-label">ASSIGN TO</label>
+              <div className="ct-label-between">
+                <label className="ct-label">ASSIGN TO</label>
+                {currentAssignedIds.length > 0 && (
+                  <span className="ct-assignee-counter-tag">
+                    {currentAssignedIds.length} {currentAssignedIds.length === 1 ? 'person' : 'people'} selected
+                  </span>
+                )}
+              </div>
               <div className="ct-custom-select-wrapper" ref={assignDropdownRef}>
                 <div 
-                  className={`ct-custom-select ${isAssignDropdownOpen ? 'open' : ''}`}
+                  className={`ct-custom-select ct-multi-select ${isAssignDropdownOpen ? 'open' : ''}`}
                   onClick={() => setIsAssignDropdownOpen(!isAssignDropdownOpen)}
                 >
-                  {tasksToCreate[activeTab].assignedTo ? (
-                    <span>{formatNameString(availableAssignees.find(a => a.id === tasksToCreate[activeTab].assignedTo || a._id === tasksToCreate[activeTab].assignedTo))}</span>
+                  {selectedAssignees.length === 0 ? (
+                    <span className="placeholder">Unassigned (Click to select assignees)</span>
                   ) : (
-                    <span className="placeholder">Unassigned</span>
+                    <div className="ct-selected-chips-container">
+                      {(isChipsExpanded ? selectedAssignees : selectedAssignees.slice(0, 2)).map(u => (
+                        <span key={u._id || u.id} className="ct-selected-chip" title={formatNameString(u)} onClick={(e) => e.stopPropagation()}>
+                          <span className="ct-chip-name">{currentUser && ((u._id || u.id) === currentUser.id || (u._id || u.id) === currentUser._id) ? 'me' : u.name}</span>
+                          {u.universityId && <span className="ct-chip-id">({u.universityId})</span>}
+                          <button
+                            type="button"
+                            className="ct-chip-remove"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleAssignee(u._id || u.id);
+                            }}
+                            title="Remove assignee"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      ))}
+                      {selectedAssignees.length > 2 && (
+                        isChipsExpanded ? (
+                          <button
+                            type="button"
+                            className="ct-selected-count-badge clickable collapse-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsChipsExpanded(false);
+                            }}
+                            title="Click to collapse"
+                          >
+                            Show less ▴
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="ct-selected-count-badge clickable"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsChipsExpanded(true);
+                            }}
+                            title="Click to view all selected assignees"
+                          >
+                            +{selectedAssignees.length - 2} more
+                          </button>
+                        )
+                      )}
+                    </div>
                   )}
                   <ChevronDown className="ct-select-icon" size={16} />
                 </div>
@@ -503,33 +624,63 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
                           </div>
                         </div>
                       )}
+
+                      {/* Multi-Select Toolbar */}
+                      <div className="ct-dropdown-toolbar">
+                        <span className="ct-dropdown-toolbar-count">{filteredAssignees.length} matching users</span>
+                        {filteredAssignees.length > 0 && (
+                          <button
+                            type="button"
+                            className="ct-quick-action-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              selectAllFiltered();
+                            }}
+                          >
+                            {isAllFilteredSelected ? 'Deselect Filtered' : 'Select All Filtered'}
+                          </button>
+                        )}
+                      </div>
                     </div>
+
                     <ul className="ct-dropdown-list">
                       <li 
-                        className={`ct-dropdown-item ${!tasksToCreate[activeTab].assignedTo ? 'selected' : ''}`}
-                        onClick={() => {
-                          setTasksToCreate(prev => { const n = [...prev]; const t = {...n[activeTab]}; t.assignedTo = ''; n[activeTab] = t; return n; });
-                          setIsAssignDropdownOpen(false);
+                        className={`ct-dropdown-item ${currentAssignedIds.length === 0 ? 'selected' : ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          clearAssignees();
                         }}
                       >
-                        <span className="placeholder">Unassigned</span>
+                        <input
+                          type="checkbox"
+                          className="ct-checkbox"
+                          checked={currentAssignedIds.length === 0}
+                          readOnly
+                        />
+                        <span className="placeholder">Unassigned (Clear all assignees)</span>
                       </li>
                       {filteredAssignees.length === 0 && (
                         <li className="ct-dropdown-item empty">No users found</li>
                       )}
                       {filteredAssignees.map(a => {
                         const userId = a.id || a._id;
-                        const isSelected = tasksToCreate[activeTab].assignedTo === userId;
+                        const isSelected = currentAssignedIds.includes(userId);
                         return (
                           <li 
                             key={userId}
                             className={`ct-dropdown-item ${isSelected ? 'selected' : ''} ct-assignee-item`}
-                            onClick={() => {
-                              setTasksToCreate(prev => { const n = [...prev]; const t = {...n[activeTab]}; t.assignedTo = userId; n[activeTab] = t; return n; });
-                              setIsAssignDropdownOpen(false);
-                              setAssignSearchQuery('');
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleAssignee(userId);
                             }}
                           >
+                            <input
+                              type="checkbox"
+                              className="ct-checkbox"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              onClick={(e) => e.stopPropagation()}
+                            />
                             <div className="ct-assignee-info">
                               <div className="ct-assignee-primary">
                                 <span className="ct-assignee-name">{currentUser && (userId === currentUser.id || userId === currentUser._id) ? 'me' : a.name}</span>
@@ -550,6 +701,37 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
                         );
                       })}
                     </ul>
+
+                    <div className="ct-dropdown-footer">
+                      <div className="ct-dropdown-footer-left">
+                        <span className="ct-dropdown-footer-text">
+                          {currentAssignedIds.length} {currentAssignedIds.length === 1 ? 'assignee' : 'assignees'} chosen
+                        </span>
+                        {currentAssignedIds.length > 0 && (
+                          <button
+                            type="button"
+                            className="ct-footer-clear-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              clearAssignees();
+                            }}
+                          >
+                            Clear all
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="ct-dropdown-done-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsAssignDropdownOpen(false);
+                          setAssignSearchQuery('');
+                        }}
+                      >
+                        Done
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

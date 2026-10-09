@@ -113,9 +113,21 @@ const TasksPage: React.FC = () => {
 
         setAvailableAssignees(prioritized);
       } else if (user?.role === 'department_admin') {
-        const res = await api.getAdminAssignments(user.id);
-        const myStaff = res.data.assignments.map(a => a.staffId);
-        setAvailableAssignees([...myStaff]);
+        const [res, deptStaffRes] = await Promise.all([
+          api.getAdminAssignments(user.id).catch(() => ({ data: { assignments: [] } })),
+          user.department ? api.getUsers({ department: user.department, role: 'staff', status: 'Active', limit: 1000 }).catch(() => ({ data: { users: [] } })) : Promise.resolve({ data: { users: [] } })
+        ]);
+        const myStaffFromAssignments = (res.data?.assignments || []).map((a: any) => a.staffId).filter(Boolean);
+        const deptStaff = (deptStaffRes.data?.users || []).filter(Boolean);
+        
+        const staffMap = new Map();
+        [...myStaffFromAssignments, ...deptStaff].forEach((s: any) => {
+          const sId = s._id || s.id;
+          if (sId && sId !== user.id && sId !== user._id) {
+            staffMap.set(sId, s);
+          }
+        });
+        setAvailableAssignees(Array.from(staffMap.values()));
       }
     } catch (err) {
       console.error('Failed to load assignees', err);

@@ -59,13 +59,44 @@ export const normalizeUniversityId = (value: unknown): string => {
  * Required column mappings from Excel/CSV headers → internal field names.
  */
 export const COLUMN_MAP: Record<string, string> = {
+  // University ID / Staff ID
   'id': 'universityId',
   'university id': 'universityId',
   'universityid': 'universityId',
+  'uid': 'universityId',
+  'emp id': 'universityId',
+  'employee id': 'universityId',
+  'student id': 'universityId',
+  'roll no': 'universityId',
+  'roll no.': 'universityId',
+  'reg no': 'universityId',
+  'reg. no': 'universityId',
+  'reg no.': 'universityId',
+  'reg. no.': 'universityId',
+  'registration no': 'universityId',
+  'registration no.': 'universityId',
+
+  // Name
   'name': 'name',
+  'full name': 'name',
+  'fullname': 'name',
+  'employee name': 'name',
+  'staff name': 'name',
+  'student name': 'name',
+  'user name': 'name',
+  'username': 'name',
+
+  // Email
   'email': 'email',
   'e-mail': 'email',
   'email id': 'email',
+  'e-mail id': 'email',
+  'email address': 'email',
+  'e-mail address': 'email',
+  'mail': 'email',
+  'mail id': 'email',
+
+  // Phone / Mobile
   'phone': 'phone',
   'phone no': 'phone',
   'phone no.': 'phone',
@@ -74,17 +105,56 @@ export const COLUMN_MAP: Record<string, string> = {
   'mobile': 'phone',
   'mobile no': 'phone',
   'mobile no.': 'phone',
+  'mobile number': 'phone',
+  'mobileno': 'phone',
+  'contact': 'phone',
+  'contact no': 'phone',
+  'contact no.': 'phone',
+  'contact number': 'phone',
+  'cell': 'phone',
+  'cell no': 'phone',
+  'cell no.': 'phone',
+
+  // Department (including common typos like "deaprtment")
   'department': 'department',
+  'deaprtment': 'department',
+  'departmnt': 'department',
+  'deparment': 'department',
+  'departmnet': 'department',
   'dept': 'department',
   'dept.': 'department',
+  'department name': 'department',
+  'dept name': 'department',
+  'school': 'department',
+  'school/dept': 'department',
+  'school / dept': 'department',
+  'school/department': 'department',
+  'school / department': 'department',
+  'school name': 'department',
+  'division': 'department',
+  'branch': 'department',
+  'faculty': 'department',
+  'institution': 'department',
+
+  // Category / Tab / Designation
+  'category': 'category',
+  'category name': 'category',
+  'staff category': 'category',
+  'staff type': 'category',
+  'employee type': 'category',
+  'designation': 'category',
+  'group': 'category',
+  'tab': 'category',
+  'tab name': 'category',
+
+  // Type / Role
   'type': 'userType',
   'user type': 'userType',
   'usertype': 'userType',
   'role': 'userType',
-  'category': 'userType',
 };
 
-export const REQUIRED_FIELDS = ['universityId', 'name', 'email', 'phone'];
+export const REQUIRED_FIELDS = ['universityId', 'name'];
 
 export interface RowValidationError {
   row: number;
@@ -100,6 +170,7 @@ export interface ParsedVerifiedUser {
   phone: string;
   department: string | null;
   userType: 'staff' | 'student';
+  category?: string | null;
 }
 
 export interface ImportResult {
@@ -134,14 +205,11 @@ export const validateRow = (
     errors.push({ row: rowNumber, field: 'Name', message: 'Name is required' });
   }
 
-  if (!isNonEmptyString(row.email)) {
-    errors.push({ row: rowNumber, field: 'Email', message: 'Email is required' });
-  } else if (!isValidEmail(row.email)) {
-    errors.push({
-      row: rowNumber,
-      field: 'Email',
-      message: `Invalid email format "${row.email}"`,
-    });
+  // Email handling: optional — if missing, invalid format, or '-', leave it as '-'
+  if (!isNonEmptyString(row.email) || row.email === '-' || !isValidEmail(row.email)) {
+    row.email = '-';
+  } else {
+    row.email = row.email.toLowerCase().trim();
   }
 
   // Phone handling: do not skip row; take last 10 digits if >= 10, or set to '-' if less

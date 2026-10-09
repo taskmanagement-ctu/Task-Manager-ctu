@@ -50,6 +50,7 @@ const VerifiedUsersPage = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('All');
+  const [categoryFilter, setCategoryFilter] = useState('All');
   const [sortBy, setSortBy] = useState('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [loading, setLoading] = useState(false);
@@ -91,6 +92,7 @@ const VerifiedUsersPage = () => {
     email: '',
     phone: '',
     department: '',
+    category: '',
   });
   const [isAdding, setIsAdding] = useState(false);
   const [inlineError, setInlineError] = useState('');
@@ -102,7 +104,21 @@ const VerifiedUsersPage = () => {
   // ─── Export State ───────────────────────────────────
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportMenuAlign, setExportMenuAlign] = useState<'left' | 'right'>('left');
   const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (showExportMenu && exportMenuRef.current) {
+      const rect = exportMenuRef.current.getBoundingClientRect();
+      const spaceRight = window.innerWidth - rect.left;
+      // If there's less than 310px on the right and sufficient space on the left, align right
+      if (spaceRight < 310 && rect.right > 310) {
+        setExportMenuAlign('right');
+      } else {
+        setExportMenuAlign('left');
+      }
+    }
+  }, [showExportMenu]);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -219,6 +235,7 @@ const VerifiedUsersPage = () => {
         search: search || undefined,
         status: statusFilter || undefined,
         department: deptParam,
+        category: categoryFilter !== 'All' ? categoryFilter : undefined,
         sortBy,
         sortOrder,
       });
@@ -229,7 +246,7 @@ const VerifiedUsersPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, departmentFilter, sortBy, sortOrder, isDeptAdmin, currentUser]);
+  }, [search, statusFilter, departmentFilter, categoryFilter, sortBy, sortOrder, isDeptAdmin, currentUser]);
 
   // ─── Fetch Stats ────────────────────────────────────
   const fetchStats = useCallback(async () => {
@@ -352,6 +369,7 @@ const VerifiedUsersPage = () => {
       email: '',
       phone: '',
       department: defaultDept,
+      category: '',
     });
     setInlineError('');
     setIsInlineAdding(true);
@@ -369,6 +387,7 @@ const VerifiedUsersPage = () => {
       email: '',
       phone: '',
       department: '',
+      category: '',
     });
   };
 
@@ -418,6 +437,7 @@ const VerifiedUsersPage = () => {
         phone: finalPhone,
         userType: 'staff',
         department: dept,
+        category: inlineForm.category?.trim() || null,
       });
 
       setIsInlineAdding(false);
@@ -427,6 +447,7 @@ const VerifiedUsersPage = () => {
         email: '',
         phone: '',
         department: '',
+        category: '',
       });
       fetchUsers(1);
       fetchStats();
@@ -523,6 +544,12 @@ const VerifiedUsersPage = () => {
   // Access checks for Department Admin
   const canAdd = isDeptAdmin ? (deptPermissions?.canAddVerifiedUsers ?? false) : true;
   const canUpload = isDeptAdmin ? (deptPermissions?.canUploadVerifiedUsers ?? false) : true;
+
+  // Available categories for filtering
+  const availableCategories = Array.from(new Set([
+    ...(stats?.categories || []),
+    ...users.map(u => u.category).filter(Boolean) as string[],
+  ])).sort();
 
   return (
     <div className="vu-page">
@@ -688,6 +715,22 @@ const VerifiedUsersPage = () => {
               <option value="not-registered">Not Registered</option>
             </select>
 
+            {availableCategories.length > 0 && (
+              <select
+                className="vu-filter-select"
+                value={categoryFilter}
+                onChange={(e) => {
+                  setCategoryFilter(e.target.value);
+                  setSelectedIds([]);
+                }}
+              >
+                <option value="All">All Categories</option>
+                {availableCategories.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            )}
+
             {/* Export Dropdown */}
             <div className="vu-export-dropdown-wrapper" ref={exportMenuRef}>
               <button
@@ -712,7 +755,7 @@ const VerifiedUsersPage = () => {
               </button>
 
               {showExportMenu && (
-                <div className="vu-export-menu">
+                <div className={`vu-export-menu align-${exportMenuAlign}`}>
                   <div className="vu-export-menu-header">
                     <span>Export Format</span>
                     {selectedIds.length > 0 && (
@@ -912,6 +955,7 @@ const VerifiedUsersPage = () => {
                     <th style={{ minWidth: '200px' }}>Email</th>
                     <th style={{ width: '140px' }}>Phone</th>
                     <th style={{ minWidth: '150px' }}>Department</th>
+                    <th style={{ width: '130px' }}>Category</th>
                     <th style={{ width: '130px' }}>Status</th>
                     <th style={{ width: '90px', textAlign: 'center' }}>Actions</th>
                   </tr>
@@ -984,6 +1028,16 @@ const VerifiedUsersPage = () => {
                         )}
                       </td>
                       <td>
+                        <input
+                          type="text"
+                          className="vu-inline-input"
+                          placeholder="Category"
+                          value={inlineForm.category}
+                          onChange={(e) => setInlineForm(prev => ({ ...prev, category: e.target.value }))}
+                          onKeyDown={handleInlineKeyDown}
+                        />
+                      </td>
+                      <td>
                         <span className="vu-status-badge vu-status-new">New</span>
                       </td>
                       <td>
@@ -1030,9 +1084,18 @@ const VerifiedUsersPage = () => {
                         </td>
                         <td className="vu-id-cell">{user.universityId}</td>
                         <td style={{ fontWeight: 600 }}>{user.name}</td>
-                        <td>{user.email}</td>
-                        <td>{user.phone}</td>
+                        <td>{user.email && user.email !== '-' ? user.email : '—'}</td>
+                        <td>{user.phone && user.phone !== '-' ? user.phone : '—'}</td>
                         <td>{user.department || '—'}</td>
+                        <td>
+                          {user.category ? (
+                            <span className={`vu-category-badge ${user.category.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}>
+                              {user.category}
+                            </span>
+                          ) : (
+                            <span style={{ color: '#94a3b8' }}>—</span>
+                          )}
+                        </td>
                         <td>
                           <span
                             className={`vu-status-badge ${
