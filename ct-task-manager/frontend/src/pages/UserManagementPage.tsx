@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, User, Department } from '../services/api';
 import { 
   Search, 
   MoreVertical, 
   Mail, 
+  Phone,
+  Building2,
   ChevronLeft, 
   ChevronRight,
   ShieldAlert,
@@ -17,7 +19,8 @@ import {
   Pencil,
   X,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  RotateCcw
 } from 'lucide-react';
 import ExportDropdownMenu from '../components/ExportDropdownMenu';
 import { exportUsers } from '../utils/generalExport';
@@ -32,6 +35,7 @@ const UserManagementPage: React.FC = () => {
   const [totalUsers, setTotalUsers] = useState(0);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
+  const [departmentFilter, setDepartmentFilter] = useState('All');
   const statusFilter = 'All';
 
   const [loading, setLoading] = useState(false);
@@ -78,6 +82,7 @@ const UserManagementPage: React.FC = () => {
           limit: 5000,
           search,
           role: roleFilter,
+          department: departmentFilter !== 'All' ? departmentFilter : undefined,
           status: statusFilter,
         });
         if (fullRes.data?.users && fullRes.data.users.length > 0) {
@@ -88,6 +93,7 @@ const UserManagementPage: React.FC = () => {
       }
       await exportUsers(dataToExport, format, {
         role: roleFilter,
+        department: departmentFilter !== 'All' ? departmentFilter : undefined,
         search,
       });
     } catch (err: any) {
@@ -106,6 +112,7 @@ const UserManagementPage: React.FC = () => {
         limit: 10,
         search,
         role: roleFilter,
+        department: departmentFilter !== 'All' ? departmentFilter : undefined,
         status: statusFilter,
       });
       if (res.success) {
@@ -123,7 +130,7 @@ const UserManagementPage: React.FC = () => {
   useEffect(() => {
     fetchUsers();
     // eslint-disable-next-line
-  }, [page, roleFilter, statusFilter, search]);
+  }, [page, roleFilter, departmentFilter, statusFilter, search]);
 
   // Click outside listener for dropdown
   useEffect(() => {
@@ -261,6 +268,26 @@ const UserManagementPage: React.FC = () => {
     return <UserIcon size={14} />;
   };
 
+  const availableDepartments = useMemo(() => {
+    const set = new Set<string>();
+    departments.forEach((d) => {
+      if (d && d.name) set.add(d.name.trim());
+    });
+    users.forEach((u) => {
+      if (u && u.department) set.add(u.department.trim());
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [departments, users]);
+
+  const hasActiveFilters = Boolean(search.trim() || roleFilter !== 'All' || departmentFilter !== 'All');
+
+  const handleClearFilters = () => {
+    setSearch('');
+    setRoleFilter('All');
+    setDepartmentFilter('All');
+    setPage(1);
+  };
+
   const formatRoleText = (role: string) => {
     if (role === 'super_admin') return 'Super Admin';
     if (role === 'department_admin') return 'Dept Admin';
@@ -297,31 +324,82 @@ const UserManagementPage: React.FC = () => {
             <input
               type="text"
               className="um-search-input"
-              placeholder="Search users by ID, Name..."
+              placeholder="Search by ID, Name, Email..."
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
                 setPage(1);
               }}
             />
+            {search && (
+              <button
+                type="button"
+                className="um-search-clear-btn"
+                onClick={() => {
+                  setSearch('');
+                  setPage(1);
+                }}
+                title="Clear search"
+                aria-label="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
           
-          <select
-            className="um-role-select"
-            value={roleFilter}
-            onChange={(e) => {
-              setRoleFilter(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="All">All Roles</option>
-            <option value="super_admin">Super Admin</option>
-            <option value="department_admin">Department Admin</option>
-            <option value="staff">Staff</option>
-          </select>
+          <div className="um-select-filters-group">
+            <div className="um-filter-select-wrapper">
+              <select
+                className="um-role-select"
+                value={roleFilter}
+                onChange={(e) => {
+                  setRoleFilter(e.target.value);
+                  setPage(1);
+                }}
+                title="Filter by Role"
+              >
+                <option value="All">All Roles</option>
+                <option value="super_admin">Super Admin</option>
+                <option value="department_admin">Department Admin</option>
+                <option value="staff">Staff</option>
+              </select>
+            </div>
+
+            <div className="um-filter-select-wrapper um-dept-wrapper">
+              <select
+                className="um-dept-select"
+                value={departmentFilter}
+                onChange={(e) => {
+                  setDepartmentFilter(e.target.value);
+                  setPage(1);
+                }}
+                title="Filter by Department"
+              >
+                <option value="All">All Departments</option>
+                {availableDepartments.map((deptName) => (
+                  <option key={deptName} value={deptName}>
+                    {deptName}
+                  </option>
+                ))}
+                <option value="Unassigned">Unassigned (No Dept)</option>
+              </select>
+            </div>
+
+            {hasActiveFilters && (
+              <button
+                type="button"
+                className="um-clear-filters-btn"
+                onClick={handleClearFilters}
+                title="Reset all filters"
+              >
+                <RotateCcw size={13} />
+                <span>Reset</span>
+              </button>
+            )}
+          </div>
         </div>
         
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+        <div className="um-filters-right">
           <ExportDropdownMenu
             onExport={handleExportUsers}
             isExporting={isExporting}
@@ -331,7 +409,7 @@ const UserManagementPage: React.FC = () => {
             onClick={() => navigate('/super-admin/verified-users')}
             title="Open Verified Users Directory"
           >
-            <ShieldCheck size={16} /> Verified Users
+            <ShieldCheck size={16} /> <span>Verified Users</span>
           </button>
         </div>
       </div>
@@ -359,7 +437,21 @@ const UserManagementPage: React.FC = () => {
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center py-4" style={{ padding: '2rem', color: '#6b7280' }}>No users found.</td>
+                <td colSpan={7} className="text-center py-4" style={{ padding: '2.5rem 1rem', color: '#6b7280' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                    <UserIcon size={32} color="#94a3b8" />
+                    <span>No users found matching your filters.</span>
+                    {hasActiveFilters && (
+                      <button 
+                        className="btn-paginate" 
+                        onClick={handleClearFilters}
+                        style={{ marginTop: '0.25rem' }}
+                      >
+                        Reset Filters
+                      </button>
+                    )}
+                  </div>
+                </td>
               </tr>
             ) : (
               users.map((user) => (
@@ -460,7 +552,15 @@ const UserManagementPage: React.FC = () => {
         {loading ? (
           <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>Loading users...</div>
         ) : users.length === 0 ? (
-          <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>No users found.</div>
+          <div className="um-mobile-empty">
+            <UserIcon size={36} color="#94a3b8" />
+            <p>No users found matching your filters.</p>
+            {hasActiveFilters && (
+              <button className="btn-paginate" onClick={handleClearFilters} style={{ margin: '0.5rem auto' }}>
+                Reset Filters
+              </button>
+            )}
+          </div>
         ) : (
           users.map((user) => (
             <div key={user.id} className={`um-mobile-card ${user.isActive ? 'status-active' : 'status-inactive'}`}>
@@ -469,27 +569,47 @@ const UserManagementPage: React.FC = () => {
                   <div className="user-avatar" style={{ backgroundImage: `url(https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=e2e8f0&color=1e293b)` }}></div>
                   <div>
                     <div className="user-name">{user.name}</div>
-                    <div className="user-dept" style={{ fontSize: '0.8rem' }}>{formatRoleText(user.role)}, {user.department || 'N/A'}</div>
+                    <div className="user-email">{user.email}</div>
                   </div>
                 </div>
                 <span className={`um-card-status ${user.isActive ? 'active' : 'inactive'}`}>
                   {user.isActive ? 'Active' : 'Deactivated'}
                 </span>
               </div>
-              
-              <div className="um-card-info-row">
-                <ShieldAlert size={14} className="um-card-info-icon" />
-                <span>{user.universityId}</span>
+
+              <div className="um-card-chips-row">
+                <span className={`badge-role badge-role-${user.role}`}>
+                  {getRoleIcon(user.role)} {formatRoleText(user.role)}
+                </span>
+                <span className="um-card-id-chip">
+                  ID: {user.universityId}
+                </span>
               </div>
               
-              <div className="um-card-info-row">
-                <Mail size={14} className="um-card-info-icon" />
-                <span>{user.email}</span>
+              <div className="um-card-details">
+                <div className="um-card-info-row">
+                  <Mail size={15} className="um-card-info-icon" />
+                  <span className="um-card-info-text">{user.email}</span>
+                </div>
+
+                <div className="um-card-info-row">
+                  <Building2 size={15} className="um-card-info-icon" />
+                  <span className="um-card-info-text">{user.department || 'Unassigned'}</span>
+                </div>
+                
+                {user.phone && user.phone !== '-' && (
+                  <div className="um-card-info-row">
+                    <Phone size={15} className="um-card-info-icon" />
+                    <span className="um-card-info-text">
+                      {user.phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3')}
+                    </span>
+                  </div>
+                )}
               </div>
 
-              <div className="actions-cell" style={{ position: 'relative' }}>
+              <div className="actions-cell" style={{ position: 'relative', marginTop: '0.85rem' }}>
                 <button className="um-card-actions-btn" onClick={(e) => toggleDropdown(`mobile-${user.id}`, e)}>
-                  Options <MoreVertical size={16} />
+                  <span>Options</span> <MoreVertical size={16} />
                 </button>
                 {activeDropdown === `mobile-${user.id}` && (
                   <div className="action-dropdown" ref={dropdownRef} style={{ top: '100%', right: '0', width: '100%' }}>

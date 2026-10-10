@@ -88,7 +88,7 @@ export const sendAccessRequestApprovalEmail = async (
   universityId: string
 ) => {
   const subject = `Your CT University TaskDesk Access Request Has Been Approved! 🎉`;
-  const registerUrl = process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/register` : 'https//taskdesk.ctuniversity.in/register';
+  const registerUrl = process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/register` : 'https://taskdesk.ctuniversity.in/register';
 
   const html = `
     <!DOCTYPE html>

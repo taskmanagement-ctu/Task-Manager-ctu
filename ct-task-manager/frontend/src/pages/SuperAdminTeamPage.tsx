@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { 
   Users, 
   Award, 
@@ -7,9 +7,12 @@ import {
   UserPlus,
   Mail,
   Phone,
-  UserMinus
+  UserMinus,
+  Building2,
+  X,
+  RotateCcw
 } from 'lucide-react';
-import { api, User } from '../services/api';
+import { api, User, Department } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import './DeptAdminStaffPage.css';
 
@@ -25,12 +28,15 @@ const SuperAdminTeamPage: React.FC = () => {
   const { currentUser: user } = useAuth();
   const [assignments, setAssignments] = useState<TeamAssignment[]>([]);
   const [directory, setDirectory] = useState<User[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [addingStaffId, setAddingStaffId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [rosterSearch, setRosterSearch] = useState('');
   const [directorySearch, setDirectorySearch] = useState('');
+  const [rosterDeptFilter, setRosterDeptFilter] = useState('All');
+  const [directoryDeptFilter, setDirectoryDeptFilter] = useState('All');
 
   const fetchTeamData = async () => {
     try {
@@ -46,9 +52,19 @@ const SuperAdminTeamPage: React.FC = () => {
       setAssignments(activeAssignments);
 
       // 2. Fetch all unassigned staff users to populate directory pool
-      const usersRes = await api.getUsers({ role: 'staff', limit: 100, unassignedOnly: true, status: 'Active' });
+      const usersRes = await api.getUsers({ role: 'staff', limit: 200, unassignedOnly: true, status: 'Active' });
       const availableStaff = usersRes.data?.users || [];
       setDirectory(availableStaff);
+
+      // 3. Fetch departments for department filtering
+      try {
+        const deptRes = await api.getDepartments();
+        if (deptRes.success && deptRes.data?.departments) {
+          setDepartments(deptRes.data.departments);
+        }
+      } catch (deptErr) {
+        console.error('Failed to load departments', deptErr);
+      }
     } catch (err: any) {
       console.error('Failed to load Super Admin team data', err);
       setErrorMsg(err.message || 'Failed to load team data');
@@ -91,24 +107,70 @@ const SuperAdminTeamPage: React.FC = () => {
     }
   };
 
+  // Unique sorted list of departments for directory filter
+  const availableDirectoryDepartments = useMemo(() => {
+    const set = new Set<string>();
+    departments.forEach(d => {
+      if (d.name && d.name.trim()) set.add(d.name.trim());
+    });
+    directory.forEach(u => {
+      if (u.department && u.department.trim()) set.add(u.department.trim());
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [departments, directory]);
+
+  // Unique sorted list of departments for roster filter
+  const availableRosterDepartments = useMemo(() => {
+    const set = new Set<string>();
+    departments.forEach(d => {
+      if (d.name && d.name.trim()) set.add(d.name.trim());
+    });
+    assignments.forEach(a => {
+      if (a.staffId?.department && a.staffId.department.trim()) {
+        set.add(a.staffId.department.trim());
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [departments, assignments]);
+
   const filteredRoster = assignments.filter(a => {
     const s = a.staffId;
     if (!s) return false;
-    const term = rosterSearch.toLowerCase();
-    return (
+    const term = rosterSearch.trim().toLowerCase();
+    const matchesSearch = !term || (
       (s.name && s.name.toLowerCase().includes(term)) ||
       (s.email && s.email.toLowerCase().includes(term)) ||
-      (s.universityId && s.universityId.toLowerCase().includes(term))
+      (s.universityId && s.universityId.toLowerCase().includes(term)) ||
+      (s.department && s.department.toLowerCase().includes(term))
     );
+
+    const matchesDept = 
+      rosterDeptFilter === 'All'
+        ? true
+        : rosterDeptFilter === 'Unassigned'
+          ? (!s.department || s.department.trim() === '' || s.department.toLowerCase() === 'unassigned')
+          : (s.department && s.department.toLowerCase() === rosterDeptFilter.toLowerCase());
+
+    return matchesSearch && matchesDept;
   });
 
   const filteredDirectory = directory.filter(u => {
-    const term = directorySearch.toLowerCase();
-    return (
+    const term = directorySearch.trim().toLowerCase();
+    const matchesSearch = !term || (
       (u.name && u.name.toLowerCase().includes(term)) ||
       (u.email && u.email.toLowerCase().includes(term)) ||
-      (u.universityId && u.universityId.toLowerCase().includes(term))
+      (u.universityId && u.universityId.toLowerCase().includes(term)) ||
+      (u.department && u.department.toLowerCase().includes(term))
     );
+
+    const matchesDept = 
+      directoryDeptFilter === 'All'
+        ? true
+        : directoryDeptFilter === 'Unassigned'
+          ? (!u.department || u.department.trim() === '' || u.department.toLowerCase() === 'unassigned')
+          : (u.department && u.department.toLowerCase() === directoryDeptFilter.toLowerCase());
+
+    return matchesSearch && matchesDept;
   });
 
   const activeCount = assignments.filter(a => a.staffId?.isActive !== false).length;
@@ -166,12 +228,37 @@ const SuperAdminTeamPage: React.FC = () => {
         <div className="roster-section">
           <div className="roster-header">
             <div>
-              <h2 className="roster-title">Super Admin Team Roster</h2>
+              <h2 className="roster-title">
+                Super Admin Team Roster
+                <span style={{ fontSize: '0.85rem', fontWeight: 500, color: '#64748b', marginLeft: '0.5rem' }}>
+                  ({filteredRoster.length}{filteredRoster.length !== assignments.length ? ` of ${assignments.length}` : ''})
+                </span>
+              </h2>
               <p style={{ color: '#64748b', fontSize: '0.85rem', margin: '0.2rem 0 0' }}>
                 Staff members directly reporting to Super Admin.
               </p>
             </div>
             <div className="roster-controls">
+              {availableRosterDepartments.length > 0 && (
+                <div className="roster-filter-select-wrapper">
+                  <Building2 size={15} className="roster-filter-icon" />
+                  <select
+                    className="roster-dept-select"
+                    value={rosterDeptFilter}
+                    onChange={(e) => setRosterDeptFilter(e.target.value)}
+                    title="Filter roster by Department"
+                  >
+                    <option value="All">All Departments</option>
+                    {availableRosterDepartments.map((dept) => (
+                      <option key={dept} value={dept}>
+                        {dept}
+                      </option>
+                    ))}
+                    <option value="Unassigned">Unassigned (No Dept)</option>
+                  </select>
+                </div>
+              )}
+
               <div className="roster-search">
                 <Search className="roster-search-icon" size={16} />
                 <input 
@@ -180,7 +267,32 @@ const SuperAdminTeamPage: React.FC = () => {
                   value={rosterSearch}
                   onChange={(e) => setRosterSearch(e.target.value)}
                 />
+                {rosterSearch && (
+                  <button
+                    type="button"
+                    className="roster-search-clear-btn"
+                    onClick={() => setRosterSearch('')}
+                    title="Clear search"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
               </div>
+
+              {(rosterDeptFilter !== 'All' || rosterSearch) && (
+                <button
+                  type="button"
+                  className="roster-clear-filter-btn"
+                  onClick={() => {
+                    setRosterDeptFilter('All');
+                    setRosterSearch('');
+                  }}
+                  title="Reset roster filters"
+                >
+                  <RotateCcw size={13} />
+                  <span>Reset</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -194,7 +306,9 @@ const SuperAdminTeamPage: React.FC = () => {
               <p className="roster-empty-text">
                 {assignments.length === 0 
                   ? 'No staff assigned to Super Admin team yet. Recruit members from the Directory Pool below.' 
-                  : 'No team members matching your search filter.'}
+                  : (rosterDeptFilter !== 'All' || rosterSearch)
+                    ? 'No team members match the selected filters.'
+                    : 'No team members matching your search filter.'}
               </p>
             </div>
           ) : (
@@ -227,10 +341,19 @@ const SuperAdminTeamPage: React.FC = () => {
                           </div>
                         </td>
                         <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem', flexWrap: 'wrap' }}>
                             <span className="role-tag" style={{ background: '#eff6ff', color: '#1d4ed8', borderColor: '#bfdbfe' }}>
                               Super Admin Team
                             </span>
+                            {staff.department ? (
+                              <span className="dir-card-dept-badge">
+                                <Building2 size={11} /> {staff.department}
+                              </span>
+                            ) : (
+                              <span className="dir-card-no-dept-badge">
+                                No Dept
+                              </span>
+                            )}
                           </div>
                           <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{staff.email}</div>
                           {staff.phone && <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>{staff.phone}</div>}
@@ -279,12 +402,37 @@ const SuperAdminTeamPage: React.FC = () => {
         <div className="roster-section" style={{ marginTop: '2rem' }}>
           <div className="roster-header">
             <div>
-              <h2 className="roster-title">Directory Pool</h2>
+              <h2 className="roster-title">
+                Directory Pool
+                <span style={{ fontSize: '0.85rem', fontWeight: 500, color: '#64748b', marginLeft: '0.5rem' }}>
+                  ({filteredDirectory.length}{filteredDirectory.length !== directory.length ? ` of ${directory.length}` : ''})
+                </span>
+              </h2>
               <p style={{ color: '#64748b', fontSize: '0.875rem', marginTop: '0.25rem' }}>
                 University staff members currently unassigned and available to recruit to your team.
               </p>
             </div>
             <div className="roster-controls">
+              {/* Department Filter (Where user specified in screenshot) */}
+              <div className="roster-filter-select-wrapper">
+                <Building2 size={15} className="roster-filter-icon" />
+                <select
+                  className="roster-dept-select"
+                  value={directoryDeptFilter}
+                  onChange={(e) => setDirectoryDeptFilter(e.target.value)}
+                  title="Filter directory by Department"
+                >
+                  <option value="All">All Departments</option>
+                  {availableDirectoryDepartments.map((dept) => (
+                    <option key={dept} value={dept}>
+                      {dept}
+                    </option>
+                  ))}
+                  <option value="Unassigned">Unassigned (No Dept)</option>
+                </select>
+              </div>
+
+              {/* Search available staff */}
               <div className="roster-search">
                 <Search className="roster-search-icon" size={16} />
                 <input 
@@ -293,7 +441,33 @@ const SuperAdminTeamPage: React.FC = () => {
                   value={directorySearch}
                   onChange={(e) => setDirectorySearch(e.target.value)}
                 />
+                {directorySearch && (
+                  <button
+                    type="button"
+                    className="roster-search-clear-btn"
+                    onClick={() => setDirectorySearch('')}
+                    title="Clear search"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
               </div>
+
+              {/* Reset Button */}
+              {(directoryDeptFilter !== 'All' || directorySearch) && (
+                <button
+                  type="button"
+                  className="roster-clear-filter-btn"
+                  onClick={() => {
+                    setDirectoryDeptFilter('All');
+                    setDirectorySearch('');
+                  }}
+                  title="Reset directory filters"
+                >
+                  <RotateCcw size={13} />
+                  <span>Reset</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -310,7 +484,9 @@ const SuperAdminTeamPage: React.FC = () => {
               <p style={{ gridColumn: '1 / -1', textAlign: 'center', color: '#64748b' }}>
                 {directory.length === 0 
                   ? 'No unassigned staff available in the university directory.' 
-                  : 'No staff members match your search.'}
+                  : (directoryDeptFilter !== 'All' || directorySearch)
+                    ? 'No staff members match the selected filters.'
+                    : 'No staff members match your search.'}
               </p>
             ) : (
               filteredDirectory.map(u => (
@@ -328,26 +504,44 @@ const SuperAdminTeamPage: React.FC = () => {
                         backgroundImage: `url(https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}&background=e2e8f0&color=1e293b)`,
                         backgroundSize: 'cover'
                       }}></div>
-                      <div>
-                        <strong style={{ display: 'block', fontSize: '0.98rem', color: '#0f172a' }}>{u.name}</strong>
-                        <span style={{ 
-                          fontSize: '0.73rem', padding: '0.1rem 0.45rem', 
-                          borderRadius: '6px', backgroundColor: '#f1f5f9', 
-                          color: '#475569', display: 'inline-block', marginTop: '0.2rem',
-                          fontWeight: 600
-                        }}>ID: {u.universityId || u._id?.toString().substring(0, 6)}</span>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <strong style={{ display: 'block', fontSize: '0.98rem', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.name}</strong>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.2rem' }}>
+                          <span style={{ 
+                            fontSize: '0.73rem', padding: '0.1rem 0.45rem', 
+                            borderRadius: '6px', backgroundColor: '#f1f5f9', 
+                            color: '#475569', display: 'inline-block',
+                            fontWeight: 600
+                          }}>ID: {u.universityId || u._id?.toString().substring(0, 6)}</span>
+                          {u.department ? (
+                            <span className="dir-card-dept-badge">
+                              <Building2 size={11} /> {u.department}
+                            </span>
+                          ) : (
+                            <span className="dir-card-no-dept-badge">
+                              No Dept
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
                   <div className="dir-card-body" style={{ flexGrow: 1, padding: '1.1rem 1.25rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.45rem', color: '#4b5563', fontSize: '0.85rem' }}>
-                      <Mail size={14} style={{ color: '#94a3b8' }} /> {u.email}
+                      <Mail size={14} style={{ color: '#94a3b8', flexShrink: 0 }} /> 
+                      <span style={{ wordBreak: 'break-all' }}>{u.email}</span>
                     </div>
                     {u.phone && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#4b5563', fontSize: '0.85rem' }}>
-                        <Phone size={14} style={{ color: '#94a3b8' }} /> {u.phone}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.45rem', color: '#4b5563', fontSize: '0.85rem' }}>
+                        <Phone size={14} style={{ color: '#94a3b8', flexShrink: 0 }} /> {u.phone}
                       </div>
                     )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#4b5563', fontSize: '0.85rem' }}>
+                      <Building2 size={14} style={{ color: '#94a3b8', flexShrink: 0 }} /> 
+                      <span style={{ color: u.department ? '#1e293b' : '#94a3b8', fontWeight: u.department ? 500 : 400 }}>
+                        {u.department || 'No department assigned'}
+                      </span>
+                    </div>
                   </div>
                   <div style={{ padding: '0.85rem 1.25rem', borderTop: '1px solid #f1f5f9', backgroundColor: '#f8fafc' }}>
                     <button 

@@ -254,6 +254,7 @@ export const exportTasks = async (
 
 export interface UsersExportFilterInfo {
   role?: string;
+  department?: string;
   search?: string;
   status?: string;
 }
@@ -312,6 +313,7 @@ export const exportUsers = async (
     doc.setTextColor(15, 23, 42);
     const filterDesc = [
       filterInfo?.role && filterInfo.role !== 'All' ? `Role: ${filterInfo.role}` : null,
+      filterInfo?.department && filterInfo.department !== 'All' ? `Dept: ${filterInfo.department}` : null,
       filterInfo?.search ? `Search: "${filterInfo.search}"` : null,
     ].filter(Boolean).join(' | ');
     doc.text(`Total Users: ${users.length}${filterDesc ? `   •   [${filterDesc}]` : ''}`, 50, 99);

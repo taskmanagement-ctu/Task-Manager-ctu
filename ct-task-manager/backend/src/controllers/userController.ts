@@ -24,6 +24,7 @@ export const getUsers = async (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string) || 10;
     const search = req.query.search as string;
     const role = req.query.role as string;
+    const department = req.query.department as string;
     const status = req.query.status as string;
     const unassignedOnly = req.query.unassignedOnly === 'true';
 
@@ -45,6 +46,30 @@ export const getUsers = async (req: Request, res: Response) => {
         query.role = { $in: role.split(',') };
       } else {
         query.role = role;
+      }
+    }
+
+    // Department filter
+    if (department && department !== 'All') {
+      if (department === 'Unassigned' || department === 'None') {
+        const unassignedCondition = {
+          $or: [
+            { department: null },
+            { department: '' },
+            { department: { $exists: false } },
+          ],
+        };
+        if (query.$or) {
+          query.$and = [
+            { $or: query.$or },
+            unassignedCondition,
+          ];
+          delete query.$or;
+        } else {
+          query.$or = unassignedCondition.$or;
+        }
+      } else {
+        query.department = { $regex: new RegExp(`^${department.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') };
       }
     }
 
