@@ -28,7 +28,7 @@ const AccessRequestModal: React.FC<AccessRequestModalProps> = ({
     email: initialData.email || '',
     phone: initialData.phone || '',
     department: initialData.department || '',
-    userType: 'staff' as 'staff' | 'student',
+    userType: 'teaching' as 'teaching' | 'non_teaching',
     reason: '',
   });
 
@@ -39,6 +39,17 @@ const AccessRequestModal: React.FC<AccessRequestModalProps> = ({
   const [isSuccess, setIsSuccess] = useState(false);
   const [submittedEmail, setSubmittedEmail] = useState('');
 
+  // Lock background body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
+
   // Sync initialData when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -48,7 +59,7 @@ const AccessRequestModal: React.FC<AccessRequestModalProps> = ({
         email: initialData.email || '',
         phone: initialData.phone || '',
         department: initialData.department || '',
-        userType: 'staff',
+        userType: 'teaching',
         reason: '',
       });
       setError(null);
@@ -93,8 +104,8 @@ const AccessRequestModal: React.FC<AccessRequestModalProps> = ({
       return;
     }
 
-    if (uid.length !== 5 || !/^\d+$/.test(uid)) {
-      setError('University ID must contain exactly 5 digits.');
+    if (!/^\d{3,5}$/.test(uid)) {
+      setError('University ID must contain between 3 and 5 digits.');
       return;
     }
 
@@ -202,7 +213,7 @@ const AccessRequestModal: React.FC<AccessRequestModalProps> = ({
                     name="universityId"
                     value={formData.universityId}
                     onChange={(e) => setFormData((prev) => ({ ...prev, universityId: e.target.value.replace(/\D/g, '').slice(0, 5) }))}
-                    placeholder="5-digit ID (e.g. 10045)"
+                    placeholder="3-5 digit ID (e.g. 10045 or 101)"
                     maxLength={5}
                     required
                   />
@@ -284,18 +295,19 @@ const AccessRequestModal: React.FC<AccessRequestModalProps> = ({
                 </div>
               </div>
 
-              {/* Role / User Type */}
+              {/* Role / User Type: Only Teaching and Non-Teaching Staff */}
               <div className="arm-form-group">
-                <label htmlFor="arm-usertype">User Type</label>
+                <label htmlFor="arm-usertype">User Type *</label>
                 <div className="arm-input-wrap">
                   <select
                     id="arm-usertype"
                     name="userType"
                     value={formData.userType}
                     onChange={handleChange}
+                    required
                   >
-                    <option value="staff">Staff / Faculty</option>
-                    <option value="student">Student</option>
+                    <option value="teaching">Teaching Staff</option>
+                    <option value="non_teaching">Non-Teaching Staff</option>
                   </select>
                 </div>
               </div>
@@ -313,7 +325,7 @@ const AccessRequestModal: React.FC<AccessRequestModalProps> = ({
                   name="reason"
                   value={formData.reason}
                   onChange={handleChange}
-                  placeholder="e.g. Newly joined Assistant Professor in CSE Dept, Employee ID card issued."
+                  placeholder="e.g. Assistant Professor in CSE Dept / Lab Assistant"
                   rows={2}
                   maxLength={300}
                 />

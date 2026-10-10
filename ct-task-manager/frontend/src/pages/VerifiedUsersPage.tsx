@@ -425,8 +425,8 @@ const VerifiedUsersPage = () => {
       return;
     }
 
-    if (!/^\d{5}$/.test(inlineForm.universityId.trim())) {
-      setInlineError('University ID must be exactly 5 digits.');
+    if (!/^\d{3,5}$/.test(inlineForm.universityId.trim())) {
+      setInlineError('University ID must be between 3 and 5 digits.');
       return;
     }
 
@@ -1077,7 +1077,7 @@ const VerifiedUsersPage = () => {
                           ref={idInputRef}
                           type="text"
                           className="vu-inline-input"
-                          placeholder="5-digit ID"
+                          placeholder="3-5 digit ID"
                           maxLength={5}
                           value={inlineForm.universityId}
                           onChange={(e) => setInlineForm(prev => ({ ...prev, universityId: e.target.value.replace(/\D/g, '') }))}

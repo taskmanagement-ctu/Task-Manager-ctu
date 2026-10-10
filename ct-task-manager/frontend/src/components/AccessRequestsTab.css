@@ -301,10 +301,17 @@
   text-transform: capitalize;
 }
 
-.art-usertype-pill.staff {
+.art-usertype-pill.staff,
+.art-usertype-pill.teaching {
   background-color: #eff6ff;
   color: #1d4ed8;
   border: 1px solid #bfdbfe;
+}
+
+.art-usertype-pill.non_teaching {
+  background-color: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
 }
 
 .art-usertype-pill.student {

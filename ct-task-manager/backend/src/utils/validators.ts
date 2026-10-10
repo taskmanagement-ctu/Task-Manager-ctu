@@ -3,7 +3,7 @@
  */
 
 export const isValidUniversityId = (id: string): boolean => {
-  return /^\d{5}$/.test(id);
+  return /^\d{3,5}$/.test(id);
 };
 
 export const isValidPhone = (phone: string): boolean => {
@@ -44,15 +44,10 @@ export const normalizePhone = (value: unknown): string => {
 };
 
 /**
- * Normalize university ID — pad with leading zeros if numeric and < 5 chars.
+ * Normalize university ID — trim whitespace.
  */
 export const normalizeUniversityId = (value: unknown): string => {
-  const raw = normalizeString(value);
-  // If it's purely numeric, pad to 5 digits
-  if (/^\d+$/.test(raw) && raw.length < 5) {
-    return raw.padStart(5, '0');
-  }
-  return raw;
+  return normalizeString(value);
 };
 
 /**
@@ -197,7 +192,7 @@ export const validateRow = (
     errors.push({
       row: rowNumber,
       field: 'ID',
-      message: `Invalid University ID "${row.universityId}". Expected exactly 5 digits`,
+      message: `Invalid University ID "${row.universityId}". Expected between 3 and 5 digits`,
     });
   }
 

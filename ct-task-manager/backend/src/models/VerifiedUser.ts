@@ -22,8 +22,8 @@ const verifiedUserSchema = new Schema<IVerifiedUser>(
       unique: true,
       index: true,
       validate: {
-        validator: (v: string) => /^\d{5}$/.test(v),
-        message: 'University ID must be exactly 5 digits',
+        validator: (v: string) => /^\d{3,5}$/.test(v),
+        message: 'University ID must be between 3 and 5 digits',
       },
     },
 

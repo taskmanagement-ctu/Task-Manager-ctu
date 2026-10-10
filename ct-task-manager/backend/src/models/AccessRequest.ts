@@ -6,7 +6,7 @@ export interface IAccessRequest extends Document {
   email: string;
   phone: string;
   department: string | null;
-  userType: 'staff' | 'student';
+  userType: 'teaching' | 'non_teaching' | 'staff' | 'student';
   category: string | null;
   reason: string | null;
   status: 'pending' | 'approved' | 'rejected';
@@ -26,8 +26,8 @@ const accessRequestSchema = new Schema<IAccessRequest>(
       trim: true,
       index: true,
       validate: {
-        validator: (v: string) => /^\d{5}$/.test(v),
-        message: 'University ID must be exactly 5 digits',
+        validator: (v: string) => /^\d{3,5}$/.test(v),
+        message: 'University ID must be between 3 and 5 digits',
       },
     },
     name: {
@@ -59,13 +59,13 @@ const accessRequestSchema = new Schema<IAccessRequest>(
     },
     userType: {
       type: String,
-      enum: ['staff', 'student'],
-      default: 'staff',
+      enum: ['teaching', 'non_teaching', 'staff', 'student'],
+      default: 'teaching',
       index: true,
     },
     category: {
       type: String,
-      default: 'Staff',
+      default: 'Teaching Staff',
       trim: true,
     },
     reason: {

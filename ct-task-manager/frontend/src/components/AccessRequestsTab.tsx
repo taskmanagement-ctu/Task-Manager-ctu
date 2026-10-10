@@ -347,7 +347,13 @@ const AccessRequestsTab: React.FC<AccessRequestsTabProps> = ({
                       <div className="art-applicant-name">
                         <strong>{req.name}</strong>
                         <span className={`art-usertype-pill ${req.userType}`}>
-                          {req.userType === 'student' ? 'Student' : 'Staff / Faculty'}
+                          {req.userType === 'teaching'
+                            ? 'Teaching Staff'
+                            : req.userType === 'non_teaching'
+                            ? 'Non-Teaching Staff'
+                            : req.userType === 'student'
+                            ? 'Student'
+                            : 'Staff / Faculty'}
                         </span>
                       </div>
                     </td>

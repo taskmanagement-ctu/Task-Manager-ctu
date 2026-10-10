@@ -26,7 +26,9 @@ export const submitAccessRequest = async (req: Request, res: Response): Promise<
     const trimmedEmail = String(email || '').trim().toLowerCase();
     const trimmedPhone = String(phone || '').trim().replace(/\D/g, '');
     const trimmedDept = department ? String(department).trim() : null;
-    const type = userType === 'student' ? 'student' : 'staff';
+    const rawType = String(userType || '').toLowerCase().trim();
+    const type = rawType.includes('non') ? 'non_teaching' : 'teaching';
+    const categoryName = type === 'non_teaching' ? 'Non-Teaching Staff' : 'Teaching Staff';
 
     // 1. Validations
     if (!trimmedId || !trimmedName || !trimmedEmail || !trimmedPhone) {
@@ -37,10 +39,10 @@ export const submitAccessRequest = async (req: Request, res: Response): Promise<
       return;
     }
 
-    if (trimmedId.length !== 5 || !/^\d+$/.test(trimmedId)) {
+    if (!/^\d{3,5}$/.test(trimmedId)) {
       res.status(400).json({
         success: false,
-        message: 'University ID must contain exactly 5 digits.',
+        message: 'University ID must contain between 3 and 5 digits.',
       });
       return;
     }
@@ -105,7 +107,7 @@ export const submitAccessRequest = async (req: Request, res: Response): Promise<
       phone: trimmedPhone,
       department: trimmedDept || null,
       userType: type,
-      category: type === 'student' ? 'Student' : 'Staff',
+      category: categoryName,
       reason: reason ? String(reason).trim() : null,
       status: 'pending',
     });
@@ -269,6 +271,7 @@ export const approveAccessRequest = async (req: Request, res: Response): Promise
     }
 
     // 1. Add / Update in VerifiedUser collection
+    const targetCategory = accessReq.category || (accessReq.userType === 'non_teaching' ? 'Non-Teaching Staff' : 'Teaching Staff');
     const existingVerified = await VerifiedUser.findOne({ universityId: accessReq.universityId });
     if (!existingVerified) {
       await VerifiedUser.create({
@@ -277,8 +280,8 @@ export const approveAccessRequest = async (req: Request, res: Response): Promise
         email: accessReq.email,
         phone: accessReq.phone,
         department: accessReq.department,
-        userType: accessReq.userType || 'staff',
-        category: accessReq.category || 'Staff',
+        userType: 'staff',
+        category: targetCategory,
         isRegistered: false,
       });
     } else {
@@ -286,7 +289,8 @@ export const approveAccessRequest = async (req: Request, res: Response): Promise
       existingVerified.email = accessReq.email;
       existingVerified.phone = accessReq.phone;
       if (accessReq.department) existingVerified.department = accessReq.department;
-      existingVerified.userType = accessReq.userType || 'staff';
+      existingVerified.userType = 'staff';
+      existingVerified.category = targetCategory;
       await existingVerified.save();
     }
 

@@ -64,10 +64,10 @@ export const sendOTP = async (req: Request, res: Response) => {
 
       // 2. If universityId is provided, validate against VerifiedUser list
       if (universityId) {
-        if (universityId.length !== 5 || !/^\d+$/.test(universityId)) {
+        if (!/^\d{3,5}$/.test(universityId)) {
           return res.status(400).json({
             success: false,
-            message: 'University ID must contain exactly 5 digits.',
+            message: 'University ID must contain between 3 and 5 digits.',
           });
         }
 
@@ -100,8 +100,8 @@ export const sendOTP = async (req: Request, res: Response) => {
         if (!targetName) targetName = verifiedRecord.name;
       }
     } else if (purpose === 'forgot_password') {
-      // Allow 5-digit University ID or Email
-      if (/^\d{5}$/.test(rawInput)) {
+      // Allow 3-5 digit University ID or Email
+      if (/^\d{3,5}$/.test(rawInput)) {
         const userById = await User.findOne({ universityId: rawInput });
         if (!userById) {
           return res.status(404).json({
@@ -117,7 +117,7 @@ export const sendOTP = async (req: Request, res: Response) => {
         if (!emailRegex.test(rawInput)) {
           return res.status(400).json({
             success: false,
-            message: 'Please enter a valid 5-digit University ID or email address.',
+            message: 'Please enter a valid 3-5 digit University ID or email address.',
           });
         }
         const userByEmail = await User.findOne({ email: rawInput.toLowerCase().trim() });
@@ -203,7 +203,7 @@ export const verifyOTP = async (req: Request, res: Response) => {
     }
 
     let targetEmail = rawInput.toLowerCase();
-    if (/^\d{5}$/.test(rawInput)) {
+    if (/^\d{3,5}$/.test(rawInput)) {
       const user = await User.findOne({ universityId: rawInput });
       if (user) targetEmail = user.email.toLowerCase().trim();
     }
@@ -285,7 +285,7 @@ export const resetPassword = async (req: Request, res: Response) => {
 
     // Resolve user by ID or email
     let user = null;
-    if (/^\d{5}$/.test(rawInput)) {
+    if (/^\d{3,5}$/.test(rawInput)) {
       user = await User.findOne({ universityId: rawInput });
     } else {
       user = await User.findOne({ email: rawInput.toLowerCase().trim() });
@@ -463,10 +463,10 @@ export const register = async (req: Request, res: Response) => {
       });
     }
 
-    if (universityId.length !== 5 || !/^\d+$/.test(universityId)) {
+    if (!/^\d{3,5}$/.test(universityId)) {
       return res.status(400).json({
         success: false,
-        message: 'University ID must contain exactly 5 digits.',
+        message: 'University ID must contain between 3 and 5 digits.',
       });
     }
 

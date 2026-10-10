@@ -99,8 +99,8 @@ const RegisterPage = () => {
       return;
     }
 
-    if (!formData.universityId || formData.universityId.length !== 5 || !/^\d+$/.test(formData.universityId)) {
-      setOtpFeedback({ type: 'error', message: 'Please enter your 5-digit University ID before requesting a code.' });
+    if (!formData.universityId || !/^\d{3,5}$/.test(formData.universityId.trim())) {
+      setOtpFeedback({ type: 'error', message: 'Please enter a valid 3-5 digit University ID before requesting a code.' });
       return;
     }
 
@@ -184,8 +184,8 @@ const RegisterPage = () => {
       return;
     }
 
-    if (formData.universityId.length !== 5 || !/^\d+$/.test(formData.universityId)) {
-      setError('University ID must contain exactly 5 digits.');
+    if (!/^\d{3,5}$/.test(formData.universityId.trim())) {
+      setError('University ID must contain between 3 and 5 digits.');
       return;
     }
 
@@ -309,7 +309,7 @@ const RegisterPage = () => {
                     name="universityId"
                     value={formData.universityId}
                     onChange={handleChange}
-                    placeholder="e.g. 12345 (5 digits)"
+                    placeholder="e.g. 12345 (3-5 digits)"
                     maxLength={5}
                     required
                   />

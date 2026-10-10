@@ -142,7 +142,7 @@ export const createVerifiedUser = async (req: Request, res: Response): Promise<v
     if (!isValidUniversityId(universityId)) {
       res.status(400).json({
         success: false,
-        message: 'University ID must be exactly 5 digits.',
+        message: 'University ID must contain between 3 and 5 digits.',
       });
       return;
     }

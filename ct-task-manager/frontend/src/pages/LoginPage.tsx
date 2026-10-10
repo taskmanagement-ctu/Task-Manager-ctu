@@ -129,16 +129,16 @@ const LoginPage = () => {
 
     const trimmed = forgotIdentifier.trim();
     if (!trimmed) {
-      setForgotError('Please enter your 5-digit University ID or registered email.');
+      setForgotError('Please enter your University ID (3-5 digits) or registered email.');
       return;
     }
 
-    const is5DigitId = /^\d{5}$/.test(trimmed);
+    const isUniversityId = /^\d{3,5}$/.test(trimmed);
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const isEmail = emailRegex.test(trimmed);
 
-    if (!is5DigitId && !isEmail) {
-      setForgotError('Please enter a valid 5-digit University ID or registered email address.');
+    if (!isUniversityId && !isEmail) {
+      setForgotError('Please enter a valid University ID (3-5 digits) or registered email address.');
       return;
     }
 
@@ -155,7 +155,7 @@ const LoginPage = () => {
         setForgotDisplayEmail(res.maskedEmail || res.email || trimmed);
         if (res.universityId) {
           setForgotResolvedUniversityId(res.universityId);
-        } else if (is5DigitId) {
+        } else if (isUniversityId) {
           setForgotResolvedUniversityId(trimmed);
         }
         setForgotStep(2);
@@ -278,7 +278,7 @@ const LoginPage = () => {
           <form onSubmit={handleSubmit}>
             <div className="login-form-group">
               <div className="login-label-row">
-                <label htmlFor="universityId">University ID (5 Digits)</label>
+                <label htmlFor="universityId">University ID (3-5 Digits)</label>
               </div>
               <div className="login-input-wrapper">
                 <IdCard size={18} className="input-icon-left" />
@@ -358,13 +358,13 @@ const LoginPage = () => {
                     <KeyRound size={26} />
                   </div>
                   <h2>Reset Password</h2>
-                  <p>Enter your 5-digit University ID or registered institutional email to receive a 6-digit verification code.</p>
+                  <p>Enter your University ID (3-5 digits) or registered institutional email to receive a 6-digit verification code.</p>
                 </div>
 
                 {forgotError && <div className="login-error-alert">{forgotError}</div>}
 
                 <div className="login-form-group" style={{ textAlign: 'left' }}>
-                  <label htmlFor="forgotIdentifier">University ID (5 Digits) or Registered Email</label>
+                  <label htmlFor="forgotIdentifier">University ID (3-5 Digits) or Registered Email</label>
                   <div className="login-input-wrapper">
                     {/^\d+$/.test(forgotIdentifier) ? (
                       <IdCard size={18} className="input-icon-left" />

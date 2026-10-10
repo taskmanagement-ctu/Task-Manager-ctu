@@ -170,7 +170,7 @@ export interface AccessRequest {
   email: string;
   phone: string;
   department: string | null;
-  userType: 'staff' | 'student';
+  userType: 'teaching' | 'non_teaching' | string;
   category?: string | null;
   reason?: string | null;
   status: 'pending' | 'approved' | 'rejected';
@@ -408,7 +408,7 @@ export const api = {
     email: string;
     phone: string;
     department?: string | null;
-    userType?: 'staff' | 'student';
+    userType?: 'teaching' | 'non_teaching' | string;
     reason?: string;
   }): Promise<{ success: boolean; message: string; data: AccessRequest }> => {
     const response = await fetch(`${API_URL}/api/access-requests`, {
