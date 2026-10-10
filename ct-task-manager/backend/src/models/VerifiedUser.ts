@@ -8,6 +8,7 @@ export interface IVerifiedUser extends Document {
   department: string | null;
   userType: 'staff' | 'student';
   category: string | null;
+  designation?: string | null;
   isRegistered: boolean;
   registeredUserId: mongoose.Types.ObjectId | null;
   createdAt: Date;
@@ -64,6 +65,13 @@ const verifiedUserSchema = new Schema<IVerifiedUser>(
     },
 
     category: {
+      type: String,
+      default: null,
+      trim: true,
+      index: true,
+    },
+
+    designation: {
       type: String,
       default: null,
       trim: true,

@@ -916,23 +916,42 @@
   white-space: nowrap;
 }
 
+.vu-category-badge.teaching,
 .vu-category-badge.faculty {
   background-color: #ecfdf5;
   color: #047857;
   border-color: #a7f3d0;
 }
 
-.vu-category-badge.admin {
-  background-color: #f5f3ff;
-  color: #6d28d9;
-  border-color: #ddd6fe;
+.vu-category-badge.non-teaching,
+.vu-category-badge.non_teaching,
+.vu-category-badge.admin,
+.vu-category-badge.staff {
+  background-color: #f0f9ff;
+  color: #0369a1;
+  border-color: #bae6fd;
 }
 
-.vu-category-badge.faculty--admin,
 .vu-category-badge.faculty--admin {
-  background: linear-gradient(135deg, #ecfdf5 0%, #f5f3ff 100%);
+  background: linear-gradient(135deg, #ecfdf5 0%, #f0f9ff 100%);
   color: #1e293b;
   border-color: #cbd5e1;
+}
+
+/* ─── Designation Badges / Cells ─── */
+.vu-designation-badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #334155;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ─── Edit Modal Styles ─── */

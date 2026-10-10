@@ -271,7 +271,9 @@ export const approveAccessRequest = async (req: Request, res: Response): Promise
     }
 
     // 1. Add / Update in VerifiedUser collection
-    const targetCategory = accessReq.category || (accessReq.userType === 'non_teaching' ? 'Non-Teaching Staff' : 'Teaching Staff');
+    const targetCategory = accessReq.category 
+      ? (accessReq.category.toLowerCase().includes('non') ? 'Non-Teaching' : 'Teaching')
+      : (accessReq.userType === 'non_teaching' ? 'Non-Teaching' : 'Teaching');
     const existingVerified = await VerifiedUser.findOne({ universityId: accessReq.universityId });
     if (!existingVerified) {
       await VerifiedUser.create({

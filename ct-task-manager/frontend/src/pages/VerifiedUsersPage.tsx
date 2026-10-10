@@ -98,7 +98,8 @@ const VerifiedUsersPage = () => {
     email: '',
     phone: '',
     department: '',
-    category: '',
+    designation: '',
+    category: 'Teaching',
   });
   const [isAdding, setIsAdding] = useState(false);
   const [inlineError, setInlineError] = useState('');
@@ -112,7 +113,8 @@ const VerifiedUsersPage = () => {
     email: '',
     phone: '',
     department: '',
-    category: '',
+    designation: '',
+    category: 'Teaching',
     userType: 'staff' as 'staff' | 'student',
   });
   const [isEditing, setIsEditing] = useState(false);
@@ -411,7 +413,8 @@ const VerifiedUsersPage = () => {
       email: '',
       phone: '',
       department: defaultDept,
-      category: '',
+      designation: '',
+      category: 'Teaching',
     });
     setInlineError('');
     setIsInlineAdding(true);
@@ -429,7 +432,8 @@ const VerifiedUsersPage = () => {
       email: '',
       phone: '',
       department: '',
-      category: '',
+      designation: '',
+      category: 'Teaching',
     });
   };
 
@@ -479,6 +483,7 @@ const VerifiedUsersPage = () => {
         phone: finalPhone,
         userType: 'staff',
         department: dept,
+        designation: inlineForm.designation?.trim() || null,
         category: inlineForm.category?.trim() || null,
       });
 
@@ -489,7 +494,8 @@ const VerifiedUsersPage = () => {
         email: '',
         phone: '',
         department: '',
-        category: '',
+        designation: '',
+        category: 'Teaching',
       });
       fetchUsers(1);
       fetchStats();
@@ -586,7 +592,8 @@ const VerifiedUsersPage = () => {
       email: user.email === '-' ? '' : user.email,
       phone: user.phone === '-' ? '' : user.phone,
       department: user.department || '',
-      category: user.category || '',
+      designation: user.designation || '',
+      category: user.category || 'Teaching',
       userType: user.userType || 'staff',
     });
     setEditError(null);
@@ -637,6 +644,7 @@ const VerifiedUsersPage = () => {
         email: editForm.email.trim(),
         phone: finalPhone,
         department: isDeptAdmin ? currentUser?.department : (editForm.department.trim() || null),
+        designation: editForm.designation.trim() || null,
         category: editForm.category.trim() || null,
         userType: editForm.userType,
       });
@@ -667,9 +675,11 @@ const VerifiedUsersPage = () => {
 
   // Available categories for filtering
   const availableCategories = Array.from(new Set([
+    'Teaching',
+    'Non-Teaching',
     ...(stats?.categories || []),
     ...users.map(u => u.category).filter(Boolean) as string[],
-  ])).sort();
+  ])).filter(c => c && c !== 'All').sort();
 
   return (
     <div className="vu-page">
@@ -1153,6 +1163,7 @@ const VerifiedUsersPage = () => {
                     <th style={{ minWidth: '200px' }}>Email</th>
                     <th style={{ width: '140px' }}>Phone</th>
                     <th style={{ minWidth: '150px' }}>Department</th>
+                    <th style={{ minWidth: '160px' }}>Designation</th>
                     <th style={{ width: '130px' }}>Category</th>
                     <th style={{ width: '130px' }}>Status</th>
                     <th style={{ width: '100px', textAlign: 'center' }}>Actions</th>
@@ -1229,11 +1240,22 @@ const VerifiedUsersPage = () => {
                         <input
                           type="text"
                           className="vu-inline-input"
-                          placeholder="Category"
+                          placeholder="e.g. Assistant Professor"
+                          value={inlineForm.designation}
+                          onChange={(e) => setInlineForm(prev => ({ ...prev, designation: e.target.value }))}
+                          onKeyDown={handleInlineKeyDown}
+                        />
+                      </td>
+                      <td>
+                        <select
+                          className="vu-inline-select"
                           value={inlineForm.category}
                           onChange={(e) => setInlineForm(prev => ({ ...prev, category: e.target.value }))}
                           onKeyDown={handleInlineKeyDown}
-                        />
+                        >
+                          <option value="Teaching">Teaching</option>
+                          <option value="Non-Teaching">Non-Teaching</option>
+                        </select>
                       </td>
                       <td>
                         <span className="vu-status-badge vu-status-new">New</span>
@@ -1285,6 +1307,15 @@ const VerifiedUsersPage = () => {
                         <td>{user.email && user.email !== '-' ? user.email : '—'}</td>
                         <td>{user.phone && user.phone !== '-' ? user.phone : '—'}</td>
                         <td>{user.department || '—'}</td>
+                        <td>
+                          {user.designation ? (
+                            <span className="vu-designation-badge" title={user.designation}>
+                              {user.designation}
+                            </span>
+                          ) : (
+                            <span style={{ color: '#94a3b8' }}>—</span>
+                          )}
+                        </td>
                         <td>
                           {user.category ? (
                             <span className={`vu-category-badge ${user.category.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}>
@@ -1581,17 +1612,31 @@ const VerifiedUsersPage = () => {
                   )}
                 </div>
 
-                {/* Category */}
+                {/* Designation */}
                 <div className="vu-edit-form-group">
-                  <label htmlFor="edit-cat">Category</label>
+                  <label htmlFor="edit-desig">Designation</label>
                   <input
                     type="text"
-                    id="edit-cat"
+                    id="edit-desig"
                     className="vu-edit-input"
+                    value={editForm.designation}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, designation: e.target.value }))}
+                    placeholder="e.g. Assistant Professor, Trainer"
+                  />
+                </div>
+
+                {/* Category */}
+                <div className="vu-edit-form-group">
+                  <label htmlFor="edit-cat">Category *</label>
+                  <select
+                    id="edit-cat"
+                    className="vu-edit-select"
                     value={editForm.category}
                     onChange={(e) => setEditForm(prev => ({ ...prev, category: e.target.value }))}
-                    placeholder="e.g. Faculty, Teaching Staff, Admin"
-                  />
+                  >
+                    <option value="Teaching">Teaching</option>
+                    <option value="Non-Teaching">Non-Teaching</option>
+                  </select>
                 </div>
               </div>
 

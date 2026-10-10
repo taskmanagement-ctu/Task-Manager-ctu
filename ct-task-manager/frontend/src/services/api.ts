@@ -158,6 +158,7 @@ export interface VerifiedUser {
   department: string | null;
   userType?: 'staff' | 'student';
   category?: string | null;
+  designation?: string | null;
   isRegistered: boolean;
   createdAt: string;
   updatedAt: string;
@@ -358,6 +359,7 @@ export const api = {
     department?: string | null;
     userType?: 'staff' | 'student';
     category?: string | null;
+    designation?: string | null;
   }): Promise<{ success: boolean; message: string; data: { user: VerifiedUser } }> => {
     return fetchWithAuth('/api/verified-users', {
       method: 'POST',
@@ -374,6 +376,7 @@ export const api = {
     department?: string | null;
     userType?: 'staff' | 'student';
     category?: string | null;
+    designation?: string | null;
   }): Promise<{ success: boolean; message: string; data: { user: VerifiedUser } }> => {
     return fetchWithAuth(`/api/verified-users/${id}`, {
       method: 'PUT',

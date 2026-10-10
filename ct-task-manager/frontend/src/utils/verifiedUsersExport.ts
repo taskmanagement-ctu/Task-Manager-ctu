@@ -68,21 +68,22 @@ export const exportVerifiedUsersToExcel = async (
     { key: 'email', width: 32 },
     { key: 'phone', width: 18 },
     { key: 'department', width: 30 },
-    { key: 'userType', width: 16 },
+    { key: 'designation', width: 24 },
+    { key: 'category', width: 18 },
     { key: 'status', width: 18 },
     { key: 'dateAdded', width: 18 },
   ];
 
-  // 1. Title Banner (Merged A1:I2)
-  worksheet.mergeCells('A1:I2');
+  // 1. Title Banner (Merged A1:J2)
+  worksheet.mergeCells('A1:J2');
   const titleCell = worksheet.getCell('A1');
   titleCell.value = 'CT UNIVERSITY - VERIFIED USERS DIRECTORY';
   titleCell.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
   titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF021C3B' } }; // CT Navy
   titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
 
-  // 2. Subtitle Bar with metadata (Merged A3:I3)
-  worksheet.mergeCells('A3:I3');
+  // 2. Subtitle Bar with metadata (Merged A3:J3)
+  worksheet.mergeCells('A3:J3');
   const subCell = worksheet.getCell('A3');
   const filterDesc = [
     filterInfo?.department && filterInfo.department !== 'All' ? `Dept: ${filterInfo.department}` : null,
@@ -124,6 +125,7 @@ export const exportVerifiedUsersToExcel = async (
     'Institutional Email',
     'Phone Number',
     'Department',
+    'Designation',
     'Category',
     'Account Status',
     'Added On',
@@ -148,6 +150,7 @@ export const exportVerifiedUsersToExcel = async (
   headerRow.getCell(3).alignment = { vertical: 'middle', horizontal: 'left' };
   headerRow.getCell(4).alignment = { vertical: 'middle', horizontal: 'left' };
   headerRow.getCell(6).alignment = { vertical: 'middle', horizontal: 'left' };
+  headerRow.getCell(7).alignment = { vertical: 'middle', horizontal: 'left' };
 
   // 5. Populate Data Rows
   const thinBorder: Partial<ExcelJS.Borders> = {
@@ -171,7 +174,8 @@ export const exportVerifiedUsersToExcel = async (
       u.email,
       u.phone,
       u.department || '—',
-      (u.userType || 'staff').toUpperCase(),
+      u.designation || '—',
+      u.category || '—',
       u.isRegistered ? 'Registered' : 'Pending',
       formattedDate,
     ];
@@ -185,8 +189,8 @@ export const exportVerifiedUsersToExcel = async (
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
       }
 
-      // Center S.No, ID, Phone, Category, Date
-      if ([1, 2, 5, 7, 9].includes(colNumber)) {
+      // Center S.No, ID, Phone, Category, Status, Date
+      if ([1, 2, 5, 8, 9, 10].includes(colNumber)) {
         cell.alignment = { vertical: 'middle', horizontal: 'center' };
       } else {
         cell.alignment = { vertical: 'middle', horizontal: 'left' };
@@ -194,7 +198,7 @@ export const exportVerifiedUsersToExcel = async (
     });
 
     // Color code Status column
-    const statusCell = row.getCell(8);
+    const statusCell = row.getCell(9);
     statusCell.alignment = { vertical: 'middle', horizontal: 'center' };
     if (u.isRegistered) {
       statusCell.font = { name: 'Arial', size: 9.5, bold: true, color: { argb: 'FF15803D' } };
@@ -270,19 +274,20 @@ export const exportVerifiedUsersToPdf = (
     u.email,
     u.phone,
     u.department || '—',
-    (u.userType || 'staff').toUpperCase(),
+    u.designation || '—',
+    u.category || '—',
     u.isRegistered ? 'Registered' : 'Pending',
   ]);
 
   autoTable(doc, {
     startY: 116,
-    head: [['#', 'ID', 'Name', 'Email Address', 'Phone No.', 'Department', 'Category', 'Status']],
+    head: [['#', 'ID', 'Name', 'Email Address', 'Phone No.', 'Department', 'Designation', 'Category', 'Status']],
     body: tableData,
-    margin: { left: 40, right: 40 },
+    margin: { left: 30, right: 30 },
     theme: 'grid',
     styles: {
-      fontSize: 8.5,
-      cellPadding: 4.5,
+      fontSize: 8,
+      cellPadding: 4,
       font: 'helvetica',
     },
     headStyles: {
@@ -295,18 +300,19 @@ export const exportVerifiedUsersToPdf = (
       fillColor: [248, 250, 252],
     },
     columnStyles: {
-      0: { cellWidth: 26, halign: 'center' },
-      1: { cellWidth: 50, halign: 'center' },
-      2: { cellWidth: 120 },
-      3: { cellWidth: 170 },
-      4: { cellWidth: 75, halign: 'center' },
-      5: { cellWidth: 140 },
-      6: { cellWidth: 60, halign: 'center' },
-      7: { cellWidth: 70, halign: 'center' },
+      0: { cellWidth: 22, halign: 'center' },
+      1: { cellWidth: 44, halign: 'center' },
+      2: { cellWidth: 105 },
+      3: { cellWidth: 145 },
+      4: { cellWidth: 70, halign: 'center' },
+      5: { cellWidth: 115 },
+      6: { cellWidth: 95 },
+      7: { cellWidth: 65, halign: 'center' },
+      8: { cellWidth: 65, halign: 'center' },
     },
     didDrawCell: (data) => {
       // Highlight status column
-      if (data.section === 'body' && data.column.index === 7) {
+      if (data.section === 'body' && data.column.index === 8) {
         const text = data.cell.raw as string;
         if (text === 'Registered') {
           doc.setTextColor(21, 128, 61); // Green
@@ -337,7 +343,7 @@ export const exportVerifiedUsersToPdf = (
  * Export verified users directory to CSV (UTF-8 with BOM for Excel compatibility)
  */
 export const exportVerifiedUsersToCsv = (users: VerifiedUser[]) => {
-  const headers = ['S.No', 'University ID', 'Name', 'Email', 'Phone', 'Department', 'Category', 'Status', 'Added Date'];
+  const headers = ['S.No', 'University ID', 'Name', 'Email', 'Phone', 'Department', 'Designation', 'Category', 'Status', 'Added Date'];
   
   const escapeCsv = (val: string | number | null | undefined): string => {
     if (val === null || val === undefined) return '""';
@@ -352,7 +358,8 @@ export const exportVerifiedUsersToCsv = (users: VerifiedUser[]) => {
     escapeCsv(u.email),
     escapeCsv(u.phone),
     escapeCsv(u.department || ''),
-    escapeCsv(u.userType || 'staff'),
+    escapeCsv(u.designation || ''),
+    escapeCsv(u.category || ''),
     escapeCsv(u.isRegistered ? 'Registered' : 'Pending'),
     escapeCsv(u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-GB') : ''),
   ].join(','));

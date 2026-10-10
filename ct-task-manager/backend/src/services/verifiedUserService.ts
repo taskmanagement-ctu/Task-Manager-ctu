@@ -182,6 +182,17 @@ const mapHeaders = (
       ) {
         fieldName = 'universityId';
       } else if (
+        normalizedKey.includes('designat') ||
+        normalizedKey.includes('job') ||
+        normalizedKey.includes('post') ||
+        normalizedKey.includes('position')
+      ) {
+        fieldName = 'designation';
+      } else if (
+        normalizedKey.includes('categor')
+      ) {
+        fieldName = 'category';
+      } else if (
         normalizedKey.includes('name') &&
         !normalizedKey.includes('dept') &&
         !normalizedKey.includes('school') &&
@@ -261,9 +272,9 @@ export const importVerifiedUsers = async (
       return null;
     }
 
-    if (lower.includes('facult')) return 'Faculty';
-    if (lower.includes('admin')) return 'Admin';
-    if (lower.includes('staff')) return 'Staff';
+    // Faculty is Teaching, Admin/Staff is Non-Teaching
+    if (lower.includes('facult') || lower.includes('teach')) return 'Teaching';
+    if (lower.includes('admin') || lower.includes('staff') || lower.includes('non')) return 'Non-Teaching';
     if (lower.includes('student')) return 'Student';
 
     // Title case the sheet name for custom tabs
@@ -380,17 +391,54 @@ export const importVerifiedUsers = async (
         userType = options?.defaultUserType || 'staff';
       }
 
-      // Determine category (e.g. "Faculty", "Admin" from tab or column)
+      // Determine designation (e.g. "Assistant Professor", "Trainer")
+      const designation = mapped.designation ? mapped.designation.trim() : null;
+
+      // Determine category (Teaching vs Non-Teaching)
       let category = mapped.category || sheetCategory || null;
       if (category) {
         const cleanCat = category.trim();
         const lowerCat = cleanCat.toLowerCase();
-        if (lowerCat.includes('facult')) category = 'Faculty';
-        else if (lowerCat.includes('admin')) category = 'Admin';
-        else if (lowerCat.includes('staff')) category = 'Staff';
-        else if (lowerCat.includes('student')) category = 'Student';
-        else {
+        if (lowerCat.includes('facult') || lowerCat.includes('teach')) {
+          category = 'Teaching';
+        } else if (lowerCat.includes('admin') || lowerCat.includes('non') || lowerCat.includes('staff')) {
+          category = 'Non-Teaching';
+        } else if (lowerCat.includes('student')) {
+          category = 'Student';
+        } else {
           category = cleanCat.replace(/\b\w/g, l => l.toUpperCase());
+        }
+      }
+
+      // If category is not explicitly determined yet, check sheetCategory or designation
+      if (!category && sheetCategory) {
+        category = sheetCategory;
+      }
+      if (!category && designation) {
+        const lowerDesig = designation.toLowerCase();
+        if (
+          lowerDesig.includes('professor') ||
+          lowerDesig.includes('lecturer') ||
+          lowerDesig.includes('faculty') ||
+          lowerDesig.includes('teacher') ||
+          lowerDesig.includes('trainer') ||
+          lowerDesig.includes('instructor') ||
+          lowerDesig.includes('dean') ||
+          lowerDesig.includes('hod') ||
+          lowerDesig.includes('chancellor')
+        ) {
+          category = 'Teaching';
+        } else if (
+          lowerDesig.includes('admin') ||
+          lowerDesig.includes('clerk') ||
+          lowerDesig.includes('accountant') ||
+          lowerDesig.includes('manager') ||
+          lowerDesig.includes('assistant') ||
+          lowerDesig.includes('attendant') ||
+          lowerDesig.includes('librarian') ||
+          lowerDesig.includes('officer')
+        ) {
+          category = 'Non-Teaching';
         }
       }
 
@@ -410,13 +458,17 @@ export const importVerifiedUsers = async (
       if (seenIds.has(mapped.universityId)) {
         const existingRow = parsedRows.find(p => p.data.universityId === mapped.universityId);
         if (existingRow) {
-          // Merge categories (e.g. Faculty + Admin -> "Faculty, Admin")
+          // Merge categories (e.g. Teaching + Non-Teaching -> "Teaching, Non-Teaching")
           if (category && existingRow.data.category) {
             if (!existingRow.data.category.includes(category)) {
               existingRow.data.category = `${existingRow.data.category}, ${category}`;
             }
           } else if (category && !existingRow.data.category) {
             existingRow.data.category = category;
+          }
+
+          if (designation && !existingRow.data.designation) {
+            existingRow.data.designation = designation;
           }
 
           // If current row has email/phone/department and previous row was empty, populate them
@@ -447,6 +499,7 @@ export const importVerifiedUsers = async (
           department,
           userType,
           category,
+          designation,
         },
       });
     }
@@ -467,6 +520,7 @@ export const importVerifiedUsers = async (
         existing.department = data.department;
         existing.userType = data.userType;
         if (data.category !== undefined) existing.category = data.category;
+        if (data.designation !== undefined) existing.designation = data.designation;
         await existing.save();
         result.updated++;
       } else {

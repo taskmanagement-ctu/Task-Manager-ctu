@@ -93,7 +93,67 @@ export const syncAndNormalizeDepartments = async (): Promise<void> => {
       }
     }
 
-    console.log('✅ [DepartmentSync] Department normalization synchronization complete.');
+    // 4. Reconcile verified users designation & category (Faculty -> Teaching, Admin -> Non-Teaching, move job titles to designation)
+    const allVerifiedUsers = await VerifiedUser.find({});
+    for (const vu of allVerifiedUsers) {
+      let changed = false;
+      const currentCat = (vu.category || '').trim();
+      const currentDesig = (vu.designation || '').trim();
+
+      // If category has a known designation title (e.g. Professor, Trainer, etc.) and designation is empty
+      if (currentCat && !currentDesig) {
+        const lower = currentCat.toLowerCase();
+        if (
+          lower !== 'teaching' &&
+          lower !== 'non-teaching' &&
+          lower !== 'faculty' &&
+          lower !== 'admin' &&
+          lower !== 'staff' &&
+          lower !== 'student'
+        ) {
+          // This category was actually a designation
+          vu.designation = currentCat;
+          if (
+            lower.includes('professor') ||
+            lower.includes('lecturer') ||
+            lower.includes('faculty') ||
+            lower.includes('teacher') ||
+            lower.includes('trainer') ||
+            lower.includes('instructor') ||
+            lower.includes('dean') ||
+            lower.includes('hod') ||
+            lower.includes('chancellor')
+          ) {
+            vu.category = 'Teaching';
+          } else {
+            vu.category = 'Non-Teaching';
+          }
+          changed = true;
+        }
+      }
+
+      // Convert legacy "Faculty" -> "Teaching", "Admin" / "Staff" -> "Non-Teaching"
+      if (vu.category) {
+        const lower = vu.category.trim().toLowerCase();
+        if (lower === 'faculty' || lower === 'teaching') {
+          if (vu.category !== 'Teaching') {
+            vu.category = 'Teaching';
+            changed = true;
+          }
+        } else if (lower === 'admin' || lower === 'staff' || lower === 'non-teaching' || lower === 'non_teaching') {
+          if (vu.category !== 'Non-Teaching') {
+            vu.category = 'Non-Teaching';
+            changed = true;
+          }
+        }
+      }
+
+      if (changed) {
+        await vu.save();
+      }
+    }
+
+    console.log('✅ [DepartmentSync] Department and Verified User category normalization complete.');
   } catch (err: any) {
     console.error('⚠️ [DepartmentSync] Error syncing department normalization:', err.message || err);
   }

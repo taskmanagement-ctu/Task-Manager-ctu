@@ -124,7 +124,7 @@ export const importFile = async (req: Request, res: Response): Promise<void> => 
 export const createVerifiedUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const user = req.user;
-    const { name, email, phone, userType, department, category } = req.body;
+    const { name, email, phone, userType, department, category, designation } = req.body;
     let { universityId } = req.body;
 
     if (!universityId || !name || !email) {
@@ -197,6 +197,16 @@ export const createVerifiedUser = async (req: Request, res: Response): Promise<v
       }
     }
 
+    // Normalize category to Teaching / Non-Teaching
+    let finalCategory: string | null = null;
+    if (category) {
+      const cStr = String(category).trim().toLowerCase();
+      if (cStr.includes('facult') || cStr.includes('teach')) finalCategory = 'Teaching';
+      else if (cStr.includes('admin') || cStr.includes('non') || cStr.includes('staff')) finalCategory = 'Non-Teaching';
+      else if (cStr.includes('student')) finalCategory = 'Student';
+      else finalCategory = String(category).trim();
+    }
+
     // Check existing
     const existing = await VerifiedUser.findOne({ universityId });
     if (existing) {
@@ -214,7 +224,8 @@ export const createVerifiedUser = async (req: Request, res: Response): Promise<v
       phone: normalizedPhone,
       department: finalDepartment,
       userType: finalUserType,
-      category: category ? String(category).trim() : null,
+      category: finalCategory,
+      designation: designation ? String(designation).trim() : null,
     });
 
     res.status(201).json({
@@ -236,7 +247,7 @@ export const updateVerifiedUser = async (req: Request, res: Response): Promise<v
   try {
     const user = req.user;
     const { id } = req.params;
-    let { universityId, name, email, phone, department, category, userType } = req.body;
+    let { universityId, name, email, phone, department, category, designation, userType } = req.body;
 
     const target = await VerifiedUser.findById(id);
     if (!target) {
@@ -326,7 +337,20 @@ export const updateVerifiedUser = async (req: Request, res: Response): Promise<v
     target.email = normalizedEmail;
     target.phone = normalizedPhone;
     target.department = finalDepartment;
-    if (category !== undefined) target.category = category ? String(category).trim() : null;
+    if (category !== undefined) {
+      if (category) {
+        const cStr = String(category).trim().toLowerCase();
+        if (cStr.includes('facult') || cStr.includes('teach')) target.category = 'Teaching';
+        else if (cStr.includes('admin') || cStr.includes('non') || cStr.includes('staff')) target.category = 'Non-Teaching';
+        else if (cStr.includes('student')) target.category = 'Student';
+        else target.category = String(category).trim();
+      } else {
+        target.category = null;
+      }
+    }
+    if (designation !== undefined) {
+      target.designation = designation ? String(designation).trim() : null;
+    }
     if (userType !== undefined) target.userType = userType === 'student' ? 'student' : 'staff';
 
     await target.save();
@@ -479,9 +503,16 @@ export const getVerifiedUsers = async (req: Request, res: Response): Promise<voi
     // Build filter
     const filter: Record<string, unknown> = {};
 
-    // Category filter (e.g. "Faculty", "Admin")
+    // Category filter (Teaching / Non-Teaching, supporting legacy tab names)
     if (categoryQuery && categoryQuery !== 'All') {
-      filter.category = { $regex: new RegExp(`^${categoryQuery}$`, 'i') };
+      const lowerCat = categoryQuery.toLowerCase();
+      if (lowerCat === 'teaching') {
+        filter.category = { $regex: /^(teaching|faculty)/i };
+      } else if (lowerCat === 'non-teaching' || lowerCat === 'non_teaching') {
+        filter.category = { $regex: /^(non-teaching|non_teaching|admin|staff)/i };
+      } else {
+        filter.category = { $regex: new RegExp(`^${categoryQuery}$`, 'i') };
+      }
     }
 
     // Department Admin scoping & permission enforcement
@@ -532,6 +563,7 @@ export const getVerifiedUsers = async (req: Request, res: Response): Promise<voi
         { universityId: { $regex: search, $options: 'i' } },
         { department: { $regex: search, $options: 'i' } },
         { category: { $regex: search, $options: 'i' } },
+        { designation: { $regex: search, $options: 'i' } },
       ];
     }
 

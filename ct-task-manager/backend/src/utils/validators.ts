@@ -131,13 +131,24 @@ export const COLUMN_MAP: Record<string, string> = {
   'faculty': 'department',
   'institution': 'department',
 
-  // Category / Tab / Designation
+  // Designation
+  'designation': 'designation',
+  'desig': 'designation',
+  'designation name': 'designation',
+  'job title': 'designation',
+  'job': 'designation',
+  'position': 'designation',
+  'post': 'designation',
+  'role/designation': 'designation',
+  'designation/role': 'designation',
+
+  // Category / Tab
   'category': 'category',
   'category name': 'category',
   'staff category': 'category',
   'staff type': 'category',
   'employee type': 'category',
-  'designation': 'category',
+  'type of staff': 'category',
   'group': 'category',
   'tab': 'category',
   'tab name': 'category',
@@ -166,6 +177,7 @@ export interface ParsedVerifiedUser {
   department: string | null;
   userType: 'staff' | 'student';
   category?: string | null;
+  designation?: string | null;
 }
 
 export interface ImportResult {

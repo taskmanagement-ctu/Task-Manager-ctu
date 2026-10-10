@@ -16,6 +16,7 @@ import {
   findMatchingDepartment,
   formatDepartmentDisplayName,
 } from '../utils/normalization';
+import { sendRolePromotionEmail, sendRoleDemotionEmail } from '../services/emailService';
 
 // GET /api/users
 export const getUsers = async (req: Request, res: Response) => {
@@ -238,6 +239,14 @@ export const updateUserRole = async (req: Request, res: Response) => {
         }
         await existingAdmin.save();
 
+        // Send demotion notification to the replaced admin
+        sendRoleDemotionEmail(
+          existingAdmin.email,
+          existingAdmin.name,
+          existingAdmin.universityId,
+          existingAdmin.department
+        ).catch((err) => console.error('Error sending demotion email to previous admin:', err));
+
         // Deactivate new admin's own subordinate staff assignment (cannot report to self)
         await StaffAssignment.updateMany(
           { staffId: userToUpdate._id, isActive: true },
@@ -283,6 +292,25 @@ export const updateUserRole = async (req: Request, res: Response) => {
         { staffId: userId, isActive: true },
         { $set: { isActive: false } }
       );
+    }
+
+    // Trigger promotion email if user was promoted to department_admin
+    if (oldRole !== 'department_admin' && role === 'department_admin') {
+      sendRolePromotionEmail(
+        userToUpdate.email,
+        userToUpdate.name,
+        userToUpdate.universityId,
+        userToUpdate.department,
+        (req as any).user?.name
+      ).catch((err) => console.error('Error sending promotion email:', err));
+    } else if (oldRole === 'department_admin' && role === 'staff') {
+      // Trigger demotion email if user was directly demoted to staff
+      sendRoleDemotionEmail(
+        userToUpdate.email,
+        userToUpdate.name,
+        userToUpdate.universityId,
+        userToUpdate.department
+      ).catch((err) => console.error('Error sending demotion email:', err));
     }
 
     return res.status(200).json({
@@ -767,6 +795,8 @@ export const updateUserAdmin = async (req: Request, res: Response) => {
     }
 
     // Role
+    let roleChanged = false;
+    const oldRole = user.role;
     if (role && role !== user.role) {
       const validRoles = ['super_admin', 'department_admin', 'staff'];
       if (!validRoles.includes(role)) {
@@ -782,9 +812,29 @@ export const updateUserAdmin = async (req: Request, res: Response) => {
         }
       }
       user.role = role;
+      roleChanged = true;
     }
 
     await user.save();
+
+    if (roleChanged) {
+      if (oldRole !== 'department_admin' && user.role === 'department_admin') {
+        sendRolePromotionEmail(
+          user.email,
+          user.name,
+          user.universityId,
+          user.department,
+          (req as any).user?.name
+        ).catch((err) => console.error('Error sending promotion email in updateUserAdmin:', err));
+      } else if (oldRole === 'department_admin' && user.role === 'staff') {
+        sendRoleDemotionEmail(
+          user.email,
+          user.name,
+          user.universityId,
+          user.department
+        ).catch((err) => console.error('Error sending demotion email in updateUserAdmin:', err));
+      }
+    }
 
     // Sync with VerifiedUser collection if entry exists
     const verifiedEntry = await VerifiedUser.findOne({
@@ -880,6 +930,14 @@ export const changeDepartmentAdmin = async (req: Request, res: Response) => {
       }
       await currentAdmin.save();
 
+      // Send demotion notification to the replaced admin
+      sendRoleDemotionEmail(
+        currentAdmin.email,
+        currentAdmin.name,
+        currentAdmin.universityId,
+        currentAdmin.department
+      ).catch((err) => console.error('Error sending demotion email to previous admin:', err));
+
       // Step B: Deactivate new admin's own subordinate staff assignment (cannot report to self)
       await StaffAssignment.updateMany(
         { staffId: newAdmin._id, isActive: true },
@@ -913,6 +971,15 @@ export const changeDepartmentAdmin = async (req: Request, res: Response) => {
     newAdmin.role = 'department_admin';
     newAdmin.department = targetDept;
     await newAdmin.save();
+
+    // Send promotion notification to the new department admin
+    sendRolePromotionEmail(
+      newAdmin.email,
+      newAdmin.name,
+      newAdmin.universityId,
+      newAdmin.department,
+      (req as any).user?.name
+    ).catch((err) => console.error('Error sending promotion email to new admin:', err));
 
     const previousAdminName = currentAdmin ? currentAdmin.name : 'Previous admin';
 

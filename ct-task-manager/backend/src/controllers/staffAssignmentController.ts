@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import StaffAssignment from '../models/StaffAssignment';
 import User from '../models/User';
+import { sendRosterAdditionEmail } from '../services/emailService';
 
 // GET /api/staff-assignments
 // Super Admin only: gets all active and inactive assignments (or can filter)
@@ -78,6 +79,16 @@ export const createAssignment = async (req: Request, res: Response) => {
       isActive: true,
     });
     await newAssignment.save();
+
+    // Send roster addition notification email
+    sendRosterAdditionEmail(
+      staff.email,
+      staff.name,
+      staff.universityId,
+      admin.department || staff.department,
+      admin.name,
+      req.user?.name
+    ).catch((err) => console.error('Failed to send roster addition email:', err));
 
     const populatedAssignment = await StaffAssignment.findById(newAssignment._id)
       .populate('adminId', 'name universityId email department role isActive')
