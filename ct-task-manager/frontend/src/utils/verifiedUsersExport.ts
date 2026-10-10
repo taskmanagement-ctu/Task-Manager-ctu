@@ -155,20 +155,49 @@ export const exportVerifiedUsersToExcel = async (
     filterInfo?.search ? `Search: "${filterInfo.search}"` : null,
   ].filter(Boolean).join(' • ');
 
+  // Helper: Auto-fit columns based on cell content with safety padding (ignoring top banner)
+  const autoFitWorksheetColumns = (ws: ExcelJS.Worksheet, headerRowIndex = 6) => {
+    if (!ws.columns) return;
+    ws.columns.forEach((column) => {
+      if (!column) return;
+      let maxLen = 0;
+      if (typeof column.eachCell === 'function') {
+        column.eachCell({ includeEmpty: false }, (cell, rowNumber) => {
+          if (rowNumber < headerRowIndex) return;
+          let cellText = '';
+          if (cell.value !== null && cell.value !== undefined) {
+            if (typeof cell.value === 'object') {
+              if ('text' in cell.value) cellText = String((cell.value as any).text);
+              else if ('result' in cell.value) cellText = String((cell.value as any).result);
+            } else {
+              cellText = String(cell.value);
+            }
+          }
+          if (cellText.length > maxLen) {
+            maxLen = cellText.length;
+          }
+        });
+      }
+      const currentWidth = (column.width as number) || 12;
+      const calculated = Math.max(maxLen + 4, currentWidth);
+      column.width = Math.min(calculated, 55);
+    });
+  };
+
   // ═══════════════════════════════════════════════════════════════════════════
   // SHEET 1: 📊 Summary (Navigation Hub & Department Breakdown)
   // ═══════════════════════════════════════════════════════════════════════════
   const summaryWs = workbook.addWorksheet('Summary', { views: [{ showGridLines: true }] });
 
   summaryWs.columns = [
-    { key: 'sno', width: 8 },
-    { key: 'dept', width: 34 },
-    { key: 'total', width: 16 },
-    { key: 'registered', width: 16 },
-    { key: 'pending', width: 16 },
-    { key: 'teaching', width: 14 },
-    { key: 'nonTeaching', width: 16 },
-    { key: 'link', width: 18 },
+    { key: 'sno', width: 10 },
+    { key: 'dept', width: 38 },
+    { key: 'total', width: 18 },
+    { key: 'registered', width: 18 },
+    { key: 'pending', width: 18 },
+    { key: 'teaching', width: 18 },
+    { key: 'nonTeaching', width: 20 },
+    { key: 'link', width: 20 },
   ];
 
   // 1. Title Banner
@@ -191,46 +220,46 @@ export const exportVerifiedUsersToExcel = async (
   // 3. Top KPI Summary Cards (Rows 5 & 6)
   summaryWs.mergeCells('A5:B5');
   summaryWs.getCell('A5').value = 'Total Verified Records';
-  summaryWs.getCell('A5').font = { name: 'Arial', size: 8.5, color: { argb: 'FF64748B' } };
+  summaryWs.getCell('A5').font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF64748B' } };
   summaryWs.getCell('A5').alignment = { horizontal: 'center', vertical: 'middle' };
   summaryWs.mergeCells('A6:B6');
   summaryWs.getCell('A6').value = totalUsersCount;
-  summaryWs.getCell('A6').font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF0284C7' } };
+  summaryWs.getCell('A6').font = { name: 'Arial', size: 15, bold: true, color: { argb: 'FF0284C7' } };
   summaryWs.getCell('A6').alignment = { horizontal: 'center', vertical: 'middle' };
 
   summaryWs.mergeCells('C5:D5');
   summaryWs.getCell('C5').value = 'Active Academic Units';
-  summaryWs.getCell('C5').font = { name: 'Arial', size: 8.5, color: { argb: 'FF64748B' } };
+  summaryWs.getCell('C5').font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF64748B' } };
   summaryWs.getCell('C5').alignment = { horizontal: 'center', vertical: 'middle' };
   summaryWs.mergeCells('C6:D6');
   summaryWs.getCell('C6').value = totalDeptsCount;
-  summaryWs.getCell('C6').font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF021C3B' } };
+  summaryWs.getCell('C6').font = { name: 'Arial', size: 15, bold: true, color: { argb: 'FF021C3B' } };
   summaryWs.getCell('C6').alignment = { horizontal: 'center', vertical: 'middle' };
 
   summaryWs.mergeCells('E5:F5');
   summaryWs.getCell('E5').value = 'Registered / Pending Accounts';
-  summaryWs.getCell('E5').font = { name: 'Arial', size: 8.5, color: { argb: 'FF64748B' } };
+  summaryWs.getCell('E5').font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF64748B' } };
   summaryWs.getCell('E5').alignment = { horizontal: 'center', vertical: 'middle' };
   summaryWs.mergeCells('E6:F6');
-  summaryWs.getCell('E6').value = `${totalRegisteredCount} Registered  /  ${totalPendingCount} Pending`;
-  summaryWs.getCell('E6').font = { name: 'Arial', size: 13, bold: true, color: { argb: 'FF16A34A' } };
-  summaryWs.getCell('E6').alignment = { horizontal: 'center', vertical: 'middle' };
+  summaryWs.getCell('E6').value = `${totalRegisteredCount} Registered  |  ${totalPendingCount} Pending`;
+  summaryWs.getCell('E6').font = { name: 'Arial', size: 10.5, bold: true, color: { argb: 'FF16A34A' } };
+  summaryWs.getCell('E6').alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
 
   summaryWs.mergeCells('G5:H5');
-  summaryWs.getCell('G5').value = 'Teaching / Non-Teaching Breakdown';
-  summaryWs.getCell('G5').font = { name: 'Arial', size: 8.5, color: { argb: 'FF64748B' } };
+  summaryWs.getCell('G5').value = 'Teaching / Non-Teaching';
+  summaryWs.getCell('G5').font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF64748B' } };
   summaryWs.getCell('G5').alignment = { horizontal: 'center', vertical: 'middle' };
   summaryWs.mergeCells('G6:H6');
-  summaryWs.getCell('G6').value = `${totalTeachingCount} Teaching  •  ${totalNonTeachingCount} Non-Teaching`;
-  summaryWs.getCell('G6').font = { name: 'Arial', size: 13, bold: true, color: { argb: 'FF7C3AED' } };
-  summaryWs.getCell('G6').alignment = { horizontal: 'center', vertical: 'middle' };
+  summaryWs.getCell('G6').value = `${totalTeachingCount} Teaching  |  ${totalNonTeachingCount} Non-Teaching`;
+  summaryWs.getCell('G6').font = { name: 'Arial', size: 10.5, bold: true, color: { argb: 'FF7C3AED' } };
+  summaryWs.getCell('G6').alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
 
   ['A5', 'B5', 'C5', 'D5', 'E5', 'F5', 'G5', 'H5', 'A6', 'B6', 'C6', 'D6', 'E6', 'F6', 'G6', 'H6'].forEach((cell) => {
     summaryWs.getCell(cell).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
     summaryWs.getCell(cell).border = thinBorder;
   });
-  summaryWs.getRow(5).height = 18;
-  summaryWs.getRow(6).height = 24;
+  summaryWs.getRow(5).height = 20;
+  summaryWs.getRow(6).height = 30;
 
   // 4. Department Table Header (Row 8)
   const sumHeaderRow = summaryWs.getRow(8);
@@ -343,6 +372,9 @@ export const exportVerifiedUsersToExcel = async (
     };
   }
 
+  // Auto-fit columns on Summary sheet based on content
+  autoFitWorksheetColumns(summaryWs, 8);
+
   // ═══════════════════════════════════════════════════════════════════════════
   // SHEET 2: 👥 All Verified Users (Master Dataset)
   // ═══════════════════════════════════════════════════════════════════════════
@@ -444,6 +476,9 @@ export const exportVerifiedUsersToExcel = async (
       to: { row: 6 + users.length, column: 10 },
     };
   }
+
+  // Auto-fit columns on Master sheet based on content
+  autoFitWorksheetColumns(allVerifiedWs, 6);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // SHEETS 3...N: 🏛️ Individual Department Dedicated Sheets
@@ -553,6 +588,9 @@ export const exportVerifiedUsersToExcel = async (
         to: { row: 6 + group.users.length, column: 10 },
       };
     }
+
+    // Auto-fit columns on this department sheet based on content
+    autoFitWorksheetColumns(ws, 6);
   });
 
   const buffer = await workbook.xlsx.writeBuffer();
