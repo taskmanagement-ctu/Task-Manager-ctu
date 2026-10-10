@@ -335,6 +335,84 @@
   background-color: #ef4444;
 }
 
+/* Roster Status Badges */
+.um-roster-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  line-height: 1.25;
+}
+
+.um-roster-badge .status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.um-roster-badge .status-dot.red {
+  background-color: #ef4444;
+}
+
+.um-roster-assigned {
+  background-color: #ecfdf5;
+  color: #065f46;
+  border-color: #a7f3d0;
+}
+
+.um-roster-assigned-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+}
+
+.um-roster-lead-name {
+  font-size: 0.72rem;
+  color: #475569;
+  font-weight: 500;
+  max-width: 170px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.um-roster-unassigned {
+  background-color: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.um-roster-lead {
+  background-color: #eff6ff;
+  color: #1e40af;
+  border-color: #bfdbfe;
+}
+
+.um-roster-super {
+  background-color: #faf5ff;
+  color: #6b21a8;
+  border-color: #e9d5ff;
+}
+
+.um-roster-deactivated {
+  background-color: #fef2f2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+.um-card-status-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 /* Actions Dropdown */
 .actions-cell {
   position: relative;

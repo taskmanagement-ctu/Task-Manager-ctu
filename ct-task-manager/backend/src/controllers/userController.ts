@@ -79,11 +79,19 @@ export const getUsers = async (req: Request, res: Response) => {
       query.isActive = status === 'Active';
     }
 
-    // Unassigned only filter
-    if (unassignedOnly) {
+    // Unassigned only filter & Roster status filter
+    const rosterStatus = req.query.rosterStatus as string;
+    if (unassignedOnly || rosterStatus === 'unassigned') {
       const activeAssignments = await StaffAssignment.find({ isActive: true }).select('staffId');
       const assignedStaffIds = activeAssignments.map(a => a.staffId);
       query._id = { $nin: assignedStaffIds };
+      if (rosterStatus === 'unassigned') {
+        query.role = 'staff';
+      }
+    } else if (rosterStatus === 'assigned') {
+      const activeAssignments = await StaffAssignment.find({ isActive: true }).select('staffId');
+      const assignedStaffIds = activeAssignments.map(a => a.staffId);
+      query._id = { $in: assignedStaffIds };
     }
 
     const total = await User.countDocuments(query);
@@ -93,13 +101,62 @@ export const getUsers = async (req: Request, res: Response) => {
       .skip((page - 1) * limit)
       .limit(limit);
 
+    // Fetch roster assignments for these fetched users
+    const userIds = users.map((u) => u._id);
+    const activeAssignments = await StaffAssignment.find({
+      staffId: { $in: userIds },
+      isActive: true,
+    }).populate('adminId', 'name universityId email department role');
+
+    // Also count assigned staff for department admins among fetched users
+    const adminIds = users.filter((u) => u.role === 'department_admin').map((u) => u._id);
+    const rosterCounts: Record<string, number> = {};
+    if (adminIds.length > 0) {
+      const counts = await StaffAssignment.aggregate([
+        { $match: { adminId: { $in: adminIds }, isActive: true } },
+        { $group: { _id: '$adminId', count: { $sum: 1 } } },
+      ]);
+      counts.forEach((c: any) => {
+        rosterCounts[c._id.toString()] = c.count;
+      });
+    }
+
+    const assignmentMap = new Map<string, any>();
+    activeAssignments.forEach((assign: any) => {
+      if (assign.staffId && assign.adminId) {
+        const staffKey = assign.staffId._id ? assign.staffId._id.toString() : assign.staffId.toString();
+        assignmentMap.set(staffKey, {
+          assignmentId: assign._id,
+          adminId: assign.adminId._id,
+          adminName: assign.adminId.name,
+          adminUniversityId: assign.adminId.universityId,
+          adminDepartment: assign.adminId.department,
+        });
+      }
+    });
+
+    const enrichedUsers = users.map((u) => {
+      const uObj: any = u.toObject();
+      const assignInfo = assignmentMap.get(u._id.toString());
+      if (u.role === 'staff') {
+        uObj.rosterStatus = assignInfo ? 'assigned' : 'unassigned';
+        uObj.assignedAdmin = assignInfo || null;
+      } else if (u.role === 'department_admin') {
+        uObj.rosterStatus = 'lead';
+        uObj.rosterStaffCount = rosterCounts[u._id.toString()] || 0;
+      } else if (u.role === 'super_admin') {
+        uObj.rosterStatus = 'super_admin';
+      }
+      return uObj;
+    });
+
     console.log('GET /api/users query:', query);
-    console.log('GET /api/users result length:', users.length);
+    console.log('GET /api/users result length:', enrichedUsers.length);
 
     return res.status(200).json({
       success: true,
       data: {
-        users,
+        users: enrichedUsers,
         pagination: {
           page,
           limit,

@@ -198,8 +198,18 @@ export interface User {
   email: string;
   phone: string;
   department: string | null;
+  baseDepartment?: string | null;
   role: string;
   isActive?: boolean;
+  rosterStatus?: 'assigned' | 'unassigned' | 'lead' | 'super_admin';
+  assignedAdmin?: {
+    assignmentId?: string;
+    adminId?: string;
+    adminName: string;
+    adminUniversityId?: string;
+    adminDepartment?: string;
+  } | null;
+  rosterStaffCount?: number;
 }
 
 export interface TaskComment {
@@ -641,6 +651,7 @@ export const api = {
     role?: string;
     department?: string;
     status?: string;
+    rosterStatus?: string;
     unassignedOnly?: boolean;
   }): Promise<{ success: boolean; data: { users: User[]; pagination: Pagination } }> => {
     const query = new URLSearchParams();
@@ -650,6 +661,7 @@ export const api = {
     if (params.role) query.set('role', params.role);
     if (params.department) query.set('department', params.department);
     if (params.status) query.set('status', params.status);
+    if (params.rosterStatus && params.rosterStatus !== 'All') query.set('rosterStatus', params.rosterStatus);
     if (params.unassignedOnly) query.set('unassignedOnly', 'true');
 
     return fetchWithAuth(`/api/users?${query.toString()}`);

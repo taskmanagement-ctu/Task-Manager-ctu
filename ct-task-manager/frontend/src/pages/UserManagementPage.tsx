@@ -20,7 +20,8 @@ import {
   X,
   Loader2,
   AlertCircle,
-  RotateCcw
+  RotateCcw,
+  Users
 } from 'lucide-react';
 import ExportDropdownMenu from '../components/ExportDropdownMenu';
 import { exportUsers } from '../utils/generalExport';
@@ -36,6 +37,7 @@ const UserManagementPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
   const [departmentFilter, setDepartmentFilter] = useState('All');
+  const [rosterFilter, setRosterFilter] = useState('All');
   const statusFilter = 'All';
 
   const [loading, setLoading] = useState(false);
@@ -84,6 +86,7 @@ const UserManagementPage: React.FC = () => {
           role: roleFilter,
           department: departmentFilter !== 'All' ? departmentFilter : undefined,
           status: statusFilter,
+          rosterStatus: rosterFilter !== 'All' ? rosterFilter : undefined,
         });
         if (fullRes.data?.users && fullRes.data.users.length > 0) {
           dataToExport = fullRes.data.users;
@@ -114,6 +117,7 @@ const UserManagementPage: React.FC = () => {
         role: roleFilter,
         department: departmentFilter !== 'All' ? departmentFilter : undefined,
         status: statusFilter,
+        rosterStatus: rosterFilter !== 'All' ? rosterFilter : undefined,
       });
       if (res.success) {
         setUsers(res.data.users);
@@ -130,7 +134,7 @@ const UserManagementPage: React.FC = () => {
   useEffect(() => {
     fetchUsers();
     // eslint-disable-next-line
-  }, [page, roleFilter, departmentFilter, statusFilter, search]);
+  }, [page, roleFilter, departmentFilter, rosterFilter, statusFilter, search]);
 
   // Click outside listener for dropdown
   useEffect(() => {
@@ -279,12 +283,18 @@ const UserManagementPage: React.FC = () => {
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [departments, users]);
 
-  const hasActiveFilters = Boolean(search.trim() || roleFilter !== 'All' || departmentFilter !== 'All');
+  const hasActiveFilters = Boolean(
+    search.trim() || 
+    roleFilter !== 'All' || 
+    departmentFilter !== 'All' || 
+    rosterFilter !== 'All'
+  );
 
   const handleClearFilters = () => {
     setSearch('');
     setRoleFilter('All');
     setDepartmentFilter('All');
+    setRosterFilter('All');
     setPage(1);
   };
 
@@ -385,6 +395,22 @@ const UserManagementPage: React.FC = () => {
               </select>
             </div>
 
+            <div className="um-filter-select-wrapper">
+              <select
+                className="um-role-select"
+                value={rosterFilter}
+                onChange={(e) => {
+                  setRosterFilter(e.target.value);
+                  setPage(1);
+                }}
+                title="Filter by Team Roster Status"
+              >
+                <option value="All">All Roster Status</option>
+                <option value="assigned">Assigned Staff</option>
+                <option value="unassigned">Unassigned Staff</option>
+              </select>
+            </div>
+
             {hasActiveFilters && (
               <button
                 type="button"
@@ -426,7 +452,7 @@ const UserManagementPage: React.FC = () => {
               <th>Phone</th>
               <th>Department</th>
               <th>Role</th>
-              <th>Status</th>
+              <th>Roster Status</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -478,10 +504,37 @@ const UserManagementPage: React.FC = () => {
                     </span>
                   </td>
                   <td>
-                    <span className={`badge-status ${user.isActive ? 'active' : 'inactive'}`}>
-                      <span className="status-dot"></span>
-                      {user.isActive ? 'Active' : 'Deactivated'}
-                    </span>
+                    {!user.isActive ? (
+                      <span className="um-roster-badge um-roster-deactivated" title="Account Deactivated">
+                        <span className="status-dot red"></span>
+                        Deactivated
+                      </span>
+                    ) : user.role === 'super_admin' ? (
+                      <span className="um-roster-badge um-roster-super" title="Super Administrator">
+                        <ShieldAlert size={12} />
+                        System Admin
+                      </span>
+                    ) : user.role === 'department_admin' ? (
+                      <span className="um-roster-badge um-roster-lead" title={`Department Team Lead (${user.rosterStaffCount || 0} assigned staff)`}>
+                        <Users size={12} />
+                        Team Lead {user.rosterStaffCount !== undefined ? `(${user.rosterStaffCount})` : ''}
+                      </span>
+                    ) : user.assignedAdmin ? (
+                      <div className="um-roster-assigned-cell" title={`Assigned to ${user.assignedAdmin.adminName} (${user.assignedAdmin.adminDepartment || 'Dept Lead'})`}>
+                        <span className="um-roster-badge um-roster-assigned">
+                          <CheckCircle size={12} />
+                          Assigned
+                        </span>
+                        <span className="um-roster-lead-name">
+                          to {user.assignedAdmin.adminName}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="um-roster-badge um-roster-unassigned" title="Not assigned to any Department Admin team">
+                        <AlertTriangle size={12} />
+                        Unassigned
+                      </span>
+                    )}
                   </td>
                   <td className="actions-cell">
                     <button className="btn-icon" onClick={(e) => toggleDropdown(user.id, e)} title="Actions">
@@ -572,9 +625,32 @@ const UserManagementPage: React.FC = () => {
                     <div className="user-email">{user.email}</div>
                   </div>
                 </div>
-                <span className={`um-card-status ${user.isActive ? 'active' : 'inactive'}`}>
-                  {user.isActive ? 'Active' : 'Deactivated'}
-                </span>
+                <div className="um-card-status-wrapper">
+                  {!user.isActive ? (
+                    <span className="um-roster-badge um-roster-deactivated">
+                      <span className="status-dot red"></span> Deactivated
+                    </span>
+                  ) : user.role === 'super_admin' ? (
+                    <span className="um-roster-badge um-roster-super">
+                      <ShieldAlert size={12} /> System Admin
+                    </span>
+                  ) : user.role === 'department_admin' ? (
+                    <span className="um-roster-badge um-roster-lead">
+                      <Users size={12} /> Team Lead {user.rosterStaffCount ? `(${user.rosterStaffCount})` : ''}
+                    </span>
+                  ) : user.assignedAdmin ? (
+                    <div className="um-roster-assigned-cell">
+                      <span className="um-roster-badge um-roster-assigned">
+                        <CheckCircle size={12} /> Assigned
+                      </span>
+                      <span className="um-roster-lead-name">to {user.assignedAdmin.adminName}</span>
+                    </div>
+                  ) : (
+                    <span className="um-roster-badge um-roster-unassigned">
+                      <AlertTriangle size={12} /> Unassigned
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="um-card-chips-row">

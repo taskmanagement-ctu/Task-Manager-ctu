@@ -269,10 +269,18 @@ export const exportUsers = async (
     return;
   }
 
+  const formatUserRosterStatus = (u: any): string => {
+    if (u.isActive === false) return 'Deactivated';
+    if (u.role === 'super_admin') return 'System Admin';
+    if (u.role === 'department_admin') return `Team Lead${u.rosterStaffCount ? ` (${u.rosterStaffCount})` : ''}`;
+    if (u.assignedAdmin?.adminName) return `Assigned (${u.assignedAdmin.adminName})`;
+    return 'Unassigned';
+  };
+
   const filenameBase = `CTU_Users_Directory_${getFileDateStamp()}`;
 
   if (format === 'csv') {
-    const headers = ['S.No', 'University ID', 'Full Name', 'Email', 'Phone', 'Role', 'Department', 'Base Department', 'Status', 'Registered Date'];
+    const headers = ['S.No', 'University ID', 'Full Name', 'Email', 'Phone', 'Role', 'Department', 'Base Department', 'Roster Status', 'Registered Date'];
     const rows = users.map((u, i) => [
       i + 1,
       escapeCsv(u.universityId),
@@ -282,7 +290,7 @@ export const exportUsers = async (
       escapeCsv((u.role || 'staff').toUpperCase()),
       escapeCsv(u.department || '—'),
       escapeCsv(u.baseDepartment || u.department || '—'),
-      escapeCsv(u.isActive !== false ? 'Active' : 'Inactive'),
+      escapeCsv(formatUserRosterStatus(u)),
       escapeCsv(u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-GB') : '—'),
     ].join(','));
 
@@ -326,12 +334,12 @@ export const exportUsers = async (
       u.phone,
       (u.role || 'staff').toUpperCase(),
       u.department || '—',
-      u.isActive !== false ? 'Active' : 'Inactive',
+      formatUserRosterStatus(u),
     ]);
 
     autoTable(doc, {
       startY: 116,
-      head: [['#', 'ID', 'Full Name', 'Email Address', 'Phone No.', 'Role', 'Department', 'Status']],
+      head: [['#', 'ID', 'Full Name', 'Email Address', 'Phone No.', 'Role', 'Department', 'Roster Status']],
       body: tableData,
       margin: { left: 40, right: 40 },
       theme: 'grid',
@@ -741,7 +749,7 @@ export const exportUsers = async (
   const allHeaderRow = allUsersWs.getRow(6);
   allHeaderRow.values = [
     'S.No', 'University ID', 'Full Name', 'Email Address', 'Phone No.',
-    'System Role', 'Current Department', 'Base Department', 'Status', 'Registered Date'
+    'System Role', 'Current Department', 'Base Department', 'Roster Status', 'Registered Date'
   ];
   allHeaderRow.height = 24;
   allHeaderRow.eachCell((cell) => {
@@ -761,7 +769,7 @@ export const exportUsers = async (
       role: (u.role || 'staff').toUpperCase(),
       dept: u.department || '—',
       baseDept: u.baseDepartment || u.department || '—',
-      status: u.isActive !== false ? 'Active' : 'Inactive',
+      status: formatUserRosterStatus(u),
       regDate: u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-GB') : '—',
     });
     row.height = 20;
@@ -774,10 +782,15 @@ export const exportUsers = async (
         cell.alignment = { vertical: 'middle', horizontal: 'center' };
       }
       if (colNumber === 9) {
+        let statusColor = 'FF15803D';
+        if (u.isActive === false) statusColor = 'FFDC2626';
+        else if (!u.assignedAdmin && u.role === 'staff') statusColor = 'FFB45309';
+        else if (u.role === 'department_admin' || u.role === 'super_admin') statusColor = 'FF4338CA';
         cell.font = {
           name: 'Arial',
           size: 9.5,
-          color: { argb: u.isActive !== false ? 'FF15803D' : 'FFDC2626' },
+          bold: true,
+          color: { argb: statusColor },
         };
       }
     });
@@ -847,7 +860,7 @@ export const exportUsers = async (
     const headerRow = ws.getRow(6);
     headerRow.values = [
       'S.No', 'University ID', 'Full Name', 'Email Address', 'Phone No.',
-      'System Role', 'Current Department', 'Base Department', 'Status', 'Registered Date'
+      'System Role', 'Current Department', 'Base Department', 'Roster Status', 'Registered Date'
     ];
     headerRow.height = 24;
     headerRow.eachCell((cell) => {
@@ -868,7 +881,7 @@ export const exportUsers = async (
         role: (u.role || 'staff').toUpperCase(),
         dept: u.department || '—',
         baseDept: u.baseDepartment || u.department || '—',
-        status: u.isActive !== false ? 'Active' : 'Inactive',
+        status: formatUserRosterStatus(u),
         regDate: u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-GB') : '—',
       });
       row.height = 20;
@@ -886,10 +899,15 @@ export const exportUsers = async (
           cell.font = { name: 'Arial', size: 9.5, bold: true, color: { argb: 'FFDC2626' } };
         }
         if (colNumber === 9) {
+          let statusColor = 'FF15803D';
+          if (u.isActive === false) statusColor = 'FFDC2626';
+          else if (!u.assignedAdmin && u.role === 'staff') statusColor = 'FFB45309';
+          else if (u.role === 'department_admin' || u.role === 'super_admin') statusColor = 'FF4338CA';
           cell.font = {
             name: 'Arial',
             size: 9.5,
-            color: { argb: u.isActive !== false ? 'FF15803D' : 'FFDC2626' },
+            bold: true,
+            color: { argb: statusColor },
           };
         }
       });
