@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import VerifiedUser from '../models/VerifiedUser';
 import Department from '../models/Department';
+import User from '../models/User';
 import { importVerifiedUsers } from '../services/verifiedUserService';
 import { 
   isValidUniversityId, 
@@ -223,6 +224,139 @@ export const createVerifiedUser = async (req: Request, res: Response): Promise<v
     });
   } catch (error: any) {
     console.error('Error adding verified user:', error);
+    res.status(500).json({ success: false, message: error.message || 'Server error' });
+  }
+};
+
+/**
+ * PUT /api/verified-users/:id
+ * Update a verified user entry
+ */
+export const updateVerifiedUser = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = req.user;
+    const { id } = req.params;
+    let { universityId, name, email, phone, department, category, userType } = req.body;
+
+    const target = await VerifiedUser.findById(id);
+    if (!target) {
+      res.status(404).json({ success: false, message: 'Verified user not found' });
+      return;
+    }
+
+    if (user.role === 'department_admin') {
+      const perms = await getDeptAdminPermissions(user);
+      if (!perms.allowed || target.department !== perms.department) {
+        res.status(403).json({
+          success: false,
+          message: 'Forbidden. You cannot edit verified users outside your department.',
+        });
+        return;
+      }
+    }
+
+    // Validate universityId if changed
+    if (universityId) {
+      universityId = normalizeUniversityId(universityId);
+      if (!isValidUniversityId(universityId)) {
+        res.status(400).json({
+          success: false,
+          message: 'University ID must contain between 3 and 5 digits.',
+        });
+        return;
+      }
+      if (universityId !== target.universityId) {
+        const existing = await VerifiedUser.findOne({ universityId, _id: { $ne: id } });
+        if (existing) {
+          res.status(400).json({
+            success: false,
+            message: `Another verified user with University ID "${universityId}" already exists.`,
+          });
+          return;
+        }
+      }
+    } else {
+      universityId = target.universityId;
+    }
+
+    // Validate email if provided
+    let normalizedEmail = target.email;
+    if (email !== undefined && email !== null) {
+      normalizedEmail = String(email).toLowerCase().trim();
+      if (!isValidEmail(normalizedEmail)) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid email address format.',
+        });
+        return;
+      }
+    }
+
+    // Validate phone if provided
+    let normalizedPhone = target.phone;
+    if (phone !== undefined && phone !== null) {
+      normalizedPhone = normalizePhone(phone);
+      if (normalizedPhone !== '-' && !isValidPhone(normalizedPhone)) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid phone number format.',
+        });
+        return;
+      }
+    }
+
+    // Handle department
+    let finalDepartment = target.department;
+    if (user.role === 'department_admin') {
+      const perms = await getDeptAdminPermissions(user);
+      finalDepartment = perms.department;
+    } else if (department !== undefined) {
+      finalDepartment = department ? String(department).trim() : null;
+      if (finalDepartment) {
+        const allDepts = await Department.find({});
+        const matched = findMatchingDepartment(allDepts, finalDepartment);
+        finalDepartment = matched ? matched.name : formatDepartmentDisplayName(finalDepartment);
+      }
+    }
+
+    const previousUniversityId = target.universityId;
+
+    target.universityId = universityId;
+    if (name) target.name = String(name).trim();
+    target.email = normalizedEmail;
+    target.phone = normalizedPhone;
+    target.department = finalDepartment;
+    if (category !== undefined) target.category = category ? String(category).trim() : null;
+    if (userType !== undefined) target.userType = userType === 'student' ? 'student' : 'staff';
+
+    await target.save();
+
+    // If registered user exists, keep User account synchronized
+    if (target.isRegistered || target.registeredUserId) {
+      const userDoc = target.registeredUserId
+        ? await User.findById(target.registeredUserId)
+        : await User.findOne({ universityId: previousUniversityId });
+
+      if (userDoc) {
+        userDoc.universityId = target.universityId;
+        userDoc.name = target.name;
+        userDoc.email = target.email;
+        userDoc.phone = target.phone;
+        if (target.department) {
+          userDoc.department = target.department;
+          userDoc.baseDepartment = target.department;
+        }
+        await userDoc.save();
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Verified user updated successfully',
+      data: { user: target },
+    });
+  } catch (error: any) {
+    console.error('Error updating verified user:', error);
     res.status(500).json({ success: false, message: error.message || 'Server error' });
   }
 };

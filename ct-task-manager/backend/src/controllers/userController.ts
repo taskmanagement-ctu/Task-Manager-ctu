@@ -5,6 +5,13 @@ import Task from '../models/Task';
 import VerifiedUser from '../models/VerifiedUser';
 import Department from '../models/Department';
 import {
+  isValidUniversityId,
+  isValidEmail,
+  isValidPhone,
+  normalizeUniversityId,
+  normalizePhone,
+} from '../utils/validators';
+import {
   areDepartmentsEqual,
   findMatchingDepartment,
   formatDepartmentDisplayName,
@@ -648,6 +655,142 @@ export const updateUserProfile = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error updating user profile:', error);
     return res.status(500).json({ success: false, message: 'Server Error' });
+  }
+};
+
+// PUT /api/users/:id
+// Super Admin updates a registered user's details
+export const updateUserAdmin = async (req: Request, res: Response) => {
+  try {
+    const userId = req.params.id;
+    let { name, email, phone, universityId, department, role } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const previousUniversityId = user.universityId;
+
+    // Validate universityId if changed
+    if (universityId) {
+      universityId = normalizeUniversityId(universityId);
+      if (!isValidUniversityId(universityId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'University ID must contain between 3 and 5 digits.',
+        });
+      }
+      if (universityId !== user.universityId) {
+        const existingUser = await User.findOne({ universityId, _id: { $ne: userId } });
+        if (existingUser) {
+          return res.status(400).json({
+            success: false,
+            message: `Another user with University ID "${universityId}" already exists.`,
+          });
+        }
+      }
+      user.universityId = universityId;
+    }
+
+    // Validate email if changed
+    if (email) {
+      const normalizedEmail = String(email).toLowerCase().trim();
+      if (!isValidEmail(normalizedEmail)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid email address format.',
+        });
+      }
+      if (normalizedEmail !== user.email) {
+        const existingEmail = await User.findOne({ email: normalizedEmail, _id: { $ne: userId } });
+        if (existingEmail) {
+          return res.status(400).json({
+            success: false,
+            message: `Another user with email "${normalizedEmail}" already exists.`,
+          });
+        }
+      }
+      user.email = normalizedEmail;
+    }
+
+    // Validate phone if provided
+    if (phone !== undefined) {
+      const normalizedPhone = normalizePhone(phone);
+      if (normalizedPhone !== '-' && !isValidPhone(normalizedPhone)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid phone number format. Must contain 10 digits.',
+        });
+      }
+      user.phone = normalizedPhone;
+    }
+
+    if (name) {
+      user.name = String(name).trim();
+    }
+
+    // Department
+    if (department !== undefined) {
+      if (department) {
+        const allDepts = await Department.find({}).lean();
+        const matched = findMatchingDepartment(allDepts, String(department).trim());
+        user.department = matched ? matched.name : formatDepartmentDisplayName(String(department).trim());
+      } else {
+        user.department = null;
+      }
+    }
+
+    // Role
+    if (role && role !== user.role) {
+      const validRoles = ['super_admin', 'department_admin', 'staff'];
+      if (!validRoles.includes(role)) {
+        return res.status(400).json({ success: false, message: 'Invalid role.' });
+      }
+      if (user.role === 'super_admin' && role !== 'super_admin') {
+        const superAdminCount = await User.countDocuments({ role: 'super_admin' });
+        if (superAdminCount <= 1) {
+          return res.status(400).json({
+            success: false,
+            message: 'At least one Super Admin must remain.',
+          });
+        }
+      }
+      user.role = role;
+    }
+
+    await user.save();
+
+    // Sync with VerifiedUser collection if entry exists
+    const verifiedEntry = await VerifiedUser.findOne({
+      $or: [
+        { registeredUserId: user._id },
+        { universityId: previousUniversityId },
+        { email: user.email },
+      ],
+    });
+
+    if (verifiedEntry) {
+      verifiedEntry.universityId = user.universityId;
+      verifiedEntry.name = user.name;
+      verifiedEntry.email = user.email;
+      verifiedEntry.phone = user.phone;
+      if (user.department) verifiedEntry.department = user.department;
+      verifiedEntry.isRegistered = true;
+      verifiedEntry.registeredUserId = user._id;
+      await verifiedEntry.save();
+    }
+
+    const updatedUser = await User.findById(userId).select('-passwordHash');
+
+    return res.status(200).json({
+      success: true,
+      message: 'User details updated successfully',
+      data: { user: updatedUser },
+    });
+  } catch (error: any) {
+    console.error('Error updating user:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Server error' });
   }
 };
 

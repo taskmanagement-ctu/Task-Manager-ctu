@@ -366,6 +366,22 @@ export const api = {
     });
   },
 
+  updateVerifiedUser: async (id: string, userData: {
+    universityId?: string;
+    name?: string;
+    email?: string;
+    phone?: string;
+    department?: string | null;
+    userType?: 'staff' | 'student';
+    category?: string | null;
+  }): Promise<{ success: boolean; message: string; data: { user: VerifiedUser } }> => {
+    return fetchWithAuth(`/api/verified-users/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(userData),
+    });
+  },
+
   deleteVerifiedUser: async (id: string): Promise<{ success: boolean; message: string }> => {
     return fetchWithAuth(`/api/verified-users/${id}`, {
       method: 'DELETE',
@@ -658,6 +674,27 @@ export const api = {
    */
   getUserById: async (id: string): Promise<{ success: boolean; data: { user: User } }> => {
     return fetchWithAuth(`/api/users/${id}`);
+  },
+
+  /**
+   * Update registered user details (Super Admin).
+   */
+  updateUserAdmin: async (
+    id: string,
+    userData: {
+      name?: string;
+      email?: string;
+      phone?: string;
+      universityId?: string;
+      department?: string | null;
+      role?: string;
+    }
+  ): Promise<{ success: boolean; message: string; data: { user: User } }> => {
+    return fetchWithAuth(`/api/users/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(userData),
+    });
   },
 
   /**

@@ -4,6 +4,7 @@ import { authenticate, authorizeRoles } from '../middleware/auth';
 import {
   importFile,
   createVerifiedUser,
+  updateVerifiedUser,
   deleteVerifiedUser,
   bulkDeleteVerifiedUsers,
   getVerifiedUsers,
@@ -28,6 +29,9 @@ router.get('/', authenticate, authorizeRoles('super_admin', 'department_admin'),
 
 // POST /api/verified-users — Add single verified user
 router.post('/', authenticate, authorizeRoles('super_admin', 'department_admin'), createVerifiedUser);
+
+// PUT /api/verified-users/:id — Edit a verified user
+router.put('/:id', authenticate, authorizeRoles('super_admin', 'department_admin'), updateVerifiedUser);
 
 // POST /api/verified-users/import — Upload Excel/CSV file
 router.post('/import', authenticate, authorizeRoles('super_admin', 'department_admin'), uploadFile.single('file'), importFile);

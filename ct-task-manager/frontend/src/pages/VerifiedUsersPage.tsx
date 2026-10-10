@@ -12,6 +12,7 @@ import AccessRequestsTab from '../components/AccessRequestsTab';
 import { 
   Plus, 
   Trash2, 
+  Pencil,
   X, 
   UploadCloud, 
   AlertCircle,
@@ -102,6 +103,20 @@ const VerifiedUsersPage = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [inlineError, setInlineError] = useState('');
   const idInputRef = useRef<HTMLInputElement>(null);
+
+  // ─── Edit Modal State ───────────────────────────────
+  const [editModalUser, setEditModalUser] = useState<VerifiedUser | null>(null);
+  const [editForm, setEditForm] = useState({
+    universityId: '',
+    name: '',
+    email: '',
+    phone: '',
+    department: '',
+    category: '',
+    userType: 'staff' as 'staff' | 'student',
+  });
+  const [isEditing, setIsEditing] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Debounce timer for search
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -559,6 +574,84 @@ const VerifiedUsersPage = () => {
       alert(err.message || 'Failed to delete user(s)');
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // ─── Handle Edit Verified User ──────────────────────
+  const handleOpenEdit = (user: VerifiedUser) => {
+    setEditModalUser(user);
+    setEditForm({
+      universityId: user.universityId,
+      name: user.name,
+      email: user.email === '-' ? '' : user.email,
+      phone: user.phone === '-' ? '' : user.phone,
+      department: user.department || '',
+      category: user.category || '',
+      userType: user.userType || 'staff',
+    });
+    setEditError(null);
+  };
+
+  const handleCloseEdit = () => {
+    setEditModalUser(null);
+    setEditError(null);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editModalUser) return;
+
+    if (!editForm.universityId.trim() || !editForm.name.trim() || !editForm.email.trim()) {
+      setEditError('University ID, Name, and Email are required.');
+      return;
+    }
+
+    if (!/^\d{3,5}$/.test(editForm.universityId.trim())) {
+      setEditError('University ID must be between 3 and 5 digits.');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(editForm.email.trim())) {
+      setEditError('Please enter a valid email address.');
+      return;
+    }
+
+    let finalPhone = '-';
+    const rawPhone = editForm.phone.trim();
+    if (rawPhone && rawPhone !== '-') {
+      const digits = rawPhone.replace(/\D/g, '');
+      if (digits.length >= 10) {
+        finalPhone = digits.slice(-10);
+      } else {
+        finalPhone = '-';
+      }
+    }
+
+    try {
+      setIsEditing(true);
+      setEditError(null);
+      const res = await api.updateVerifiedUser(editModalUser._id, {
+        universityId: editForm.universityId.trim(),
+        name: editForm.name.trim(),
+        email: editForm.email.trim(),
+        phone: finalPhone,
+        department: isDeptAdmin ? currentUser?.department : (editForm.department.trim() || null),
+        category: editForm.category.trim() || null,
+        userType: editForm.userType,
+      });
+
+      if (res.success) {
+        setActionSuccessMessage(`Successfully updated details for ${editForm.name} (${editForm.universityId}).`);
+        setTimeout(() => setActionSuccessMessage(''), 4000);
+        handleCloseEdit();
+        await fetchUsers(pagination.page);
+        await fetchStats();
+      }
+    } catch (err: any) {
+      setEditError(err.message || 'Failed to update verified user details.');
+    } finally {
+      setIsEditing(false);
     }
   };
 
@@ -1062,7 +1155,7 @@ const VerifiedUsersPage = () => {
                     <th style={{ minWidth: '150px' }}>Department</th>
                     <th style={{ width: '130px' }}>Category</th>
                     <th style={{ width: '130px' }}>Status</th>
-                    <th style={{ width: '90px', textAlign: 'center' }}>Actions</th>
+                    <th style={{ width: '100px', textAlign: 'center' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1211,13 +1304,22 @@ const VerifiedUsersPage = () => {
                           </span>
                         </td>
                         <td style={{ textAlign: 'center' }}>
-                          <button 
-                            className="vu-delete-btn"
-                            onClick={() => handleOpenSingleDelete(user)}
-                            title="Delete user"
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                            <button 
+                              className="vu-edit-btn"
+                              onClick={() => handleOpenEdit(user)}
+                              title="Edit user details"
+                            >
+                              <Pencil size={15} />
+                            </button>
+                            <button 
+                              className="vu-delete-btn"
+                              onClick={() => handleOpenSingleDelete(user)}
+                              title="Delete user"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1345,6 +1447,178 @@ const VerifiedUsersPage = () => {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Verified User Modal */}
+      {editModalUser && (
+        <div 
+          className="vu-modal-overlay" 
+          onClick={() => !isEditing && handleCloseEdit()}
+        >
+          <div className="vu-modal-card vu-edit-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="vu-modal-header">
+              <div className="vu-modal-icon-edit">
+                <Pencil size={20} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3 className="vu-modal-title">Edit Verified Staff Member</h3>
+                <p className="vu-modal-desc">
+                  Update directory credentials for <strong>{editModalUser.name}</strong> ({editModalUser.universityId}).
+                </p>
+              </div>
+              <button 
+                type="button" 
+                className="vu-modal-close-icon-btn" 
+                onClick={handleCloseEdit}
+                disabled={isEditing}
+                aria-label="Close edit modal"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {editError && (
+              <div className="vu-edit-error-alert">
+                <AlertCircle size={16} />
+                <span>{editError}</span>
+              </div>
+            )}
+
+            {editModalUser.isRegistered && (
+              <div className="vu-modal-alert" style={{ marginTop: '0.85rem', marginBottom: '0.5rem' }}>
+                <AlertCircle size={16} className="vu-modal-alert-icon" />
+                <div className="vu-modal-alert-text">
+                  <strong>Registered Account Sync:</strong>
+                  <p>This user has an active portal account. Saving changes here will automatically update their registered account credentials.</p>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveEdit} className="vu-edit-form">
+              <div className="vu-edit-grid">
+                {/* University ID */}
+                <div className="vu-edit-form-group">
+                  <label htmlFor="edit-uid">University ID *</label>
+                  <input
+                    type="text"
+                    id="edit-uid"
+                    className="vu-edit-input"
+                    value={editForm.universityId}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, universityId: e.target.value.replace(/\D/g, '').slice(0, 5) }))}
+                    placeholder="3-5 digit ID"
+                    maxLength={5}
+                    required
+                  />
+                </div>
+
+                {/* Name */}
+                <div className="vu-edit-form-group">
+                  <label htmlFor="edit-name">Full Name *</label>
+                  <input
+                    type="text"
+                    id="edit-name"
+                    className="vu-edit-input"
+                    value={editForm.name}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Full Name"
+                    required
+                  />
+                </div>
+
+                {/* Email */}
+                <div className="vu-edit-form-group">
+                  <label htmlFor="edit-email">Email Address *</label>
+                  <input
+                    type="email"
+                    id="edit-email"
+                    className="vu-edit-input"
+                    value={editForm.email}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="user@ctuniversity.in"
+                    required
+                  />
+                </div>
+
+                {/* Phone */}
+                <div className="vu-edit-form-group">
+                  <label htmlFor="edit-phone">Phone Number</label>
+                  <input
+                    type="tel"
+                    id="edit-phone"
+                    className="vu-edit-input"
+                    value={editForm.phone}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
+                    placeholder="10-digit number"
+                    maxLength={10}
+                  />
+                </div>
+
+                {/* Department */}
+                <div className="vu-edit-form-group">
+                  <label htmlFor="edit-dept">Department</label>
+                  {isDeptAdmin ? (
+                    <input
+                      type="text"
+                      className="vu-edit-input"
+                      value={currentUser?.department || ''}
+                      disabled
+                      style={{ backgroundColor: '#f1f5f9' }}
+                    />
+                  ) : (
+                    <select
+                      id="edit-dept"
+                      className="vu-edit-select"
+                      value={editForm.department}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, department: e.target.value }))}
+                    >
+                      <option value="">Select Department...</option>
+                      {departments.map((d) => (
+                        <option key={d._id} value={d.name}>{d.name}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {/* Category */}
+                <div className="vu-edit-form-group">
+                  <label htmlFor="edit-cat">Category</label>
+                  <input
+                    type="text"
+                    id="edit-cat"
+                    className="vu-edit-input"
+                    value={editForm.category}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, category: e.target.value }))}
+                    placeholder="e.g. Faculty, Teaching Staff, Admin"
+                  />
+                </div>
+              </div>
+
+              <div className="vu-modal-actions" style={{ marginTop: '1.5rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleCloseEdit}
+                  disabled={isEditing}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={isEditing}
+                >
+                  {isEditing ? (
+                    <>
+                      <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Saving...
+                    </>
+                  ) : (
+                    'Save Changes'
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

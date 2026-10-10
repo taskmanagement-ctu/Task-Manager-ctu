@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, User } from '../services/api';
+import { api, User, Department } from '../services/api';
 import { 
   Search, 
   MoreVertical, 
@@ -13,7 +13,11 @@ import {
   Trash2,
   Ban,
   CheckCircle,
-  AlertTriangle
+  AlertTriangle,
+  Pencil,
+  X,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import ExportDropdownMenu from '../components/ExportDropdownMenu';
 import { exportUsers } from '../utils/generalExport';
@@ -37,9 +41,24 @@ const UserManagementPage: React.FC = () => {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Selected User for actions
+  // Selected User for status/delete actions
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   
+  // Edit User Modal State
+  const [editModalUser, setEditModalUser] = useState<User | null>(null);
+  const [editForm, setEditForm] = useState({
+    universityId: '',
+    name: '',
+    email: '',
+    phone: '',
+    department: '',
+    role: 'staff',
+  });
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [actionSuccessMessage, setActionSuccessMessage] = useState('');
+
   // Status confirm State
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [statusAction, setStatusAction] = useState<boolean>(true); // true = activate, false = deactivate
@@ -149,6 +168,93 @@ const UserManagementPage: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    const loadDepartments = async () => {
+      try {
+        const res = await api.getDepartments();
+        if (res.success && res.data?.departments) {
+          setDepartments(res.data.departments);
+        }
+      } catch (err) {
+        console.error('Failed to load departments', err);
+      }
+    };
+    loadDepartments();
+  }, []);
+
+  const handleOpenEdit = (user: User) => {
+    setEditModalUser(user);
+    setEditForm({
+      universityId: user.universityId || '',
+      name: user.name || '',
+      email: user.email || '',
+      phone: user.phone && user.phone !== '-' ? user.phone : '',
+      department: user.department || '',
+      role: user.role || 'staff',
+    });
+    setEditError(null);
+  };
+
+  const handleCloseEdit = () => {
+    if (isEditing) return;
+    setEditModalUser(null);
+    setEditError(null);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editModalUser) return;
+
+    const uid = editForm.universityId.trim();
+    if (!/^\d{3,5}$/.test(uid)) {
+      setEditError('University ID must be between 3 and 5 digits.');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(editForm.email.trim())) {
+      setEditError('Please enter a valid email address.');
+      return;
+    }
+
+    let finalPhone = '-';
+    const rawPhone = editForm.phone.trim();
+    if (rawPhone && rawPhone !== '-') {
+      const digits = rawPhone.replace(/\D/g, '');
+      if (digits.length === 10) {
+        finalPhone = digits;
+      } else {
+        setEditError('Phone number must contain exactly 10 digits.');
+        return;
+      }
+    }
+
+    try {
+      setIsEditing(true);
+      setEditError(null);
+      const targetUserId = editModalUser.id || (editModalUser as any)._id;
+      const res = await api.updateUserAdmin(targetUserId, {
+        universityId: uid,
+        name: editForm.name.trim(),
+        email: editForm.email.trim().toLowerCase(),
+        phone: finalPhone,
+        department: editForm.department.trim() || null,
+        role: editForm.role,
+      });
+
+      if (res.success) {
+        setActionSuccessMessage(`Successfully updated details for ${editForm.name} (${uid}).`);
+        setTimeout(() => setActionSuccessMessage(''), 4500);
+        handleCloseEdit();
+        await fetchUsers();
+      }
+    } catch (err: any) {
+      setEditError(err.message || 'Failed to update user details.');
+    } finally {
+      setIsEditing(false);
+    }
+  };
+
   const getRoleIcon = (role: string) => {
     if (role === 'super_admin') return <ShieldAlert size={14} />;
     if (role === 'department_admin') return <ShieldCheck size={14} />;
@@ -176,6 +282,13 @@ const UserManagementPage: React.FC = () => {
         <h1 className="um-title">User Management</h1>
         <p className="um-subtitle">Manage system access and status for all university personnel.</p>
       </div>
+
+      {actionSuccessMessage && (
+        <div className="um-action-success-banner">
+          <CheckCircle size={18} className="um-action-success-icon" />
+          <span>{actionSuccessMessage}</span>
+        </div>
+      )}
 
       <div className="um-filters">
         <div className="um-filters-left">
@@ -287,6 +400,16 @@ const UserManagementPage: React.FC = () => {
                         <button 
                           className="dropdown-item" 
                           onClick={() => {
+                            handleOpenEdit(user);
+                            setActiveDropdown(null);
+                          }}
+                        >
+                          <Pencil size={15} color="#2563eb" />
+                          <span>Edit User</span>
+                        </button>
+                        <button 
+                          className="dropdown-item" 
+                          onClick={() => {
                             setSelectedUser(user);
                             setStatusAction(!user.isActive);
                             setShowStatusModal(true);
@@ -370,6 +493,16 @@ const UserManagementPage: React.FC = () => {
                 </button>
                 {activeDropdown === `mobile-${user.id}` && (
                   <div className="action-dropdown" ref={dropdownRef} style={{ top: '100%', right: '0', width: '100%' }}>
+                    <button 
+                      className="dropdown-item" 
+                      onClick={() => {
+                        handleOpenEdit(user);
+                        setActiveDropdown(null);
+                      }}
+                    >
+                      <Pencil size={15} color="#2563eb" />
+                      <span>Edit User</span>
+                    </button>
                     <button 
                       className="dropdown-item" 
                       onClick={() => {
@@ -560,6 +693,179 @@ const UserManagementPage: React.FC = () => {
                 {isDeleting ? 'Deleting...' : 'Delete User'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {editModalUser && (
+        <div 
+          className="modal-overlay" 
+          onClick={() => !isEditing && handleCloseEdit()}
+        >
+          <div className="modal-content um-edit-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="um-modal-header">
+              <div className="um-modal-icon-edit">
+                <Pencil size={20} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3 className="um-modal-title">Edit User Account</h3>
+                <p className="um-modal-desc">
+                  Update registered details and permissions for <strong>{editModalUser.name}</strong> ({editModalUser.universityId}).
+                </p>
+              </div>
+              <button 
+                type="button" 
+                className="um-modal-close-icon-btn" 
+                onClick={handleCloseEdit}
+                disabled={isEditing}
+                aria-label="Close edit modal"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {editError && (
+              <div className="um-edit-error-alert">
+                <AlertCircle size={16} />
+                <span>{editError}</span>
+              </div>
+            )}
+
+            <div className="um-sync-notice-alert">
+              <AlertCircle size={16} className="um-sync-notice-icon" />
+              <div className="um-sync-notice-text">
+                <strong>Directory Synchronization:</strong>
+                <p>Changes saved here will automatically keep their credentials synchronized with the Verified Users Directory.</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="um-edit-form">
+              <div className="um-edit-grid">
+                {/* University ID */}
+                <div className="um-edit-form-group">
+                  <label htmlFor="edit-uid">University ID *</label>
+                  <input
+                    type="text"
+                    id="edit-uid"
+                    className="um-edit-input"
+                    value={editForm.universityId}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, universityId: e.target.value.replace(/\D/g, '').slice(0, 5) }))}
+                    placeholder="3-5 digit ID"
+                    maxLength={5}
+                    required
+                  />
+                </div>
+
+                {/* Name */}
+                <div className="um-edit-form-group">
+                  <label htmlFor="edit-name">Full Name *</label>
+                  <input
+                    type="text"
+                    id="edit-name"
+                    className="um-edit-input"
+                    value={editForm.name}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Full Name"
+                    required
+                  />
+                </div>
+
+                {/* Email */}
+                <div className="um-edit-form-group">
+                  <label htmlFor="edit-email">Email Address *</label>
+                  <input
+                    type="email"
+                    id="edit-email"
+                    className="um-edit-input"
+                    value={editForm.email}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="user@ctuniversity.in"
+                    required
+                  />
+                </div>
+
+                {/* Phone */}
+                <div className="um-edit-form-group">
+                  <label htmlFor="edit-phone">Phone Number</label>
+                  <input
+                    type="tel"
+                    id="edit-phone"
+                    className="um-edit-input"
+                    value={editForm.phone}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
+                    placeholder="10-digit number"
+                    maxLength={10}
+                  />
+                </div>
+
+                {/* Department */}
+                <div className="um-edit-form-group">
+                  <label htmlFor="edit-dept">Department</label>
+                  <select
+                    id="edit-dept"
+                    className="um-edit-select"
+                    value={editForm.department}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, department: e.target.value }))}
+                  >
+                    <option value="">No Department (Unassigned)</option>
+                    {departments.map((d) => (
+                      <option key={d._id} value={d.name}>
+                        {d.name}
+                      </option>
+                    ))}
+                    {editForm.department && !departments.some(d => d.name.toLowerCase() === editForm.department.toLowerCase()) && (
+                      <option value={editForm.department}>{editForm.department}</option>
+                    )}
+                  </select>
+                </div>
+
+                {/* Role */}
+                <div className="um-edit-form-group">
+                  <label htmlFor="edit-role">System Role *</label>
+                  <select
+                    id="edit-role"
+                    className="um-edit-select"
+                    value={editForm.role}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, role: e.target.value }))}
+                  >
+                    <option value="staff">Staff</option>
+                    <option value="department_admin">Department Admin</option>
+                    <option value="super_admin">Super Admin</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="modal-actions" style={{ marginTop: '1.5rem' }}>
+                <button
+                  type="button"
+                  className="btn-paginate"
+                  onClick={handleCloseEdit}
+                  disabled={isEditing}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-add-user"
+                  disabled={isEditing}
+                  style={{
+                    backgroundColor: '#2563eb',
+                    borderColor: '#2563eb',
+                    color: '#ffffff',
+                    cursor: isEditing ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {isEditing ? (
+                    <>
+                      <Loader2 size={16} className="um-spin-icon" /> Saving...
+                    </>
+                  ) : (
+                    'Save Changes'
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

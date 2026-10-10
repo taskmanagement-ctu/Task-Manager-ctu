@@ -3,6 +3,7 @@ import {
   getUsers,
   getUserStats,
   getUserById,
+  updateUserAdmin,
   updateUserRole,
   updateUserStatus,
   deleteUser,
@@ -45,6 +46,10 @@ router.get('/stats', getUserStats);
 // @route   GET /api/users/:id
 // @desc    Get single user details
 router.get('/:id', getUserById);
+
+// @route   PUT /api/users/:id
+// @desc    Update user details (name, email, phone, universityId, department, role)
+router.put('/:id', updateUserAdmin);
 
 // @route   PATCH /api/users/:id/role
 // @desc    Update user's role
