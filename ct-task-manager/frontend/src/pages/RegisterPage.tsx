@@ -406,20 +406,16 @@ const RegisterPage = () => {
                 </div>
 
                 {otpFeedback && (
-                  <div className={`otp-inline-feedback ${otpFeedback.type} ${otpFeedback.canRequestAccess ? 'with-action' : ''}`}>
-                    <div className="otp-feedback-msg-wrap">
-                      <span>{otpFeedback.message}</span>
-                    </div>
+                  <div className={`otp-inline-feedback ${otpFeedback.type}`}>
+                    <span>{otpFeedback.message}</span>
                     {otpFeedback.canRequestAccess && (
-                      <div className="otp-feedback-action-row">
-                        <button
-                          type="button"
-                          className="btn-trigger-access-request"
-                          onClick={() => setShowAccessModal(true)}
-                        >
-                          📝 Submit Access Request Form
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        className="otp-access-link"
+                        onClick={() => setShowAccessModal(true)}
+                      >
+                        Submit Access Request Form
+                      </button>
                     )}
                   </div>
                 )}

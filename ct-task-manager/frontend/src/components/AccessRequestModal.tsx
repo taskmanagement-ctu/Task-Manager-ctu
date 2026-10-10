@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Send, CheckCircle2, AlertCircle, Loader2, Building2, User, Mail, Phone, IdCard, FileText } from 'lucide-react';
+import { X, CheckCircle2, Info, AlertCircle, RefreshCw, Mail } from 'lucide-react';
 import { api, Department } from '../services/api';
+import PortalBrandLogo from './PortalBrandLogo';
+import { useSettings } from '../context/SettingsContext';
 import './AccessRequestModal.css';
 
 interface AccessRequestModalProps {
@@ -22,6 +24,7 @@ const AccessRequestModal: React.FC<AccessRequestModalProps> = ({
   initialData = {},
   onSuccess,
 }) => {
+  const { systemName } = useSettings();
   const [formData, setFormData] = useState({
     universityId: initialData.universityId || '',
     name: initialData.name || '',
@@ -147,101 +150,118 @@ const AccessRequestModal: React.FC<AccessRequestModalProps> = ({
   return (
     <div className="arm-overlay" onClick={onClose}>
       <div className="arm-modal" onClick={(e) => e.stopPropagation()}>
-        {/* Modal Header */}
-        <div className="arm-header">
-          <div className="arm-header-left">
-            <div className="arm-icon-badge">
-              <IdCard size={20} />
-            </div>
-            <div>
-              <h3 className="arm-title">Request Portal Access</h3>
-              <p className="arm-subtitle">Unlisted University ID Verification</p>
-            </div>
-          </div>
-          <button className="arm-close-btn" onClick={onClose} aria-label="Close">
-            <X size={20} />
-          </button>
-        </div>
+        {/* Top-Right Close Button */}
+        <button className="arm-close-btn" onClick={onClose} aria-label="Close modal">
+          <X size={20} />
+        </button>
 
-        {/* Modal Body */}
-        {isSuccess ? (
-          <div className="arm-success-body">
-            <div className="arm-success-icon-wrap">
-              <CheckCircle2 size={52} className="arm-success-icon" />
+        <div className="arm-content-scroll">
+          {/* Header matching Register Page style */}
+          <div className="arm-header-section">
+            <div className="arm-logo-wrap">
+              <PortalBrandLogo overrideSize="large" overrideShape="circle" />
             </div>
-            <h4 className="arm-success-title">Access Request Submitted!</h4>
-            <p className="arm-success-text">
-              Your request for University ID <strong>{formData.universityId}</strong> has been forwarded to the IT Administrator and Department Coordinator.
+            <h1 className="arm-title">Request Portal Access</h1>
+            <p className="arm-subtitle">
+              Submit your credentials to request unlisted University ID verification in {systemName}.
             </p>
-            <div className="arm-success-callout">
-              <Mail size={16} />
-              <span>
-                As soon as your access is approved, an approval email will be sent to <strong>{submittedEmail}</strong>. You will then be able to register instantly!
-              </span>
+          </div>
+
+          {/* Info Box matching .register-info-box-mobile */}
+          <div className="arm-info-box">
+            <Info size={18} />
+            <p>
+              Your University ID must match university records. If your ID is not found, submit this form. An administrator will verify your credentials and approve your account.
+            </p>
+          </div>
+
+          {/* Error Alert */}
+          {error && (
+            <div className="arm-error-alert">
+              <AlertCircle size={16} />
+              <span>{error}</span>
             </div>
-            <div className="arm-success-actions">
-              <button className="btn btn-primary arm-done-btn" onClick={onClose}>
+          )}
+
+          {isSuccess ? (
+            <div className="arm-success-alert">
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+                <CheckCircle2 size={48} color="#16a34a" />
+              </div>
+              <h3>Access Request Submitted!</h3>
+              <p>
+                Your request for University ID <strong>{formData.universityId}</strong> has been forwarded to the IT Administrator and Department Coordinator.
+                <br /><br />
+                As soon as your access is approved, an email notification will be sent to <strong>{submittedEmail}</strong>. You will then be able to register instantly!
+              </p>
+              <button
+                type="button"
+                className="arm-btn-primary"
+                onClick={onClose}
+                style={{ width: '100%', marginTop: '0.5rem' }}
+              >
                 Back to Registration
               </button>
             </div>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="arm-form">
-            <div className="arm-notice">
-              <AlertCircle size={16} className="arm-notice-icon" />
-              <span>
-                If your University ID is not found in our records, submit this form. An administrator will verify your credentials and approve your account.
-              </span>
-            </div>
-
-            {error && (
-              <div className="arm-error-alert">
-                <AlertCircle size={16} />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <div className="arm-form-grid">
-              {/* University ID */}
+          ) : (
+            <form onSubmit={handleSubmit}>
+              {/* UNIVERSITY ID */}
               <div className="arm-form-group">
                 <label htmlFor="arm-uid">University ID *</label>
-                <div className="arm-input-wrap">
-                  <IdCard size={16} className="arm-input-icon" />
+                <div className="arm-input-wrapper">
                   <input
                     type="text"
                     id="arm-uid"
                     name="universityId"
                     value={formData.universityId}
                     onChange={(e) => setFormData((prev) => ({ ...prev, universityId: e.target.value.replace(/\D/g, '').slice(0, 5) }))}
-                    placeholder="3-5 digit ID (e.g. 10045 or 101)"
+                    placeholder="e.g. 10001 (3-5 digits)"
                     maxLength={5}
                     required
+                    style={formData.universityId ? { backgroundColor: '#edf5ff' } : {}}
                   />
                 </div>
               </div>
 
-              {/* Full Name */}
-              <div className="arm-form-group">
-                <label htmlFor="arm-name">Full Name *</label>
-                <div className="arm-input-wrap">
-                  <User size={16} className="arm-input-icon" />
-                  <input
-                    type="text"
-                    id="arm-name"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    placeholder="e.g. Dr. Jane Doe"
-                    required
-                  />
+              {/* FULL NAME & PHONE NUMBER in a row */}
+              <div className="arm-row">
+                <div className="arm-form-group">
+                  <label htmlFor="arm-name">Full Name *</label>
+                  <div className="arm-input-wrapper">
+                    <input
+                      type="text"
+                      id="arm-name"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleChange}
+                      placeholder="e.g. Jane Doe"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="arm-form-group">
+                  <label htmlFor="arm-phone">Phone Number *</label>
+                  <div className="arm-input-wrapper">
+                    <input
+                      type="tel"
+                      id="arm-phone"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
+                      placeholder="e.g. 9876543210"
+                      maxLength={10}
+                      required
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Email */}
+              {/* INSTITUTIONAL EMAIL (with left mail icon matching RegisterPage) */}
               <div className="arm-form-group">
                 <label htmlFor="arm-email">Institutional Email *</label>
-                <div className="arm-input-wrap">
-                  <Mail size={16} className="arm-input-icon" />
+                <div className="arm-input-wrapper with-icon">
+                  <Mail size={18} className="input-icon-left" />
                   <input
                     type="email"
                     id="arm-email"
@@ -254,103 +274,90 @@ const AccessRequestModal: React.FC<AccessRequestModalProps> = ({
                 </div>
               </div>
 
-              {/* Phone */}
+              {/* DEPARTMENT & USER TYPE in a row */}
+              <div className="arm-row">
+                <div className="arm-form-group">
+                  <label htmlFor="arm-dept">Department (Optional)</label>
+                  <div className="arm-input-wrapper">
+                    <select
+                      id="arm-dept"
+                      name="department"
+                      value={formData.department}
+                      onChange={handleChange}
+                      disabled={loadingDepts}
+                    >
+                      <option value="">Select Department...</option>
+                      {departments.map((d) => (
+                        <option key={d._id} value={d.name}>
+                          {d.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="arm-form-group">
+                  <label htmlFor="arm-usertype">User Type *</label>
+                  <div className="arm-input-wrapper">
+                    <select
+                      id="arm-usertype"
+                      name="userType"
+                      value={formData.userType}
+                      onChange={handleChange}
+                      required
+                    >
+                      <option value="teaching">Teaching Staff</option>
+                      <option value="non_teaching">Non-Teaching Staff</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* REMARKS / DESIGNATION */}
               <div className="arm-form-group">
-                <label htmlFor="arm-phone">Phone Number *</label>
-                <div className="arm-input-wrap">
-                  <Phone size={16} className="arm-input-icon" />
+                <label htmlFor="arm-reason">
+                  Remarks / Designation (Optional)
+                </label>
+                <div className="arm-input-wrapper">
                   <input
-                    type="tel"
-                    id="arm-phone"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
-                    placeholder="10-digit number"
-                    maxLength={10}
-                    required
+                    type="text"
+                    id="arm-reason"
+                    name="reason"
+                    value={formData.reason}
+                    onChange={handleChange}
+                    placeholder="e.g. Assistant Professor in CSE Dept"
+                    maxLength={300}
                   />
                 </div>
               </div>
 
-              {/* Department */}
-              <div className="arm-form-group">
-                <label htmlFor="arm-dept">Department *</label>
-                <div className="arm-input-wrap">
-                  <Building2 size={16} className="arm-input-icon" />
-                  <select
-                    id="arm-dept"
-                    name="department"
-                    value={formData.department}
-                    onChange={handleChange}
-                    disabled={loadingDepts}
-                    required
-                  >
-                    <option value="">Select your department...</option>
-                    {departments.map((d) => (
-                      <option key={d._id} value={d.name}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              {/* Actions Button Row matching Register page button style */}
+              <div className="arm-btn-row">
+                <button
+                  type="button"
+                  className="arm-cancel-btn"
+                  onClick={onClose}
+                  disabled={submitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="arm-btn-primary"
+                  disabled={submitting}
+                >
+                  {submitting ? (
+                    <>
+                      <RefreshCw size={15} className="spin-icon" /> Submitting...
+                    </>
+                  ) : (
+                    'Submit Access Request'
+                  )}
+                </button>
               </div>
-
-              {/* Role / User Type: Only Teaching and Non-Teaching Staff */}
-              <div className="arm-form-group">
-                <label htmlFor="arm-usertype">User Type *</label>
-                <div className="arm-input-wrap">
-                  <select
-                    id="arm-usertype"
-                    name="userType"
-                    value={formData.userType}
-                    onChange={handleChange}
-                    required
-                  >
-                    <option value="teaching">Teaching Staff</option>
-                    <option value="non_teaching">Non-Teaching Staff</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* Reason / Remarks */}
-            <div className="arm-form-group full-width" style={{ marginTop: '0.85rem' }}>
-              <label htmlFor="arm-reason">
-                Remarks / Designation <span style={{ color: '#94a3b8', fontWeight: 400 }}>(Optional)</span>
-              </label>
-              <div className="arm-input-wrap textarea-wrap">
-                <FileText size={16} className="arm-input-icon textarea-icon" />
-                <textarea
-                  id="arm-reason"
-                  name="reason"
-                  value={formData.reason}
-                  onChange={handleChange}
-                  placeholder="e.g. Assistant Professor in CSE Dept / Lab Assistant"
-                  rows={2}
-                  maxLength={300}
-                />
-              </div>
-            </div>
-
-            {/* Modal Actions */}
-            <div className="arm-footer">
-              <button type="button" className="btn btn-secondary" onClick={onClose} disabled={submitting}>
-                Cancel
-              </button>
-              <button type="submit" className="btn btn-primary arm-submit-btn" disabled={submitting}>
-                {submitting ? (
-                  <>
-                    <Loader2 size={16} className="arm-spin" /> Submitting Request...
-                  </>
-                ) : (
-                  <>
-                    <Send size={16} /> Submit Access Request
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
-        )}
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );

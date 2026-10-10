@@ -559,48 +559,23 @@
   color: #b91c1c;
 }
 
-.otp-inline-feedback.with-action {
-  background-color: #fffbeb;
-  border: 1px solid #fde68a;
-  color: #92400e;
-}
-
-.otp-feedback-msg-wrap {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.otp-feedback-action-row {
-  margin-top: 0.65rem;
-  padding-top: 0.55rem;
-  border-top: 1px dashed rgba(217, 119, 6, 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.btn-trigger-access-request {
-  background-color: #d97706;
-  color: #ffffff;
+.otp-access-link {
+  background: none;
   border: none;
-  border-radius: 6px;
-  padding: 0.45rem 0.85rem;
-  font-size: 0.82rem;
+  padding: 0;
+  margin-left: 0.35rem;
+  font-family: inherit;
+  font-size: inherit;
   font-weight: 600;
+  color: #1d4ed8;
+  text-decoration: underline;
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: all 0.15s ease;
+  display: inline;
+  transition: color 0.15s ease;
 }
 
-.btn-trigger-access-request:hover {
-  background-color: #b45309;
-  transform: translateY(-1px);
+.otp-access-link:hover {
+  color: #031429;
 }
 
 @media (max-width: 600px) {
