@@ -520,6 +520,89 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Helper link on top of inputs (e.g. Unlisted ID) */
+.register-helper-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #2563eb;
+  cursor: pointer;
+  text-decoration: underline;
+  transition: color 0.15s ease;
+}
+
+.register-helper-link:hover {
+  color: #1d4ed8;
+}
+
+/* Inline OTP Feedback Banner */
+.otp-inline-feedback {
+  margin-top: 0.65rem;
+  padding: 0.75rem 0.95rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  animation: fadeIn 0.2s ease;
+}
+
+.otp-inline-feedback.success {
+  background-color: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+}
+
+.otp-inline-feedback.error {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+.otp-inline-feedback.with-action {
+  background-color: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+
+.otp-feedback-msg-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.otp-feedback-action-row {
+  margin-top: 0.65rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed rgba(217, 119, 6, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.btn-trigger-access-request {
+  background-color: #d97706;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.15s ease;
+}
+
+.btn-trigger-access-request:hover {
+  background-color: #b45309;
+  transform: translateY(-1px);
+}
+
 @media (max-width: 600px) {
   .register-page-container {
     padding: 0.5rem;

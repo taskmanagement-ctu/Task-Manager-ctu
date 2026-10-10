@@ -76,7 +76,11 @@ export const parseSafeJson = async (response: Response, defaultErrorMessage: str
         errorMsg = `${defaultErrorMessage} (${response.status})`;
       }
     }
-    throw new Error(errorMsg);
+    const err: any = new Error(errorMsg);
+    err.status = response.status;
+    err.code = json?.code;
+    err.canRequestAccess = json?.canRequestAccess;
+    throw err;
   }
   return json || {};
 };
@@ -128,7 +132,11 @@ const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
         errorMsg = `API request failed (${response.status})`;
       }
     }
-    throw new Error(errorMsg);
+    const err: any = new Error(errorMsg);
+    err.status = response.status;
+    err.code = json?.code;
+    err.canRequestAccess = json?.canRequestAccess;
+    throw err;
   }
   return json || {};
 };
@@ -153,6 +161,32 @@ export interface VerifiedUser {
   isRegistered: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AccessRequest {
+  _id: string;
+  universityId: string;
+  name: string;
+  email: string;
+  phone: string;
+  department: string | null;
+  userType: 'staff' | 'student';
+  category?: string | null;
+  reason?: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  rejectionReason?: string | null;
+  reviewedBy?: string | null;
+  reviewedByName?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AccessRequestStats {
+  total: number;
+  pending: number;
+  approved: number;
+  rejected: number;
 }
 
 export interface User {
@@ -361,6 +395,76 @@ export const api = {
    */
   downloadTemplate: (): string => {
     return `${API_URL}/api/verified-users/template`;
+  },
+
+  // ─── Access Requests ───────────────────────────────────
+
+  /**
+   * Submit a new portal access request (Public).
+   */
+  submitAccessRequest: async (data: {
+    universityId: string;
+    name: string;
+    email: string;
+    phone: string;
+    department?: string | null;
+    userType?: 'staff' | 'student';
+    reason?: string;
+  }): Promise<{ success: boolean; message: string; data: AccessRequest }> => {
+    const response = await fetch(`${API_URL}/api/access-requests`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return parseSafeJson(response, 'Failed to submit access request');
+  },
+
+  /**
+   * Fetch access requests (Admin).
+   */
+  getAccessRequests: async (params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    department?: string;
+    search?: string;
+  }): Promise<{ success: boolean; data: { requests: AccessRequest[]; pagination: Pagination } }> => {
+    const query = new URLSearchParams();
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.status && params.status !== 'all') query.set('status', params.status);
+    if (params?.department && params.department !== 'All') query.set('department', params.department);
+    if (params?.search) query.set('search', params.search);
+
+    return fetchWithAuth(`/api/access-requests?${query.toString()}`);
+  },
+
+  /**
+   * Fetch access request stats.
+   */
+  getAccessRequestStats: async (): Promise<{ success: boolean; data: AccessRequestStats }> => {
+    return fetchWithAuth('/api/access-requests/stats');
+  },
+
+  /**
+   * Approve an access request.
+   */
+  approveAccessRequest: async (id: string): Promise<{ success: boolean; message: string; data: AccessRequest }> => {
+    return fetchWithAuth(`/api/access-requests/${id}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+  },
+
+  /**
+   * Reject an access request.
+   */
+  rejectAccessRequest: async (id: string, reason?: string): Promise<{ success: boolean; message: string; data: AccessRequest }> => {
+    return fetchWithAuth(`/api/access-requests/${id}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
   },
 
   // ─── Departments ──────────────────────────────────────

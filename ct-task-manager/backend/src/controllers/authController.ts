@@ -83,7 +83,9 @@ export const sendOTP = async (req: Request, res: Response) => {
         if (!verifiedRecord) {
           return res.status(404).json({
             success: false,
-            message: 'Your University ID could not be found in university records. Please contact IT admin.',
+            code: 'NOT_VERIFIED',
+            canRequestAccess: true,
+            message: 'Your University ID could not be found in university records. Please submit an access request to be verified.',
           });
         }
 
@@ -514,7 +516,9 @@ export const register = async (req: Request, res: Response) => {
     if (!verifiedUser) {
       return res.status(404).json({
         success: false,
-        message: 'Your University ID could not be verified in university records. Please contact administrator.',
+        code: 'NOT_VERIFIED',
+        canRequestAccess: true,
+        message: 'Your University ID could not be verified in university records. Please submit an access request.',
       });
     }
 

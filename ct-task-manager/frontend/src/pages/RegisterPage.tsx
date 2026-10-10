@@ -4,6 +4,7 @@ import { api, Department } from '../services/api';
 import { Eye, EyeOff, Info, Mail, CheckCircle2, RefreshCw } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import PortalBrandLogo from '../components/PortalBrandLogo';
+import AccessRequestModal from '../components/AccessRequestModal';
 import './RegisterPage.css';
 
 const RegisterPage = () => {
@@ -25,6 +26,7 @@ const RegisterPage = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [showAccessModal, setShowAccessModal] = useState(false);
 
   // OTP State
   const [otp, setOtp] = useState('');
@@ -33,7 +35,7 @@ const RegisterPage = () => {
   const [otpCountdown, setOtpCountdown] = useState(0);
   const [otpVerified, setOtpVerified] = useState(false);
   const [otpVerifying, setOtpVerifying] = useState(false);
-  const [otpFeedback, setOtpFeedback] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
+  const [otpFeedback, setOtpFeedback] = useState<{ type: 'error' | 'success'; message: string; canRequestAccess?: boolean } | null>(null);
 
   useEffect(() => {
     const fetchDepartments = async () => {
@@ -120,9 +122,19 @@ const RegisterPage = () => {
         });
       }
     } catch (err: any) {
+      const isNotVerified =
+        err?.code === 'NOT_VERIFIED' ||
+        err?.canRequestAccess ||
+        (err?.message && String(err.message).toLowerCase().includes('not found in university records')) ||
+        (err?.message && String(err.message).toLowerCase().includes('could not be found in university records')) ||
+        (err?.message && String(err.message).toLowerCase().includes('not verified in university records'));
+
       setOtpFeedback({
         type: 'error',
-        message: err.message || 'Failed to send verification code. Please check your details.',
+        message: isNotVerified
+          ? 'Your University ID was not found in university records.'
+          : (err.message || 'Failed to send verification code. Please check your details.'),
+        canRequestAccess: Boolean(isNotVerified),
       });
     } finally {
       setOtpSending(false);
@@ -280,7 +292,16 @@ const RegisterPage = () => {
             <form onSubmit={handleSubmit}>
               
               <div className="register-form-group">
-                <label htmlFor="universityId">University ID *</label>
+                <div className="register-label-between">
+                  <label htmlFor="universityId">University ID *</label>
+                  <button
+                    type="button"
+                    className="register-helper-link"
+                    onClick={() => setShowAccessModal(true)}
+                  >
+                    Unlisted ID? Request Access
+                  </button>
+                </div>
                 <div className="register-input-wrapper">
                   <input
                     type="text"
@@ -385,8 +406,21 @@ const RegisterPage = () => {
                 </div>
 
                 {otpFeedback && (
-                  <div className={`otp-inline-feedback ${otpFeedback.type}`}>
-                    {otpFeedback.message}
+                  <div className={`otp-inline-feedback ${otpFeedback.type} ${otpFeedback.canRequestAccess ? 'with-action' : ''}`}>
+                    <div className="otp-feedback-msg-wrap">
+                      <span>{otpFeedback.message}</span>
+                    </div>
+                    {otpFeedback.canRequestAccess && (
+                      <div className="otp-feedback-action-row">
+                        <button
+                          type="button"
+                          className="btn-trigger-access-request"
+                          onClick={() => setShowAccessModal(true)}
+                        >
+                          📝 Submit Access Request Form
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -499,6 +533,18 @@ const RegisterPage = () => {
           
         </div>
       </div>
+
+      <AccessRequestModal
+        isOpen={showAccessModal}
+        onClose={() => setShowAccessModal(false)}
+        initialData={{
+          universityId: formData.universityId,
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          department: formData.department,
+        }}
+      />
     </div>
   );
 };

@@ -5,9 +5,10 @@ import {
   Pagination, 
   ImportResult, 
   VerifiedUserStats, 
-  Department 
+  Department,
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import AccessRequestsTab from '../components/AccessRequestsTab';
 import { 
   Plus, 
   Trash2, 
@@ -39,6 +40,10 @@ const VerifiedUsersPage = () => {
     canAddVerifiedUsers: boolean;
     canUploadVerifiedUsers: boolean;
   } | null>(null);
+
+  // ─── Tabs & Access Requests State ───────────────────
+  const [activeTab, setActiveTab] = useState<'verified_users' | 'access_requests'>('verified_users');
+  const [pendingRequestsCount, setPendingRequestsCount] = useState<number>(0);
 
   // ─── Data State ─────────────────────────────────────
   const [users, setUsers] = useState<VerifiedUser[]>([]);
@@ -226,6 +231,22 @@ const VerifiedUsersPage = () => {
         .catch(err => console.error('Failed to load departments', err));
     }
   }, [isDeptAdmin, currentUser]);
+
+  // ─── Fetch Pending Access Requests Count ─────────────
+  const fetchPendingRequestsCount = useCallback(async () => {
+    try {
+      const res = await api.getAccessRequestStats();
+      if (res.success) {
+        setPendingRequestsCount(res.data.pending);
+      }
+    } catch {
+      // non-blocking
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPendingRequestsCount();
+  }, [fetchPendingRequestsCount]);
 
   // ─── Fetch Users ────────────────────────────────────
   const fetchUsers = useCallback(async (page = 1) => {
@@ -567,13 +588,41 @@ const VerifiedUsersPage = () => {
           </h1>
           <p className="vu-description">
             {isDeptAdmin 
-              ? `Manage authorized staff for ${currentUser?.department || 'your department'}.`
-              : 'Manage university staff members authorized to register accounts.'}
+              ? `Manage authorized staff and registration requests for ${currentUser?.department || 'your department'}.`
+              : 'Manage university staff members authorized to register accounts and review portal access requests.'}
           </p>
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Tabs Navigation */}
+      <div className="vu-tabs-nav">
+        <button
+          type="button"
+          className={`vu-tab-btn ${activeTab === 'verified_users' ? 'active' : ''}`}
+          onClick={() => setActiveTab('verified_users')}
+        >
+          Verified Staff Directory
+          {stats && <span className="vu-tab-count">{stats.total}</span>}
+        </button>
+        <button
+          type="button"
+          className={`vu-tab-btn ${activeTab === 'access_requests' ? 'active' : ''}`}
+          onClick={() => setActiveTab('access_requests')}
+        >
+          Access Requests
+          {pendingRequestsCount > 0 ? (
+            <span className="vu-tab-badge-pending">
+              {pendingRequestsCount} Pending
+            </span>
+          ) : (
+            <span className="vu-tab-count">0</span>
+          )}
+        </button>
+      </div>
+
+      {activeTab === 'verified_users' ? (
+        <>
+          {/* Stats Cards */}
       {stats && (
         <div className="vu-stats-row">
           <div className="vu-stat-card">
@@ -1202,6 +1251,20 @@ const VerifiedUsersPage = () => {
           </>
         )}
       </div>
+      </>
+    ) : (
+      <AccessRequestsTab
+        isDeptAdmin={isDeptAdmin}
+        currentUserDepartment={currentUser?.department}
+        departments={departments}
+        onStatsChange={(s) => setPendingRequestsCount(s.pending)}
+        onRequestApproved={() => {
+          fetchUsers(1);
+          fetchStats();
+          fetchPendingRequestsCount();
+        }}
+      />
+    )}
 
       {/* Delete Confirmation Modal */}
       {deleteModalState.isOpen && (

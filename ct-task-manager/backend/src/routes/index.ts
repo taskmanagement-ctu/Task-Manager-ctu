@@ -9,6 +9,7 @@ import departmentRoutes from './department';
 import fileRoutes from './file';
 import notificationRoutes from './notification';
 import settingRoutes from './setting';
+import accessRequestRoutes from './accessRequest';
 
 const router = Router();
 
@@ -16,6 +17,7 @@ const router = Router();
 router.use('/', healthRoutes);
 router.use('/auth', authRoutes);
 router.use('/verified-users', verifiedUserRoutes);
+router.use('/access-requests', accessRequestRoutes);
 router.use('/users', userRoutes);
 router.use('/staff-assignments', staffAssignmentRoutes);
 router.use('/tasks', taskRoutes);
