@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import User from '../models/User';
+import User, { PRIMARY_SUPER_ADMIN_ID } from '../models/User';
 import VerifiedUser from '../models/VerifiedUser';
 import Department from '../models/Department';
 import OTP from '../models/OTP';
@@ -533,11 +533,15 @@ export const register = async (req: Request, res: Response) => {
     const saltRounds = 10;
     const passwordHash = await bcrypt.hash(password, saltRounds);
 
-    // 6. Determine Role (First Super Admin Logic)
+    // 6. Determine Role (10001 is always super_admin, or first super admin logic)
     let role: 'super_admin' | 'staff' = 'staff';
-    const superAdminExists = await User.exists({ role: 'super_admin' });
-    if (!superAdminExists) {
+    if (universityId === PRIMARY_SUPER_ADMIN_ID) {
       role = 'super_admin';
+    } else {
+      const superAdminExists = await User.exists({ role: 'super_admin' });
+      if (!superAdminExists) {
+        role = 'super_admin';
+      }
     }
 
     // 7. Resolve canonical department

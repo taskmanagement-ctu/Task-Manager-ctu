@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, CheckCircle2, CornerDownRight, MessageSquare, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { Calendar, CheckCircle2, CornerDownRight, MessageSquare, ChevronDown, ChevronUp, ExternalLink, Plus, X, Check, Loader2, ListTree } from 'lucide-react';
 import { api } from '../services/api';
 import { calculateUrgency, getUrgencyCardStyle, getUrgencyLabel, getUrgencyColor } from '../utils/taskUrgency';
 import './TaskCard.css';
@@ -11,18 +11,57 @@ interface TaskCardProps {
   onCreateSubtask?: () => void;
   onOpenChat?: (task: any) => void;
   forceExpanded?: boolean | null;
+  availableAssignees?: any[];
+  onSubtaskCreated?: () => void;
 }
+
+const formatToLocalDateTimeInput = (dateString?: string | Date) => {
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
 
 const TaskCard: React.FC<TaskCardProps> = ({ 
   task, 
   currentUser, 
   onClick, 
-  onCreateSubtask, 
+  onCreateSubtask: _onCreateSubtask, 
   onOpenChat,
-  forceExpanded
+  forceExpanded,
+  availableAssignees = [],
+  onSubtaskCreated
 }) => {
   const [progress, setProgress] = useState<any>(null);
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
+
+  // Subtasks downwards drawer state
+  const [isSubtasksOpen, setIsSubtasksOpen] = useState<boolean>(false);
+  const [subtasksList, setSubtasksList] = useState<any[]>([]);
+  const [loadingSubtasks, setLoadingSubtasks] = useState<boolean>(false);
+
+  // Inline subtask creation state
+  const [isAddingSubtask, setIsAddingSubtask] = useState<boolean>(false);
+  const [subtaskTitle, setSubtaskTitle] = useState<string>('');
+  const [subtaskDesc, setSubtaskDesc] = useState<string>('');
+  const [subtaskDeadline, setSubtaskDeadline] = useState<string>('');
+  const [subtaskAssignee, setSubtaskAssignee] = useState<string>('');
+  const [isSubmittingSubtask, setIsSubmittingSubtask] = useState<boolean>(false);
+  const [subtaskError, setSubtaskError] = useState<string>('');
+  const [subtaskSuccess, setSubtaskSuccess] = useState<string>('');
+  const [internalAssignees, setInternalAssignees] = useState<any[]>(availableAssignees);
+
+  useEffect(() => {
+    if (availableAssignees && availableAssignees.length > 0) {
+      setInternalAssignees(availableAssignees);
+    }
+  }, [availableAssignees]);
 
   useEffect(() => {
     if (!task.isSubtask) {
@@ -37,8 +76,133 @@ const TaskCard: React.FC<TaskCardProps> = ({
     }
   }, [forceExpanded]);
 
+  const loadSubtasksList = async () => {
+    if (task.isSubtask) return;
+    setLoadingSubtasks(true);
+    try {
+      const res = await api.getSubtasks(task._id);
+      if (res.success && res.data?.subtasks) {
+        setSubtasksList(res.data.subtasks);
+      }
+    } catch (err) {
+      console.error('Failed to load subtasks for task', task._id, err);
+    } finally {
+      setLoadingSubtasks(false);
+    }
+  };
+
+  const handleToggleSubtasks = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const nextState = !isSubtasksOpen;
+    setIsSubtasksOpen(nextState);
+    if (nextState && subtasksList.length === 0) {
+      loadSubtasksList();
+    }
+  };
+
+  const handleOpenAddSubtask = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsAddingSubtask(true);
+    setIsSubtasksOpen(true);
+    setSubtaskTitle('');
+    setSubtaskDesc('');
+    setSubtaskDeadline(formatToLocalDateTimeInput(task.deadline));
+    setSubtaskError('');
+    setSubtaskSuccess('');
+
+    const defaultAssigneeId = task.assignedTo?._id || task.assignedTo?.id || (internalAssignees.length > 0 ? (internalAssignees[0]._id || internalAssignees[0].id) : '');
+    setSubtaskAssignee(defaultAssigneeId);
+
+    if (internalAssignees.length === 0) {
+      try {
+        if (currentUser?.role === 'super_admin') {
+          const res = await api.getUsers({ limit: 500, status: 'Active' });
+          if (res.data?.users) setInternalAssignees(res.data.users);
+        } else if (currentUser?.role === 'department_admin') {
+          const res = await api.getAdminAssignments(currentUser.id || currentUser._id).catch(() => ({ data: { assignments: [] } }));
+          const assignedStaff = (res.data?.assignments || []).map((a: any) => a.staffId).filter(Boolean);
+          setInternalAssignees(assignedStaff);
+        }
+      } catch (err) {
+        console.error('Failed to load assignees for subtask:', err);
+      }
+    }
+
+    if (subtasksList.length === 0) {
+      loadSubtasksList();
+    }
+  };
+
+  const handleCreateSubtaskSubmit = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (!subtaskTitle.trim()) {
+      setSubtaskError('Please enter a subtask title.');
+      return;
+    }
+    if (!subtaskAssignee) {
+      setSubtaskError('Please select an assignee.');
+      return;
+    }
+    if (!subtaskDeadline) {
+      setSubtaskError('Please select a deadline.');
+      return;
+    }
+
+    const parentDeadlineTime = new Date(task.deadline).getTime();
+    const chosenDeadlineTime = new Date(subtaskDeadline).getTime();
+    if (chosenDeadlineTime > parentDeadlineTime) {
+      setSubtaskError('Subtask deadline cannot exceed parent task deadline.');
+      return;
+    }
+
+    setIsSubmittingSubtask(true);
+    setSubtaskError('');
+    setSubtaskSuccess('');
+
+    try {
+      const res = await api.createSubtask(task._id, {
+        title: subtaskTitle.trim(),
+        description: subtaskDesc.trim() || subtaskTitle.trim(),
+        deadline: new Date(subtaskDeadline).toISOString(),
+        assignedTo: subtaskAssignee
+      });
+
+      if (res.success) {
+        setSubtaskSuccess('Subtask created & assigned successfully!');
+        await Promise.all([
+          loadSubtasksList(),
+          api.getTaskProgress(task._id).then(r => setProgress(r.data)).catch(console.error)
+        ]);
+
+        setSubtaskTitle('');
+        setSubtaskDesc('');
+        setTimeout(() => {
+          setIsAddingSubtask(false);
+          setSubtaskSuccess('');
+        }, 1200);
+
+        if (onSubtaskCreated) {
+          onSubtaskCreated();
+        }
+      } else {
+        setSubtaskError(res.message || 'Failed to create subtask.');
+      }
+    } catch (err: any) {
+      setSubtaskError(err.message || 'Error creating subtask.');
+    } finally {
+      setIsSubmittingSubtask(false);
+    }
+  };
+
   const isCompleted = task.status === 'completed' || task.status === 'approved';
   const isSubmitted = task.status === 'submitted_for_review';
+  const canAddSubtask = !task.isSubtask && !isCompleted && (
+    currentUser?.role === 'super_admin' || 
+    currentUser?.role === 'department_admin'
+  );
   
   // Calculate urgency from deadline (frozen at submission/completion if submitted/completed)
   const urgency = calculateUrgency(task);
@@ -184,6 +348,28 @@ const TaskCard: React.FC<TaskCardProps> = ({
         {task.title}
       </h3>
 
+      {/* Delegated Super Admin Creator Indicator (Visible to Primary Super Admin 10001) */}
+      {currentUser?.universityId === '10001' && 
+       task.createdBy?.role === 'super_admin' && 
+       task.createdBy?.universityId !== '10001' && (
+        <div style={{
+          background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
+          border: '1px solid #ddd6fe',
+          borderRadius: '6px',
+          padding: '0.3rem 0.6rem',
+          margin: '0.35rem 0 0.6rem 0',
+          fontSize: '0.74rem',
+          color: '#5b21b6',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.4rem',
+          fontWeight: 600
+        }}>
+          <span>🛡️</span>
+          <span>Created &amp; Assigned by Super Admin: <strong>{task.createdBy.name}</strong> ({task.createdBy.universityId})</span>
+        </div>
+      )}
+
       {/* ── Collapsible Body (Hidden by default on mobile, expands smoothly) ── */}
       <div className={`tc-collapsible-body ${isExpanded ? 'expanded' : 'collapsed'}`}>
         {task.isSubtask && task.parentTaskId && (
@@ -199,32 +385,223 @@ const TaskCard: React.FC<TaskCardProps> = ({
           </div>
         )}
 
-        {/* Progress Bar for subtasks */}
-        {!task.isSubtask && progress && progress.total > 0 && !isCompleted && (
-          <div className="tc-progress-container">
-            <div className="tc-progress-label">
-              <span>Subtasks</span>
-              <span>{progress.approved} / {progress.total}</span>
-            </div>
-            <div className="tc-progress-bar">
-              <div className="tc-progress-fill" style={{ width: `${progress.percentage}%` }}></div>
-            </div>
-          </div>
-        )}
+        {/* ── Subtasks Downwards Section for Main Tasks ── */}
+        {!task.isSubtask && (
+          <div className="tc-subtasks-section" onClick={(e) => e.stopPropagation()}>
+            <div className="tc-subtasks-header">
+              <div className="tc-subtasks-header-left">
+                {progress && progress.total > 0 ? (
+                  <button 
+                    type="button"
+                    className={`tc-subtasks-toggle-btn ${isSubtasksOpen ? 'open' : ''}`}
+                    onClick={handleToggleSubtasks}
+                    title={isSubtasksOpen ? "Hide subtasks" : "View subtasks downwards"}
+                  >
+                    <ListTree size={13} />
+                    <span>Subtasks ({progress.approved}/{progress.total})</span>
+                    {isSubtasksOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  </button>
+                ) : (
+                  <span className="tc-subtasks-empty-label">
+                    <ListTree size={13} /> Subtasks (0)
+                  </span>
+                )}
+              </div>
 
-        {/* Add Subtask Button for Main Tasks */}
-        {!task.isSubtask && onCreateSubtask && !isCompleted && (
-          <div className="tc-add-subtask-wrap">
-            <button 
-              type="button"
-              className="tc-add-subtask-btn" 
-              onClick={(e) => {
-                e.stopPropagation();
-                onCreateSubtask();
-              }}
-            >
-              + Add Subtask
-            </button>
+              {canAddSubtask && !isAddingSubtask && (
+                <button 
+                  type="button"
+                  className="tc-add-subtask-action-btn"
+                  onClick={handleOpenAddSubtask}
+                  title="Add subtask directly downwards"
+                >
+                  <Plus size={13} />
+                  <span>Add Subtask</span>
+                </button>
+              )}
+            </div>
+
+            {/* Progress Bar for subtasks */}
+            {progress && progress.total > 0 && !isCompleted && (
+              <div className="tc-progress-container" style={{ margin: '0.35rem 0 0.5rem 0' }}>
+                <div className="tc-progress-bar">
+                  <div className="tc-progress-fill" style={{ width: `${progress.percentage}%` }}></div>
+                </div>
+              </div>
+            )}
+
+            {/* Inline Downwards Subtask Form */}
+            {isAddingSubtask && (
+              <div className="tc-inline-subtask-form">
+                <div className="tc-subtask-form-header">
+                  <div className="tc-subtask-form-title">
+                    <Plus size={13} color="#2563eb" />
+                    <span>New Subtask for #{task.taskId}</span>
+                  </div>
+                  <button 
+                    type="button" 
+                    className="tc-subtask-close-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsAddingSubtask(false);
+                      setSubtaskError('');
+                    }}
+                    title="Close"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+
+                {subtaskError && (
+                  <div className="tc-subtask-form-error">{subtaskError}</div>
+                )}
+                {subtaskSuccess && (
+                  <div className="tc-subtask-form-success">{subtaskSuccess}</div>
+                )}
+
+                <div className="tc-subtask-input-group">
+                  <label className="tc-subtask-label">Title *</label>
+                  <input 
+                    type="text" 
+                    className="tc-subtask-input" 
+                    placeholder="Enter subtask title..."
+                    value={subtaskTitle}
+                    onChange={(e) => setSubtaskTitle(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+
+                <div className="tc-subtask-input-group">
+                  <label className="tc-subtask-label">Description / Instructions</label>
+                  <textarea 
+                    className="tc-subtask-textarea" 
+                    placeholder="Instructions or requirements..."
+                    rows={2}
+                    value={subtaskDesc}
+                    onChange={(e) => setSubtaskDesc(e.target.value)}
+                  />
+                </div>
+
+                <div className="tc-subtask-grid-2">
+                  <div className="tc-subtask-input-group">
+                    <label className="tc-subtask-label">Assign To *</label>
+                    <select 
+                      className="tc-subtask-select"
+                      value={subtaskAssignee}
+                      onChange={(e) => setSubtaskAssignee(e.target.value)}
+                    >
+                      <option value="">-- Select Assignee --</option>
+                      {internalAssignees.map(u => {
+                        const uid = u._id || u.id;
+                        return (
+                          <option key={uid} value={uid}>
+                            {u.name} {u.universityId ? `(${u.universityId})` : ''} - {u.role === 'department_admin' ? 'Admin' : 'Staff'}{u.department ? ` [${u.department}]` : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  <div className="tc-subtask-input-group">
+                    <label className="tc-subtask-label">
+                      Deadline * <span className="tc-deadline-hint">(Max: {formatDateDDMMYYYY(task.deadline)})</span>
+                    </label>
+                    <input 
+                      type="datetime-local" 
+                      className="tc-subtask-input" 
+                      value={subtaskDeadline}
+                      max={formatToLocalDateTimeInput(task.deadline)}
+                      onChange={(e) => setSubtaskDeadline(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="tc-subtask-form-actions">
+                  <button 
+                    type="button" 
+                    className="tc-subtask-cancel-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsAddingSubtask(false);
+                      setSubtaskError('');
+                    }}
+                    disabled={isSubmittingSubtask}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="button" 
+                    className="tc-subtask-submit-btn"
+                    onClick={handleCreateSubtaskSubmit}
+                    disabled={isSubmittingSubtask}
+                  >
+                    {isSubmittingSubtask ? (
+                      <>
+                        <Loader2 size={13} className="tc-spinner" />
+                        <span>Creating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check size={13} />
+                        <span>Create Subtask</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Downwards Subtasks Drawer */}
+            {isSubtasksOpen && (
+              <div className="tc-subtasks-drawer">
+                {loadingSubtasks ? (
+                  <div className="tc-subtasks-loading">
+                    <Loader2 size={13} className="tc-spinner" />
+                    <span>Loading subtasks...</span>
+                  </div>
+                ) : subtasksList.length === 0 ? (
+                  <div className="tc-subtasks-empty">
+                    No subtasks created yet. Click "+ Add Subtask" above to create one.
+                  </div>
+                ) : (
+                  <div className="tc-subtasks-list">
+                    {subtasksList.map(st => {
+                      const stAssignee = st.delegatedTo || st.assignedTo;
+                      const isStCompleted = st.status === 'completed' || st.status === 'approved';
+                      return (
+                        <div 
+                          key={st._id} 
+                          className="tc-subtask-item"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onClick(st);
+                          }}
+                          title="Click to view/edit subtask"
+                        >
+                          <div className="tc-subtask-item-main">
+                            <span className="tc-subtask-item-id">#{st.taskId}</span>
+                            <span className={`tc-subtask-item-title ${isStCompleted ? 'completed' : ''}`}>
+                              {st.title}
+                            </span>
+                          </div>
+                          <div className="tc-subtask-item-meta">
+                            <span className="tc-subtask-item-assignee">
+                              👤 {stAssignee ? (stAssignee.name || stAssignee.universityId) : 'Unassigned'}
+                            </span>
+                            <span className="tc-subtask-item-date">
+                              📅 {formatDateDDMMYYYY(st.deadline)}
+                            </span>
+                            <span className={`tc-subtask-pill tc-subtask-pill-${st.status}`}>
+                              {st.status.replace(/_/g, ' ')}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

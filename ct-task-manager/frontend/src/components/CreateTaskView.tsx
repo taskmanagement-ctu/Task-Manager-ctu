@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { History, Clock, UploadCloud, Plus, ArrowRight, ChevronDown, ArrowLeft, X, Search, Building2 } from 'lucide-react';
+import { History, Clock, UploadCloud, Plus, ArrowRight, ChevronDown, ChevronUp, ArrowLeft, X, Search, Building2 } from 'lucide-react';
 import { api } from '../services/api';
 import './CreateTaskView.css';
 
@@ -70,8 +70,20 @@ const compressFiles = async (files: File[]): Promise<File[]> => {
   return Promise.all(files.map(f => compressImage(f)));
 };
 
+const formatDateTimeDDMMYYYY = (dateString?: string | Date) => {
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return '';
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  const hours = String(d.getHours()).padStart(2, '0');
+  const mins = String(d.getMinutes()).padStart(2, '0');
+  return `${day}/${month}/${year}, ${hours}:${mins}`;
+};
+
 interface CreateTaskViewProps {
-  onSubmit: (taskData: any) => Promise<void>;
+  onSubmit: (taskData: any) => Promise<any>;
   onCancel: () => void;
   availableAssignees: any[];
   departments?: any[];
@@ -103,7 +115,63 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
   ]);
   const [activeTab, setActiveTab] = useState(0);
 
-  const availableExtensions = ['.pdf', '.docx', '.xlsx', '.pptx', '.csv', '.jpg', '.png', '.zip'];
+  // Video formats (.mp4, .mov, .avi, .mkv, .webm) now supported alongside documents and images
+  const availableExtensions = [
+    '.pdf', '.docx', '.xlsx', '.pptx', '.csv', 
+    '.jpg', '.png', 
+    '.mp4', '.mov', '.avi', '.mkv', '.webm', 
+    '.zip'
+  ];
+
+  // Inline subtasks for Main Task creation matching Screenshot 2
+  const [inlineSubtasks, setInlineSubtasks] = useState<Array<{
+    title: string;
+    description: string;
+    deadline: string;
+    assignedTo: string[];
+  }>>([
+    {
+      title: '',
+      description: '',
+      deadline: '',
+      assignedTo: []
+    }
+  ]);
+  const [activeInlineSubtaskTab, setActiveInlineSubtaskTab] = useState(0);
+
+  // State for inline subtask assignee dropdown
+  const [isInlineAssignDropdownOpen, setIsInlineAssignDropdownOpen] = useState(false);
+  const [inlineAssignSearchQuery, setInlineAssignSearchQuery] = useState('');
+  const [inlineAssignRoleFilter, setInlineAssignRoleFilter] = useState<'all' | 'admin' | 'staff' | 'team'>('all');
+  const [inlineAssignDeptFilter, setInlineAssignDeptFilter] = useState<string>('all');
+  const [isInlineChipsExpanded, setIsInlineChipsExpanded] = useState(false);
+  const [isSubtasksExpanded, setIsSubtasksExpanded] = useState(false);
+  const inlineAssignDropdownRef = useRef<HTMLDivElement>(null);
+
+  const handleAddInlineSubtask = () => {
+    const parentDeadline = tasksToCreate[activeTab]?.deadline || '';
+    setInlineSubtasks(prev => [
+      ...prev,
+      {
+        title: '',
+        description: '',
+        deadline: parentDeadline,
+        assignedTo: []
+      }
+    ]);
+    setActiveInlineSubtaskTab(inlineSubtasks.length);
+    setIsSubtasksExpanded(true);
+  };
+
+  const handleRemoveInlineSubtask = (index: number) => {
+    setInlineSubtasks(prev => {
+      const updated = prev.filter((_, i) => i !== index);
+      if (activeInlineSubtaskTab >= updated.length) {
+        setActiveInlineSubtaskTab(Math.max(0, updated.length - 1));
+      }
+      return updated;
+    });
+  };
   
   const toggleExtension = (ext: string) => {
     setTasksToCreate(prev => {
@@ -165,6 +233,9 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
       if (assignDropdownRef.current && !assignDropdownRef.current.contains(event.target as Node)) {
         setIsAssignDropdownOpen(false);
       }
+      if (inlineAssignDropdownRef.current && !inlineAssignDropdownRef.current.contains(event.target as Node)) {
+        setIsInlineAssignDropdownOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -214,6 +285,87 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
     });
   };
 
+  // Multi-assignee selection helpers for Inline Subtasks (Screenshot 2 parity)
+  const currentInlineAssignedIds: string[] = inlineSubtasks[activeInlineSubtaskTab]?.assignedTo || [];
+
+  const selectedInlineAssignees = availableAssignees.filter(a =>
+    currentInlineAssignedIds.includes(a._id || a.id)
+  );
+
+  const filteredInlineAssignees = availableAssignees.filter(a => {
+    if (inlineAssignRoleFilter === 'team') {
+      if (!a.isSuperAdminTeamMember) return false;
+    } else {
+      if (inlineAssignRoleFilter === 'admin' && !a.role?.includes('admin')) return false;
+      if (inlineAssignRoleFilter === 'staff' && a.role !== 'staff') return false;
+      
+      if (currentUser?.role === 'super_admin' && inlineAssignDeptFilter !== 'all') {
+        if (!a.department || a.department.toLowerCase() !== inlineAssignDeptFilter.toLowerCase()) return false;
+      }
+    }
+
+    if (inlineAssignSearchQuery.trim()) {
+      const q = inlineAssignSearchQuery.toLowerCase();
+      const matchName = a.name && a.name.toLowerCase().includes(q);
+      const matchId = a.universityId && a.universityId.toLowerCase().includes(q);
+      const matchDept = a.department && a.department.toLowerCase().includes(q);
+      return matchName || matchId || matchDept;
+    }
+
+    return true;
+  });
+
+  const isAllFilteredInlineSelected = filteredInlineAssignees.length > 0 && 
+    filteredInlineAssignees.every(a => currentInlineAssignedIds.includes(a._id || a.id));
+
+  const toggleInlineAssignee = (userId: string) => {
+    setInlineSubtasks(prev => {
+      const copy = [...prev];
+      if (!copy[activeInlineSubtaskTab]) return prev;
+      const cur = { ...copy[activeInlineSubtaskTab] };
+      const list = [...(cur.assignedTo || [])];
+      const idx = list.indexOf(userId);
+      if (idx >= 0) {
+        list.splice(idx, 1);
+      } else {
+        list.push(userId);
+      }
+      cur.assignedTo = list;
+      copy[activeInlineSubtaskTab] = cur;
+      return copy;
+    });
+  };
+
+  const selectAllFilteredInline = () => {
+    setInlineSubtasks(prev => {
+      const copy = [...prev];
+      if (!copy[activeInlineSubtaskTab]) return prev;
+      const cur = { ...copy[activeInlineSubtaskTab] };
+      const curList = cur.assignedTo || [];
+      const filteredIds = filteredInlineAssignees.map(a => a._id || a.id);
+      let updated: string[];
+      if (isAllFilteredInlineSelected) {
+        updated = curList.filter(id => !filteredIds.includes(id));
+      } else {
+        updated = Array.from(new Set([...curList, ...filteredIds]));
+      }
+      cur.assignedTo = updated;
+      copy[activeInlineSubtaskTab] = cur;
+      return copy;
+    });
+  };
+
+  const clearInlineAssignees = () => {
+    setInlineSubtasks(prev => {
+      const copy = [...prev];
+      if (!copy[activeInlineSubtaskTab]) return prev;
+      const cur = { ...copy[activeInlineSubtaskTab] };
+      cur.assignedTo = [];
+      copy[activeInlineSubtaskTab] = cur;
+      return copy;
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -243,7 +395,45 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
         return formData;
       });
 
-      await onSubmit(isSubtaskMode ? forms : forms[0]);
+      const result: any = await onSubmit(isSubtaskMode ? forms : forms[0]);
+
+      // If creating main task and user defined inline subtasks downwards:
+      if (!isSubtaskMode && inlineSubtasks.length > 0) {
+        let parentId = result?.data?.task?._id || result?.data?.tasks?.[0]?._id || result?._id || result?.id;
+        if (!parentId) {
+          try {
+            const latest = await api.getTasks({ taskType: 'main', limit: 1 });
+            if (latest.data?.tasks?.length > 0) {
+              parentId = latest.data.tasks[0]._id;
+            }
+          } catch (err) {
+            console.error('Failed to locate parent task ID for subtasks', err);
+          }
+        }
+
+        if (parentId) {
+          const mainDeadline = tasksToCreate[activeTab]?.deadline;
+          for (const st of inlineSubtasks) {
+            if (st.title.trim()) {
+              try {
+                const subAssignees = (st.assignedTo && st.assignedTo.length > 0)
+                  ? st.assignedTo
+                  : (tasksToCreate[activeTab]?.assignedTo && tasksToCreate[activeTab]?.assignedTo.length > 0
+                      ? tasksToCreate[activeTab]?.assignedTo
+                      : []);
+                await api.createSubtask(parentId, {
+                  title: st.title.trim(),
+                  description: st.description.trim() || st.title.trim(),
+                  deadline: st.deadline || mainDeadline,
+                  assignedTo: subAssignees.length > 0 ? subAssignees : ''
+                });
+              } catch (stErr) {
+                console.error('Error creating inline subtask from CreateTaskView:', stErr);
+              }
+            }
+          }
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -482,6 +672,7 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
               onChange={e => setTasksToCreate(prev => { const n = [...prev]; const t = {...n[activeTab]}; t.description = e.target.value; n[activeTab] = t; return n; })}
             />
           </div>
+
 
           <div className="ct-row">
             <div className="ct-input-group">
@@ -747,7 +938,399 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
                 onChange={e => setTasksToCreate(prev => { const n = [...prev]; const t = {...n[activeTab]}; t.deadline = e.target.value; n[activeTab] = t; return n; })}
               />
             </div>
-          </div>
+            </div>
+
+          {/* ── Subtasks Section (Below Assign To & Deadline) ── */}
+          {!isSubtaskMode && (
+            <div className={`ct-subtasks-inline-section ${isSubtasksExpanded ? 'expanded' : 'minimized'}`}>
+              <div 
+                className="ct-subtasks-header-row"
+                style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center', 
+                  marginBottom: isSubtasksExpanded ? '1rem' : '0',
+                  cursor: 'pointer',
+                  userSelect: 'none'
+                }}
+                onClick={() => setIsSubtasksExpanded(!isSubtasksExpanded)}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                  <label className="ct-label" style={{ margin: 0, cursor: 'pointer' }}>SUBTASKS</label>
+                  {inlineSubtasks.filter(st => st.title.trim()).length > 0 && (
+                    <span style={{ 
+                      fontSize: '0.74rem', 
+                      fontWeight: 600, 
+                      backgroundColor: '#eff6ff', 
+                      color: '#2563eb', 
+                      border: '1px solid #bfdbfe',
+                      padding: '0.12rem 0.55rem', 
+                      borderRadius: '12px' 
+                    }}>
+                      {inlineSubtasks.filter(st => st.title.trim()).length} defined
+                    </span>
+                  )}
+                </div>
+
+                <button 
+                  type="button"
+                  className="ct-toggle-subtasks-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsSubtasksExpanded(!isSubtasksExpanded);
+                  }}
+                  style={{
+                    background: isSubtasksExpanded ? '#f1f5f9' : '#ffffff',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '6px',
+                    padding: '0.35rem 0.75rem',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    color: '#334155',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    transition: 'all 0.15s ease'
+                  }}
+                  title={isSubtasksExpanded ? 'Minimize subtasks' : 'Maximize subtasks'}
+                >
+                  {isSubtasksExpanded ? (
+                    <>
+                      <ChevronUp size={15} /> Minimize
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown size={15} /> Maximize
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {isSubtasksExpanded && (
+                <>
+                  {/* Subtask Tabs matching Screenshot 2 */}
+                  <div className="ct-subtask-tabs-container">
+                <div className="ct-subtask-tabs">
+                  {inlineSubtasks.map((st, idx) => (
+                    <div 
+                      key={idx} 
+                      className={`ct-subtask-tab ${activeInlineSubtaskTab === idx ? 'active' : ''}`}
+                      onClick={() => setActiveInlineSubtaskTab(idx)}
+                    >
+                      <span>
+                        {st.title ? (st.title.length > 20 ? st.title.substring(0, 18) + '...' : st.title) : `Subtask ${idx + 1}`}
+                      </span>
+                      {inlineSubtasks.length > 1 && (
+                        <button 
+                          type="button"
+                          className="ct-tab-close"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveInlineSubtask(idx);
+                          }}
+                          title="Remove subtask"
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button 
+                    type="button" 
+                    className="ct-add-tab-btn"
+                    onClick={handleAddInlineSubtask}
+                    title="Add another subtask"
+                  >
+                    <Plus size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Active Subtask Fields matching Screenshot 2 */}
+              {inlineSubtasks.length > 0 && activeInlineSubtaskTab < inlineSubtasks.length && (
+                <div className="ct-inline-subtask-fields">
+                  <div className="ct-input-group">
+                    <label className="ct-label">TASK TITLE</label>
+                    <input 
+                      type="text" 
+                      className="ct-title-input" 
+                      placeholder="e.g., Finalize Q3 Departmental Budget" 
+                      value={inlineSubtasks[activeInlineSubtaskTab].title}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setInlineSubtasks(prev => prev.map((st, i) => i === activeInlineSubtaskTab ? { ...st, title: val } : st));
+                      }}
+                    />
+                  </div>
+
+                  <div className="ct-input-group">
+                    <label className="ct-label">DESCRIPTION</label>
+                    <textarea 
+                      className="ct-desc-input" 
+                      placeholder="Detailed requirements and context for the assignee..."
+                      value={inlineSubtasks[activeInlineSubtaskTab].description}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setInlineSubtasks(prev => prev.map((st, i) => i === activeInlineSubtaskTab ? { ...st, description: val } : st));
+                      }}
+                    />
+                  </div>
+
+                  <div className="ct-row">
+                    <div className="ct-input-group">
+                      <div className="ct-label-between">
+                        <label className="ct-label">ASSIGN TO</label>
+                        {currentInlineAssignedIds.length > 0 && (
+                          <span className="ct-assignee-counter-tag">
+                            {currentInlineAssignedIds.length} {currentInlineAssignedIds.length === 1 ? 'person' : 'people'} selected
+                          </span>
+                        )}
+                      </div>
+                      <div className="ct-custom-select-wrapper" ref={inlineAssignDropdownRef}>
+                        <div 
+                          className={`ct-custom-select ct-multi-select ${isInlineAssignDropdownOpen ? 'open' : ''}`}
+                          onClick={() => setIsInlineAssignDropdownOpen(!isInlineAssignDropdownOpen)}
+                        >
+                          {selectedInlineAssignees.length === 0 ? (
+                            <span className="placeholder">Unassigned (Click to select assignees)</span>
+                          ) : (
+                            <div className="ct-selected-chips-container">
+                              {(isInlineChipsExpanded ? selectedInlineAssignees : selectedInlineAssignees.slice(0, 2)).map(u => (
+                                <span key={u._id || u.id} className="ct-selected-chip" title={formatNameString(u)} onClick={(e) => e.stopPropagation()}>
+                                  <span className="ct-chip-name">{currentUser && ((u._id || u.id) === currentUser.id || (u._id || u.id) === currentUser._id) ? 'me' : u.name}</span>
+                                  {u.universityId && <span className="ct-chip-id">({u.universityId})</span>}
+                                  <button
+                                    type="button"
+                                    className="ct-chip-remove"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleInlineAssignee(u._id || u.id);
+                                    }}
+                                    title="Remove assignee"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </span>
+                              ))}
+                              {selectedInlineAssignees.length > 2 && (
+                                isInlineChipsExpanded ? (
+                                  <button
+                                    type="button"
+                                    className="ct-selected-count-badge clickable collapse-btn"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setIsInlineChipsExpanded(false);
+                                    }}
+                                    title="Click to collapse"
+                                  >
+                                    Show less ▴
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="ct-selected-count-badge clickable"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setIsInlineChipsExpanded(true);
+                                    }}
+                                    title="Click to view all selected assignees"
+                                  >
+                                    +{selectedInlineAssignees.length - 2} more
+                                  </button>
+                                )
+                              )}
+                            </div>
+                          )}
+                          <ChevronDown className="ct-select-icon" size={16} />
+                        </div>
+                        
+                        {isInlineAssignDropdownOpen && (
+                          <div className="ct-dropdown-menu">
+                            <div className="ct-dropdown-search-container">
+                              <div className="ct-dropdown-search">
+                                <Search size={14} className="ct-search-icon" />
+                                <input 
+                                  type="text" 
+                                  placeholder="Search users..." 
+                                  value={inlineAssignSearchQuery}
+                                  onChange={(e) => setInlineAssignSearchQuery(e.target.value)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  autoFocus
+                                />
+                              </div>
+                              
+                              {currentUser?.role === 'super_admin' && (
+                                <div className="ct-dropdown-filter-controls">
+                                  <div className="ct-dept-filter-wrapper">
+                                    <Building2 size={13} className="ct-dept-filter-icon" />
+                                    <select 
+                                      className="ct-dept-filter-select"
+                                      value={inlineAssignRoleFilter === 'team' ? 'all' : inlineAssignDeptFilter}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        setInlineAssignDeptFilter(e.target.value);
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      disabled={inlineAssignRoleFilter === 'team'}
+                                      style={inlineAssignRoleFilter === 'team' ? { opacity: 0.55, cursor: 'not-allowed', backgroundColor: '#f1f5f9' } : {}}
+                                      title={inlineAssignRoleFilter === 'team' ? 'Department filter is disabled for My Team' : undefined}
+                                    >
+                                      <option value="all">
+                                        {inlineAssignRoleFilter === 'team' ? 'Department: N/A (My Team)' : `All Departments (${availableAssignees.length})`}
+                                      </option>
+                                      {inlineAssignRoleFilter !== 'team' && departmentList.map(dept => {
+                                        const count = availableAssignees.filter(a => a.department && a.department.toLowerCase() === dept.toLowerCase()).length;
+                                        return (
+                                          <option key={dept} value={dept}>
+                                            {dept} {count > 0 ? `(${count})` : ''}
+                                          </option>
+                                        );
+                                      })}
+                                    </select>
+                                  </div>
+
+                                  <div className="ct-role-filters">
+                                    <button 
+                                      type="button"
+                                      className={`ct-role-filter-btn ${inlineAssignRoleFilter === 'all' ? 'active' : ''}`}
+                                      onClick={(e) => { e.stopPropagation(); setInlineAssignRoleFilter('all'); }}
+                                    >All</button>
+                                    <button 
+                                      type="button"
+                                      className={`ct-role-filter-btn ${inlineAssignRoleFilter === 'team' ? 'active' : ''}`}
+                                      onClick={(e) => { 
+                                        e.stopPropagation(); 
+                                        setInlineAssignRoleFilter('team'); 
+                                        setInlineAssignDeptFilter('all'); 
+                                      }}
+                                    >My Team</button>
+                                    <button 
+                                      type="button"
+                                      className={`ct-role-filter-btn ${inlineAssignRoleFilter === 'admin' ? 'active' : ''}`}
+                                      onClick={(e) => { e.stopPropagation(); setInlineAssignRoleFilter('admin'); }}
+                                    >Admins</button>
+                                    <button 
+                                      type="button"
+                                      className={`ct-role-filter-btn ${inlineAssignRoleFilter === 'staff' ? 'active' : ''}`}
+                                      onClick={(e) => { e.stopPropagation(); setInlineAssignRoleFilter('staff'); }}
+                                    >Staff</button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Multi-Select Toolbar */}
+                              <div className="ct-dropdown-toolbar">
+                                <span className="ct-dropdown-toolbar-count">{filteredInlineAssignees.length} matching users</span>
+                                {filteredInlineAssignees.length > 0 && (
+                                  <button
+                                    type="button"
+                                    className="ct-quick-action-btn"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      selectAllFilteredInline();
+                                    }}
+                                  >
+                                    {isAllFilteredInlineSelected ? 'Deselect Filtered' : 'Select All Filtered'}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            <ul className="ct-dropdown-list">
+                              <li 
+                                className={`ct-dropdown-item ${currentInlineAssignedIds.length === 0 ? 'selected' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  clearInlineAssignees();
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="ct-checkbox"
+                                  checked={currentInlineAssignedIds.length === 0}
+                                  readOnly
+                                />
+                                <span style={{ color: '#94a3b8' }}>Unassigned</span>
+                              </li>
+                              {filteredInlineAssignees.length === 0 && (
+                                <li className="ct-dropdown-item empty">No users found</li>
+                              )}
+                              {filteredInlineAssignees.map(a => {
+                                const userId = a.id || a._id;
+                                const isSelected = currentInlineAssignedIds.includes(userId);
+                                return (
+                                  <li 
+                                    key={userId}
+                                    className={`ct-dropdown-item ${isSelected ? 'selected' : ''}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleInlineAssignee(userId);
+                                    }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="ct-checkbox"
+                                      checked={isSelected}
+                                      onChange={() => {}}
+                                    />
+                                    <div className="ct-assignee-info">
+                                      <div className="ct-assignee-primary">
+                                        <span className="ct-assignee-name">{currentUser && (userId === currentUser.id || userId === currentUser._id) ? 'me' : a.name}</span>
+                                        {a.isSuperAdminTeamMember && <span className="ct-role-tag team">Team</span>}
+                                        {a.role?.includes('admin') && <span className="ct-role-tag admin">Admin</span>}
+                                        {a.role === 'staff' && <span className="ct-role-tag staff">Staff</span>}
+                                      </div>
+                                      {a.department && (
+                                        <span className="ct-assignee-dept">{a.department}</span>
+                                      )}
+                                    </div>
+                                    <span className="ct-assignee-role">ID: {a.universityId || 'N/A'}</span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+
+                            <div className="ct-dropdown-footer">
+                              <button
+                                type="button"
+                                className="ct-btn-done"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setIsInlineAssignDropdownOpen(false);
+                                  setInlineAssignSearchQuery('');
+                                }}
+                              >
+                                Done
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="ct-input-group">
+                      <label className="ct-label">
+                        DEADLINE {tasksToCreate[activeTab]?.deadline ? `(Max: ${formatDateTimeDDMMYYYY(tasksToCreate[activeTab].deadline)})` : ''}
+                      </label>
+                      <input 
+                        type="datetime-local" 
+                        className="ct-date" 
+                        max={tasksToCreate[activeTab]?.deadline || undefined}
+                        value={inlineSubtasks[activeInlineSubtaskTab].deadline}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setInlineSubtasks(prev => prev.map((st, i) => i === activeInlineSubtaskTab ? { ...st, deadline: val } : st));
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
         </div>
 
         {/* Right Sidebar Section */}

@@ -1,9 +1,10 @@
 import { Request, Response } from 'express';
 import Task from '../models/Task';
-import User from '../models/User';
+import User, { PRIMARY_SUPER_ADMIN_ID } from '../models/User';
 import StaffAssignment from '../models/StaffAssignment';
 import mongoose from 'mongoose';
 import { createNotification } from './notificationController';
+import { sendTaskAssignedEmail } from '../services/emailService';
 import {
   findMatchingDepartment,
   formatDepartmentDisplayName,
@@ -213,8 +214,8 @@ export const createTask = async (req: Request, res: Response) => {
       await task.save();
 
       const populatedTask = await Task.findById(task._id)
-        .populate('createdBy', 'name role universityId')
-        .populate('assignedTo', 'name role department universityId')
+        .populate('createdBy', 'name role universityId email department')
+        .populate('assignedTo', 'name role department universityId email')
         .populate('parentTaskId', 'taskId title');
 
       // Notify assignee about new task
@@ -227,6 +228,20 @@ export const createTask = async (req: Request, res: Response) => {
           task._id,
           user._id
         );
+
+        const targetAssignee = populatedTask?.assignedTo as any;
+        if (targetAssignee?.email) {
+          sendTaskAssignedEmail(
+            targetAssignee.email,
+            targetAssignee.name,
+            title,
+            populatedTask?.taskId || '',
+            user.name,
+            user.role,
+            parsedDeadline,
+            description
+          ).catch((err) => console.error('Error sending task assigned email:', err));
+        }
       }
 
       createdTasks.push(populatedTask);
@@ -286,12 +301,35 @@ export const getTasks = async (req: Request, res: Response) => {
       const myStaffAssignments = await StaffAssignment.find({ adminId: user._id, isActive: true });
       const myStaffIds = myStaffAssignments.map(a => a.staffId);
       const teamOnly = req.query.teamOnly === 'true';
+      const isPrimarySuperAdmin = user.universityId === PRIMARY_SUPER_ADMIN_ID;
+      const delegatedAdminOnly = req.query.delegatedAdminOnly === 'true';
 
-      if (teamOnly) {
+      // Find all delegated super admins (super admins other than 10001)
+      const otherSuperAdmins = await User.find({
+        role: 'super_admin',
+        universityId: { $ne: PRIMARY_SUPER_ADMIN_ID },
+      }).select('_id');
+      const otherSuperAdminIds = otherSuperAdmins.map(u => u._id);
+
+      if (delegatedAdminOnly) {
+        query.createdBy = { $in: otherSuperAdminIds };
+      } else if (teamOnly) {
         query.$or = [
           { assignedTo: { $in: myStaffIds } },
           { delegatedTo: { $in: myStaffIds } },
           { createdBy: user._id, assignedTo: { $in: myStaffIds } }
+        ];
+      } else if (isPrimarySuperAdmin) {
+        // 10001 can see their own tasks, all tasks made by other super admins, tasks assigned to them or their staff, and review items
+        query.$or = [
+          { createdBy: user._id },
+          { createdBy: { $in: otherSuperAdminIds } },
+          { assignedTo: user._id },
+          { delegatedTo: user._id },
+          { assignedTo: { $in: myStaffIds } },
+          { delegatedTo: { $in: myStaffIds } },
+          { reviewStage: 'super_admin' },
+          { currentReviewer: user._id }
         ];
       } else {
         // Super admin sees tasks they created, tasks assigned/delegated to them or their team staff, or submitted for review
@@ -404,9 +442,9 @@ export const getTasks = async (req: Request, res: Response) => {
     else if (sortBy === 'title_desc') sortObj = { title: -1 };
 
     const tasks = await Task.find(query)
-      .populate('createdBy', 'name role universityId')
-      .populate('assignedTo', 'name role department universityId')
-      .populate('delegatedTo', 'name role department universityId')
+      .populate('createdBy', 'name role universityId email department')
+      .populate('assignedTo', 'name role department universityId email')
+      .populate('delegatedTo', 'name role department universityId email')
       .populate('ratedBy', 'name role universityId')
       .populate('ratedUser', 'name role department universityId')
       .populate('parentTaskId', 'taskId title')
@@ -431,9 +469,9 @@ export const getTasks = async (req: Request, res: Response) => {
 export const getTaskById = async (req: Request, res: Response) => {
   try {
     const task = await Task.findById(req.params.id)
-      .populate('createdBy', 'name role universityId')
-      .populate('assignedTo', 'name role department universityId')
-      .populate('delegatedTo', 'name role department universityId')
+      .populate('createdBy', 'name role universityId email department')
+      .populate('assignedTo', 'name role department universityId email')
+      .populate('delegatedTo', 'name role department universityId email')
       .populate('ratedBy', 'name role universityId')
       .populate('ratedUser', 'name role department universityId')
       .populate('parentTaskId', 'taskId title');
@@ -446,6 +484,7 @@ export const getTaskById = async (req: Request, res: Response) => {
 
     if (user.role === 'super_admin') {
       if (
+        user.universityId === PRIMARY_SUPER_ADMIN_ID ||
         task.createdBy._id.toString() === user._id.toString() ||
         (task.assignedTo && task.assignedTo._id.toString() === user._id.toString()) ||
         (task.delegatedTo && task.delegatedTo._id.toString() === user._id.toString()) ||
@@ -618,9 +657,9 @@ export const assignTask = async (req: Request, res: Response) => {
     await task.save();
 
     const populatedTask = await Task.findById(task._id)
-      .populate('createdBy', 'name role universityId')
-      .populate('assignedTo', 'name role department universityId')
-      .populate('delegatedTo', 'name role department universityId')
+      .populate('createdBy', 'name role universityId email department')
+      .populate('assignedTo', 'name role department universityId email')
+      .populate('delegatedTo', 'name role department universityId email')
       .populate('ratedBy', 'name role universityId')
       .populate('ratedUser', 'name role department universityId')
       .populate('parentTaskId', 'taskId title');
@@ -636,6 +675,21 @@ export const assignTask = async (req: Request, res: Response) => {
         task._id,
         user._id
       );
+
+      // Send email to assigned / delegated user
+      const targetUserObj = (task.delegatedTo ? populatedTask?.delegatedTo : populatedTask?.assignedTo) as any;
+      if (targetUserObj?.email) {
+        sendTaskAssignedEmail(
+          targetUserObj.email,
+          targetUserObj.name,
+          task.title,
+          populatedTask?.taskId || '',
+          user.name,
+          user.role,
+          task.deadline,
+          task.description
+        ).catch((err) => console.error('Error sending task assignment email:', err));
+      }
     }
 
     return res.status(200).json({ success: true, data: { task: populatedTask } });
@@ -1154,8 +1208,8 @@ export const createSubtask = async (req: Request, res: Response) => {
       await subtask.save();
 
       const populatedSubtask = await Task.findById(subtask._id)
-        .populate('createdBy', 'name role universityId')
-        .populate('assignedTo', 'name role department universityId')
+        .populate('createdBy', 'name role universityId email department')
+        .populate('assignedTo', 'name role department universityId email')
         .populate('parentTaskId', 'taskId title');
 
       if (info.assigneeId && info.assigneeId.toString() !== user._id.toString()) {
@@ -1167,6 +1221,20 @@ export const createSubtask = async (req: Request, res: Response) => {
           subtask._id,
           user._id
         );
+
+        const targetAssignee = populatedSubtask?.assignedTo as any;
+        if (targetAssignee?.email) {
+          sendTaskAssignedEmail(
+            targetAssignee.email,
+            targetAssignee.name,
+            title,
+            populatedSubtask?.taskId || '',
+            user.name,
+            user.role,
+            parsedDeadline,
+            description
+          ).catch((err) => console.error('Error sending subtask assigned email:', err));
+        }
       }
 
       createdSubtasks.push(populatedSubtask);

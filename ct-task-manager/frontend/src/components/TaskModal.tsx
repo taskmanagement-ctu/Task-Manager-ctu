@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ChevronDown, Paperclip, FileText, Star, Building2, MessageSquare } from 'lucide-react';
+import { Search, ChevronDown, Paperclip, FileText, Star, Building2, MessageSquare, Video, Plus, Check, X } from 'lucide-react';
 import { api } from '../services/api';
 import { calculateUrgency, getUrgencyColor, getUrgencyLabel } from '../utils/taskUrgency';
 import './TaskModal.css';
@@ -61,6 +61,24 @@ const formatDateTimeDDMMYYYY = (dateString: string) => {
   return `${day}/${month}/${year}, ${hours}:${mins}`;
 };
 
+const formatToLocalDateTimeInput = (dateString?: string | Date) => {
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+
+const isVideoFilename = (filename: string) => {
+  const ext = (filename || '').toLowerCase();
+  return ext.endsWith('.mp4') || ext.endsWith('.mov') || ext.endsWith('.webm') || ext.endsWith('.mkv') || ext.endsWith('.avi');
+};
+
 const EMPTY_ARRAY: any[] = [];
 
 const AttachmentList: React.FC<{ fileIds: string[]; title: string }> = ({ fileIds, title }) => {
@@ -110,32 +128,42 @@ const AttachmentList: React.FC<{ fileIds: string[]; title: string }> = ({ fileId
         {files.length === 0 ? (
           <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Loading files...</span>
         ) : (
-          files.map((file, i) => (
-            <a
-              key={file._id || i}
-              href={`${apiUrl}/api/files/${file._id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ 
-                display: 'inline-flex', 
-                alignItems: 'center', 
-                gap: '0.6rem', 
-                color: '#2563eb', 
-                textDecoration: 'none', 
-                fontSize: '0.875rem', 
-                backgroundColor: '#ffffff', 
-                padding: '0.6rem 0.85rem', 
-                borderRadius: '6px', 
-                border: '1px solid #cbd5e1',
-                transition: 'all 0.2s ease',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-              }}
-            >
-              <FileText size={16} color="#3b82f6" style={{ flexShrink: 0 }} />
-              <span style={{ fontWeight: 600, color: '#0f172a', wordBreak: 'break-all' }}>{file.filename}</span>
-              <span style={{ color: '#64748b', fontSize: '0.8rem', marginLeft: 'auto', flexShrink: 0, paddingLeft: '0.5rem' }}>({Math.round((file.length || 0) / 1024)} KB)</span>
-            </a>
-          ))
+          files.map((file, i) => {
+            const isVideo = isVideoFilename(file.filename);
+            return (
+              <a
+                key={file._id || i}
+                href={`${apiUrl}/api/files/${file._id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ 
+                  display: 'inline-flex', 
+                  alignItems: 'center', 
+                  gap: '0.6rem', 
+                  color: isVideo ? '#7c3aed' : '#2563eb', 
+                  textDecoration: 'none', 
+                  fontSize: '0.875rem', 
+                  backgroundColor: '#ffffff', 
+                  padding: '0.6rem 0.85rem', 
+                  borderRadius: '6px', 
+                  border: isVideo ? '1px solid #ddd6fe' : '1px solid #cbd5e1',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                }}
+              >
+                {isVideo ? (
+                  <Video size={16} color="#7c3aed" style={{ flexShrink: 0 }} />
+                ) : (
+                  <FileText size={16} color="#3b82f6" style={{ flexShrink: 0 }} />
+                )}
+                <span style={{ fontWeight: 600, color: '#0f172a', wordBreak: 'break-all' }}>{file.filename}</span>
+                {isVideo && (
+                  <span style={{ fontSize: '0.68rem', fontWeight: 700, background: '#ede9fe', color: '#6d28d9', padding: '0.1rem 0.4rem', borderRadius: '4px', textTransform: 'uppercase' }}>Video</span>
+                )}
+                <span style={{ color: '#64748b', fontSize: '0.8rem', marginLeft: 'auto', flexShrink: 0, paddingLeft: '0.5rem' }}>({Math.round((file.length || 0) / 1024)} KB)</span>
+              </a>
+            );
+          })
         )}
       </div>
     </div>
@@ -160,7 +188,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
   currentUser, 
   availableAssignees = EMPTY_ARRAY, 
   departments = EMPTY_ARRAY, 
-  onCreateSubtask, 
+  onCreateSubtask: _onCreateSubtask, 
   onOpenChat 
 }) => {
   const [task, setTask] = useState<any>(initialTask);
@@ -300,6 +328,16 @@ const TaskModal: React.FC<TaskModalProps> = ({
   const [hoverRating, setHoverRating] = useState<number>(0);
   const [reviewFeedback, setReviewFeedback] = useState<string>('');
 
+  // Inline Subtask Creation in Modal
+  const [isAddingSubtaskModal, setIsAddingSubtaskModal] = useState(false);
+  const [modalSubtaskTitle, setModalSubtaskTitle] = useState('');
+  const [modalSubtaskDesc, setModalSubtaskDesc] = useState('');
+  const [modalSubtaskDeadline, setModalSubtaskDeadline] = useState('');
+  const [modalSubtaskAssignee, setModalSubtaskAssignee] = useState('');
+  const [modalSubtaskLoading, setModalSubtaskLoading] = useState(false);
+  const [modalSubtaskError, setModalSubtaskError] = useState('');
+  const [modalSubtaskSuccess, setModalSubtaskSuccess] = useState('');
+
   const refreshTaskData = async () => {
     try {
       const res = await api.getTaskById(task._id);
@@ -334,8 +372,14 @@ const TaskModal: React.FC<TaskModalProps> = ({
       deadline: new Date(initialTask.deadline).toISOString().slice(0, 16)
     });
     setAssignTarget(initialTask.delegatedTo ? initialTask.delegatedTo._id : (initialTask.assignedTo ? initialTask.assignedTo._id : ''));
-    setError('');
-    
+    setIsAddingSubtaskModal(false);
+    setModalSubtaskTitle('');
+    setModalSubtaskDesc('');
+    setModalSubtaskDeadline('');
+    setModalSubtaskAssignee('');
+    setModalSubtaskError('');
+    setModalSubtaskSuccess('');
+
     if (initialTask && !initialTask.isSubtask) {
       fetchSubtasks();
     }
@@ -347,6 +391,60 @@ const TaskModal: React.FC<TaskModalProps> = ({
       setSubtasks(res.data.subtasks);
     } catch (err) {
       console.error('Failed to fetch subtasks', err);
+    }
+  };
+
+  const handleModalCreateSubtask = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!modalSubtaskTitle.trim()) {
+      setModalSubtaskError('Subtask title is required.');
+      return;
+    }
+    if (!modalSubtaskAssignee) {
+      setModalSubtaskError('Please select an assignee.');
+      return;
+    }
+    if (!modalSubtaskDeadline) {
+      setModalSubtaskError('Please specify a deadline.');
+      return;
+    }
+
+    const parentDeadlineTime = new Date(task.deadline).getTime();
+    const chosenDeadlineTime = new Date(modalSubtaskDeadline).getTime();
+    if (chosenDeadlineTime > parentDeadlineTime) {
+      setModalSubtaskError('Subtask deadline cannot exceed main task deadline.');
+      return;
+    }
+
+    setModalSubtaskLoading(true);
+    setModalSubtaskError('');
+    setModalSubtaskSuccess('');
+
+    try {
+      const res = await api.createSubtask(task._id, {
+        title: modalSubtaskTitle.trim(),
+        description: modalSubtaskDesc.trim() || modalSubtaskTitle.trim(),
+        deadline: new Date(modalSubtaskDeadline).toISOString(),
+        assignedTo: modalSubtaskAssignee
+      });
+
+      if (res.success) {
+        setModalSubtaskSuccess('Subtask created successfully!');
+        await fetchSubtasks();
+        refreshTaskData();
+        setModalSubtaskTitle('');
+        setModalSubtaskDesc('');
+        setTimeout(() => {
+          setIsAddingSubtaskModal(false);
+          setModalSubtaskSuccess('');
+        }, 1200);
+      } else {
+        setModalSubtaskError(res.message || 'Failed to create subtask.');
+      }
+    } catch (err: any) {
+      setModalSubtaskError(err.message || 'Error creating subtask.');
+    } finally {
+      setModalSubtaskLoading(false);
     }
   };
 
@@ -1136,20 +1234,157 @@ const TaskModal: React.FC<TaskModalProps> = ({
                   </div>
                 )}
               </div>
-
             </div>
 
             {/* Subtasks Section */}
             {!task.isSubtask && (
-              <div style={{ marginTop: '2rem', borderTop: '1px solid #ddd', paddingTop: '1rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                  <h3>Subtasks</h3>
-                  {canAssign && task.status !== 'approved' && onCreateSubtask && (
-                    <button className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.9rem' }} onClick={() => onCreateSubtask()}>+ Add Subtask</button>
+              <div style={{ marginTop: '2rem', borderTop: '1px solid #e2e8f0', paddingTop: '1.25rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#0f172a' }}>
+                    Subtasks ({subtasks.length})
+                  </h3>
+                  {canAssign && task.status !== 'approved' && (
+                    <button 
+                      className="btn btn-primary" 
+                      style={{ padding: '0.4rem 0.85rem', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }} 
+                      onClick={() => {
+                        const next = !isAddingSubtaskModal;
+                        setIsAddingSubtaskModal(next);
+                        if (next) {
+                          setModalSubtaskTitle('');
+                          setModalSubtaskDesc('');
+                          setModalSubtaskDeadline(formatToLocalDateTimeInput(task.deadline));
+                          const defAssignee = task.assignedTo?._id || task.assignedTo?.id || (availableAssignees.length > 0 ? (availableAssignees[0]._id || availableAssignees[0].id) : '');
+                          setModalSubtaskAssignee(defAssignee);
+                          setModalSubtaskError('');
+                          setModalSubtaskSuccess('');
+                        }
+                      }}
+                    >
+                      {isAddingSubtaskModal ? <><X size={14} /> Cancel</> : <><Plus size={14} /> Add Subtask</>}
+                    </button>
                   )}
                 </div>
-                
 
+                {/* Inline Subtask Form in Modal */}
+                {isAddingSubtaskModal && (
+                  <div style={{
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '8px',
+                    padding: '1rem',
+                    marginBottom: '1.25rem'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                      <strong style={{ fontSize: '0.85rem', color: '#0f172a' }}>➕ Add New Subtask</strong>
+                      <button 
+                        type="button" 
+                        onClick={() => setIsAddingSubtaskModal(false)}
+                        style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+
+                    {modalSubtaskError && (
+                      <div style={{ padding: '0.45rem 0.75rem', backgroundColor: '#fee2e2', border: '1px solid #fca5a5', color: '#991b1b', borderRadius: '6px', fontSize: '0.78rem', marginBottom: '0.65rem' }}>
+                        {modalSubtaskError}
+                      </div>
+                    )}
+                    {modalSubtaskSuccess && (
+                      <div style={{ padding: '0.45rem 0.75rem', backgroundColor: '#d1fae5', border: '1px solid #86efac', color: '#065f46', borderRadius: '6px', fontSize: '0.78rem', marginBottom: '0.65rem' }}>
+                        {modalSubtaskSuccess}
+                      </div>
+                    )}
+
+                    <div style={{ marginBottom: '0.65rem' }}>
+                      <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', marginBottom: '0.25rem' }}>
+                        Subtask Title *
+                      </label>
+                      <input 
+                        type="text" 
+                        className="form-control"
+                        placeholder="e.g. Prepare curriculum proposal document"
+                        value={modalSubtaskTitle}
+                        onChange={(e) => setModalSubtaskTitle(e.target.value)}
+                        style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
+                        autoFocus
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: '0.65rem' }}>
+                      <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', marginBottom: '0.25rem' }}>
+                        Description / Instructions
+                      </label>
+                      <textarea 
+                        className="form-control"
+                        placeholder="Specific instructions or notes for this subtask..."
+                        rows={2}
+                        value={modalSubtaskDesc}
+                        onChange={(e) => setModalSubtaskDesc(e.target.value)}
+                        style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', marginBottom: '0.25rem' }}>
+                          Assign To *
+                        </label>
+                        <select 
+                          className="form-control"
+                          value={modalSubtaskAssignee}
+                          onChange={(e) => setModalSubtaskAssignee(e.target.value)}
+                          style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
+                        >
+                          <option value="">-- Choose Assignee --</option>
+                          {availableAssignees.map(u => {
+                            const uid = u._id || u.id;
+                            return (
+                              <option key={uid} value={uid}>
+                                {u.name} {u.universityId ? `(${u.universityId})` : ''} - {u.role === 'department_admin' ? 'Admin' : 'Staff'}{u.department ? ` [${u.department}]` : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', marginBottom: '0.25rem' }}>
+                          Deadline * (Max: {formatDateTimeDDMMYYYY(task.deadline)})
+                        </label>
+                        <input 
+                          type="datetime-local" 
+                          className="form-control"
+                          value={modalSubtaskDeadline}
+                          max={formatToLocalDateTimeInput(task.deadline)}
+                          onChange={(e) => setModalSubtaskDeadline(e.target.value)}
+                          style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                      <button 
+                        type="button" 
+                        className="btn btn-secondary"
+                        onClick={() => setIsAddingSubtaskModal(false)}
+                        disabled={modalSubtaskLoading}
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        type="button" 
+                        className="btn btn-primary"
+                        onClick={handleModalCreateSubtask}
+                        disabled={modalSubtaskLoading}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                      >
+                        {modalSubtaskLoading ? 'Creating...' : <><Check size={14} /> Create Subtask</>}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {subtasks.length === 0 ? (
                   <p style={{ color: '#888', fontStyle: 'italic' }}>No subtasks created yet.</p>
@@ -1158,7 +1393,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                     {subtasks.map(st => (
                       <div key={st._id} style={{ padding: '0.75rem', backgroundColor: '#f1f5f9', borderRadius: '6px', borderLeft: `3px solid ${st.status === 'approved' ? '#10b981' : st.status === 'rejected' ? '#ef4444' : '#3b82f6'}` }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                          <strong style={{ fontSize: '0.95rem' }}>{st.title}</strong>
+                          <strong style={{ fontSize: '0.95rem' }}>#{st.taskId} - {st.title}</strong>
                           <span style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>{st.status.replace(/_/g, ' ').toUpperCase()}</span>
                         </div>
                         <div style={{ fontSize: '0.85rem', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>

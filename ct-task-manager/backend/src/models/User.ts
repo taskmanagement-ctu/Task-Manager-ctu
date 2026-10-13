@@ -70,13 +70,9 @@ const userSchema = new Schema<IUser>(
   }
 );
 
-// Enforce that only one initial super_admin can be created to prevent race conditions.
-// A unique partial index guarantees this at the database level.
-userSchema.index(
-  { role: 1 },
-  { unique: true, partialFilterExpression: { role: 'super_admin' } }
-);
+export const PRIMARY_SUPER_ADMIN_ID = '10001';
 
 const User = mongoose.model<IUser>('User', userSchema, 'users');
 
 export default User;
+

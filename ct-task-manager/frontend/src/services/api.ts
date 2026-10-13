@@ -190,6 +190,19 @@ export interface AccessRequestStats {
   rejected: number;
 }
 
+export interface SuperAdminInfo {
+  id: string;
+  _id?: string;
+  universityId: string;
+  name: string;
+  email: string;
+  phone?: string;
+  department?: string | null;
+  isActive: boolean;
+  isPrimary: boolean;
+  createdAt?: string;
+}
+
 export interface User {
   id: string;
   _id?: string;
@@ -201,6 +214,7 @@ export interface User {
   baseDepartment?: string | null;
   role: string;
   isActive?: boolean;
+  isPrimarySuperAdmin?: boolean;
   rosterStatus?: 'assigned' | 'unassigned' | 'lead' | 'super_admin';
   assignedAdmin?: {
     assignmentId?: string;
@@ -679,6 +693,7 @@ export const api = {
       superAdmins: number;
       departmentAdmins: number;
       staff: number;
+      superAdminList?: SuperAdminInfo[];
     };
   }> => {
     return fetchWithAuth(`/api/users/stats`);
@@ -731,6 +746,17 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ newAdminId, department }),
+    });
+  },
+
+  /**
+   * Transfer or delegate Super Administrator role to another user.
+   */
+  transferSuperAdmin: async (targetUserId: string): Promise<{ success: boolean; message: string; data: { promotedUser: User; operatorDemoted: boolean; demotedUser?: User | null } }> => {
+    return fetchWithAuth('/api/users/transfer-super-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetUserId }),
     });
   },
 
@@ -793,7 +819,7 @@ export const api = {
     });
   },
 
-  getTasks: async (params: { page?: number; limit?: number; search?: string; status?: string; assignee?: string; sortBy?: string; workflow?: string; reviewStage?: string; taskType?: string; department?: string; teamOnly?: string }): Promise<{ success: boolean; data: { tasks: any[]; pagination: Pagination } }> => {
+  getTasks: async (params: { page?: number; limit?: number; search?: string; status?: string; assignee?: string; sortBy?: string; workflow?: string; reviewStage?: string; taskType?: string; department?: string; teamOnly?: string; delegatedAdminOnly?: string }): Promise<{ success: boolean; data: { tasks: any[]; pagination: Pagination } }> => {
     const query = new URLSearchParams();
     if (params.page) query.set('page', String(params.page));
     if (params.limit) query.set('limit', String(params.limit));
@@ -806,6 +832,7 @@ export const api = {
     if (params.taskType) query.set('taskType', params.taskType);
     if (params.department) query.set('department', params.department);
     if (params.teamOnly) query.set('teamOnly', params.teamOnly);
+    if (params.delegatedAdminOnly) query.set('delegatedAdminOnly', params.delegatedAdminOnly);
 
     return fetchWithAuth(`/api/tasks?${query.toString()}`);
   },
@@ -868,16 +895,16 @@ export const api = {
     });
   },
 
-  createSubtask: async (taskId: string, data: { title: string; description: string; deadline: string; assignedTo: string | string[] }): Promise<{ success: boolean; data: { task: any; tasks?: any[] } }> => {
+  getSubtasks: async (taskId: string): Promise<{ success: boolean; data: { subtasks: any[] } }> => {
+    return fetchWithAuth(`/api/tasks/${taskId}/subtasks`);
+  },
+
+  createSubtask: async (taskId: string, data: { title: string; description?: string; deadline: string; assignedTo: string | string[] }): Promise<{ success: boolean; data: any; message?: string }> => {
     return fetchWithAuth(`/api/tasks/${taskId}/subtasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-  },
-
-  getSubtasks: async (taskId: string): Promise<{ success: boolean; data: { subtasks: any[] } }> => {
-    return fetchWithAuth(`/api/tasks/${taskId}/subtasks`);
   },
 
   getTaskProgress: async (taskId: string): Promise<{ success: boolean; data: any }> => {

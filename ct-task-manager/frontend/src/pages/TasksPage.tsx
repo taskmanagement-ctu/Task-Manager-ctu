@@ -31,6 +31,9 @@ const TasksPage: React.FC = () => {
   const [schoolFilter, setSchoolFilter] = useState('All');     // Department/School filter
   const [taskTypeFilter, setTaskTypeFilter] = useState('All');
   const [teamOnlyFilter, setTeamOnlyFilter] = useState(false); // Super Admin Team Tasks toggle
+  const [delegatedAdminOnlyFilter, setDelegatedAdminOnlyFilter] = useState<boolean>(
+    searchParams.get('delegatedAdminOnly') === 'true'
+  );
   
   // View & Mobile Filter Controls
   const [forceExpandedAll, setForceExpandedAll] = useState<boolean | null>(null);
@@ -61,6 +64,7 @@ const TasksPage: React.FC = () => {
           taskType: taskTypeFilter !== 'All' ? taskTypeFilter : undefined,
           department: (!teamOnlyFilter && schoolFilter !== 'All') ? schoolFilter : undefined,
           teamOnly: teamOnlyFilter ? 'true' : undefined,
+          delegatedAdminOnly: delegatedAdminOnlyFilter ? 'true' : undefined,
         });
         if (fullRes.data?.tasks && fullRes.data.tasks.length > 0) {
           dataToExport = fullRes.data.tasks;
@@ -94,6 +98,7 @@ const TasksPage: React.FC = () => {
         taskType: taskTypeFilter !== 'All' ? taskTypeFilter : undefined,
         department: (!teamOnlyFilter && schoolFilter !== 'All') ? schoolFilter : undefined,
         teamOnly: teamOnlyFilter ? 'true' : undefined,
+        delegatedAdminOnly: delegatedAdminOnlyFilter ? 'true' : undefined,
       });
       setTasks(res.data.tasks);
       setTotalPages(res.data.pagination.totalPages);
@@ -194,7 +199,7 @@ const TasksPage: React.FC = () => {
     if (user && !isCreatingTask) {
       loadTasks();
     }
-  }, [page, statusFilter, schoolFilter, taskTypeFilter, teamOnlyFilter, user, search, isCreatingTask]);
+  }, [page, statusFilter, schoolFilter, taskTypeFilter, teamOnlyFilter, delegatedAdminOnlyFilter, user, search, isCreatingTask]);
 
   // Handle openTask / openChat from notification popup click
   useEffect(() => {
@@ -285,14 +290,16 @@ const TasksPage: React.FC = () => {
   const handleCreateTaskSubmit = async (taskData: FormData | FormData[]) => {
     setError('');
     try {
+      let result;
       if (Array.isArray(taskData)) {
-        await Promise.all(taskData.map(data => api.createTask(data)));
+        result = await Promise.all(taskData.map(data => api.createTask(data)));
       } else {
-        await api.createTask(taskData);
+        result = await api.createTask(taskData);
       }
       loadTasks();
       setIsCreatingTask(false);
       setCreatingSubtaskFor(null);
+      return result;
     } catch (err: any) {
       setError(err.message);
       throw err;
@@ -405,11 +412,30 @@ const TasksPage: React.FC = () => {
             {user?.role === 'super_admin' && (
               <select 
                 className="tasks-filter-select" 
-                value={teamOnlyFilter ? 'team' : 'all'} 
-                onChange={e => { setTeamOnlyFilter(e.target.value === 'team'); setPage(1); }}
+                value={delegatedAdminOnlyFilter ? 'delegated' : teamOnlyFilter ? 'team' : 'all'} 
+                onChange={e => { 
+                  const val = e.target.value;
+                  if (val === 'delegated') {
+                    setDelegatedAdminOnlyFilter(true);
+                    setTeamOnlyFilter(false);
+                    setSearchParams({ delegatedAdminOnly: 'true' });
+                  } else if (val === 'team') {
+                    setDelegatedAdminOnlyFilter(false);
+                    setTeamOnlyFilter(true);
+                    setSearchParams({});
+                  } else {
+                    setDelegatedAdminOnlyFilter(false);
+                    setTeamOnlyFilter(false);
+                    setSearchParams({});
+                  }
+                  setPage(1); 
+                }}
               >
                 <option value="all">All Tasks</option>
                 <option value="team">My Team</option>
+                {user?.universityId === '10001' && (
+                  <option value="delegated">🛡️ Other Super Admins' Tasks</option>
+                )}
               </select>
             )}
             
@@ -516,6 +542,8 @@ const TasksPage: React.FC = () => {
                   task={task} 
                   currentUser={user}
                   forceExpanded={forceExpandedAll}
+                  availableAssignees={availableAssignees}
+                  onSubtaskCreated={loadTasks}
                   onClick={() => setSelectedTask(task)} 
                   onCreateSubtask={() => handleCreateSubtaskForTask(task._id)}
                   onOpenChat={(t) => setChatTask(t)}

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import User from '../models/User';
+import User, { PRIMARY_SUPER_ADMIN_ID } from '../models/User';
 import StaffAssignment from '../models/StaffAssignment';
 import Task from '../models/Task';
 import VerifiedUser from '../models/VerifiedUser';
@@ -16,7 +16,12 @@ import {
   findMatchingDepartment,
   formatDepartmentDisplayName,
 } from '../utils/normalization';
-import { sendRolePromotionEmail, sendRoleDemotionEmail } from '../services/emailService';
+import {
+  sendRolePromotionEmail,
+  sendRoleDemotionEmail,
+  sendSuperAdminPromotionEmail,
+  sendSuperAdminTransferEmail,
+} from '../services/emailService';
 
 // GET /api/users
 export const getUsers = async (req: Request, res: Response) => {
@@ -147,6 +152,7 @@ export const getUsers = async (req: Request, res: Response) => {
       } else if (u.role === 'super_admin') {
         uObj.rosterStatus = 'super_admin';
       }
+      uObj.isPrimarySuperAdmin = u.universityId === PRIMARY_SUPER_ADMIN_ID;
       return uObj;
     });
 
@@ -181,6 +187,23 @@ export const getUserStats = async (req: Request, res: Response) => {
     const departmentAdmins = await User.countDocuments({ role: 'department_admin' });
     const staff = await User.countDocuments({ role: 'staff' });
 
+    const superAdminUsers = await User.find({ role: 'super_admin' })
+      .select('universityId name email phone department isActive createdAt')
+      .lean();
+
+    const superAdminList = superAdminUsers.map((sa: any) => ({
+      id: sa._id?.toString(),
+      _id: sa._id?.toString(),
+      universityId: sa.universityId,
+      name: sa.name,
+      email: sa.email,
+      phone: sa.phone,
+      department: sa.department,
+      isActive: sa.isActive,
+      isPrimary: sa.universityId === PRIMARY_SUPER_ADMIN_ID,
+      createdAt: sa.createdAt,
+    }));
+
     return res.status(200).json({
       success: true,
       data: {
@@ -190,6 +213,7 @@ export const getUserStats = async (req: Request, res: Response) => {
         superAdmins,
         departmentAdmins,
         staff,
+        superAdminList,
       },
     });
   } catch (error) {
@@ -217,6 +241,7 @@ export const updateUserRole = async (req: Request, res: Response) => {
   try {
     const { role, department } = req.body;
     const userId = req.params.id;
+    const operator = (req as any).user;
 
     // Validate role
     const validRoles = ['super_admin', 'department_admin', 'staff'];
@@ -229,7 +254,23 @@ export const updateUserRole = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
 
-    // Safety: Prevent removing the last super admin
+    // Safety 1: Primary Super Admin (10001) cannot be demoted or removed
+    if (userToUpdate.universityId === PRIMARY_SUPER_ADMIN_ID) {
+      if (role !== 'super_admin') {
+        return res.status(400).json({
+          success: false,
+          message: `Primary Super Admin (${PRIMARY_SUPER_ADMIN_ID}) cannot be demoted or removed.`,
+        });
+      }
+      if (operator?.universityId !== PRIMARY_SUPER_ADMIN_ID) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only the Primary Super Admin can modify their own account.',
+        });
+      }
+    }
+
+    // Safety 2: Prevent removing the last super admin & secondary admin cannot unilaterally demote another super admin
     if (userToUpdate.role === 'super_admin' && role !== 'super_admin') {
       const superAdminCount = await User.countDocuments({ role: 'super_admin' });
       if (superAdminCount <= 1) {
@@ -238,9 +279,49 @@ export const updateUserRole = async (req: Request, res: Response) => {
           message: 'At least one Super Admin must remain.',
         });
       }
+      if (operator?.universityId !== PRIMARY_SUPER_ADMIN_ID && operator?._id?.toString() !== userToUpdate._id.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only the Primary Super Admin can change another Super Admin\'s role.',
+        });
+      }
     }
 
     const oldRole = userToUpdate.role;
+    let demotedSuperAdminInfo: any = null;
+
+    // 3. Super Admin promotion logic:
+    // If promoting a user to super_admin:
+    if (role === 'super_admin' && userToUpdate.role !== 'super_admin') {
+      // If the operator who makes this change is NOT 10001 (e.g. 26214):
+      // The operator steps down from super_admin to staff, transferring the mantle to userToUpdate!
+      // But if operator IS 10001, 10001 stays super_admin AND userToUpdate also becomes super_admin!
+      if (operator && operator.universityId !== PRIMARY_SUPER_ADMIN_ID) {
+        const promoterUser = await User.findById(operator._id);
+        if (promoterUser && promoterUser.role === 'super_admin' && promoterUser.universityId !== userToUpdate.universityId) {
+          promoterUser.role = 'staff';
+          if (promoterUser.baseDepartment && promoterUser.department !== promoterUser.baseDepartment) {
+            promoterUser.department = promoterUser.baseDepartment;
+          }
+          await promoterUser.save();
+          demotedSuperAdminInfo = promoterUser;
+
+          sendSuperAdminTransferEmail(
+            promoterUser.email,
+            promoterUser.name,
+            promoterUser.universityId,
+            userToUpdate.name
+          ).catch((err) => console.error('Error sending Super Admin transfer email:', err));
+        }
+      }
+
+      // Deactivate any subordinate staff assignment for userToUpdate
+      await StaffAssignment.updateMany(
+        { staffId: userToUpdate._id, isActive: true },
+        { $set: { isActive: false } }
+      );
+    }
+
     userToUpdate.role = role;
     
     // Check candidate's current active staff assignment to see who their admin is
@@ -351,8 +432,15 @@ export const updateUserRole = async (req: Request, res: Response) => {
       );
     }
 
-    // Trigger promotion email if user was promoted to department_admin
-    if (oldRole !== 'department_admin' && role === 'department_admin') {
+    // Trigger promotion email if user was promoted to super_admin or department_admin
+    if (oldRole !== 'super_admin' && role === 'super_admin') {
+      sendSuperAdminPromotionEmail(
+        userToUpdate.email,
+        userToUpdate.name,
+        userToUpdate.universityId,
+        (req as any).user?.name || ((req as any).user?.universityId === PRIMARY_SUPER_ADMIN_ID ? 'Primary Super Admin (10001)' : 'Super Admin')
+      ).catch((err) => console.error('Error sending super admin promotion email:', err));
+    } else if (oldRole !== 'department_admin' && role === 'department_admin') {
       sendRolePromotionEmail(
         userToUpdate.email,
         userToUpdate.name,
@@ -370,11 +458,20 @@ export const updateUserRole = async (req: Request, res: Response) => {
       ).catch((err) => console.error('Error sending demotion email:', err));
     }
 
+    let successMessage = 'User role updated successfully.';
+    if (role === 'super_admin') {
+      if (demotedSuperAdminInfo) {
+        successMessage = `Successfully promoted ${userToUpdate.name} (${userToUpdate.universityId}) to Super Admin. Your Super Admin privileges were transferred to them, and your account has reverted to Staff.`;
+      } else {
+        successMessage = `Successfully appointed ${userToUpdate.name} (${userToUpdate.universityId}) as Super Admin. Primary Super Admin (${PRIMARY_SUPER_ADMIN_ID}) remains active.`;
+      }
+    } else if (existingAdmin) {
+      successMessage = `Successfully promoted ${userToUpdate.name} to Department Admin. Replaced previous admin ${existingAdmin.name} and transferred team.`;
+    }
+
     return res.status(200).json({
       success: true,
-      message: existingAdmin
-        ? `Successfully promoted ${userToUpdate.name} to Department Admin. Replaced previous admin ${existingAdmin.name} and transferred team.`
-        : 'User role updated successfully.',
+      message: successMessage,
       data: { user: await User.findById(userId).select('-passwordHash') },
     });
   } catch (error) {
@@ -398,15 +495,35 @@ export const updateUserStatus = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
 
-    // Optional safety: Prevent super admin from deactivating themselves? 
-    // The prompt does not explicitly forbid it, but says we cannot delete. 
-    // Usually a good idea to prevent deactivating the last super_admin as well.
+    // Safety 1: Primary Super Admin (10001) cannot be deactivated
+    if (userToUpdate.universityId === PRIMARY_SUPER_ADMIN_ID) {
+      if (!isActive) {
+        return res.status(400).json({
+          success: false,
+          message: `Primary Super Admin (${PRIMARY_SUPER_ADMIN_ID}) account cannot be deactivated.`,
+        });
+      }
+      if ((req as any).user?.universityId !== PRIMARY_SUPER_ADMIN_ID) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only the Primary Super Admin can modify their own status.',
+        });
+      }
+    }
+
+    // Safety 2: Prevent deactivating the last active super admin & secondary admin cannot deactivate super admins
     if (userToUpdate.role === 'super_admin' && !isActive) {
       const superAdminCount = await User.countDocuments({ role: 'super_admin', isActive: true });
       if (superAdminCount <= 1) {
         return res.status(400).json({
           success: false,
           message: 'At least one active Super Admin must remain.',
+        });
+      }
+      if ((req as any).user?.universityId !== PRIMARY_SUPER_ADMIN_ID && (req as any).user?._id?.toString() !== userToUpdate._id.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only the Primary Super Admin can deactivate another Super Admin.',
         });
       }
     }
@@ -460,13 +577,27 @@ export const deleteUser = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
 
-    // Safety: Prevent deleting the last active Super Admin
+    // Safety 1: Primary Super Admin (10001) cannot be deleted
+    if (userToDelete.universityId === PRIMARY_SUPER_ADMIN_ID) {
+      return res.status(400).json({
+        success: false,
+        message: `Primary Super Admin (${PRIMARY_SUPER_ADMIN_ID}) account cannot be deleted.`,
+      });
+    }
+
+    // Safety 2: Prevent deleting the last active Super Admin & secondary admin cannot delete another super admin
     if (userToDelete.role === 'super_admin') {
       const superAdminCount = await User.countDocuments({ role: 'super_admin' });
       if (superAdminCount <= 1) {
         return res.status(400).json({
           success: false,
           message: 'Cannot delete the last remaining Super Admin account.',
+        });
+      }
+      if (requestingUser?.universityId !== PRIMARY_SUPER_ADMIN_ID) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only the Primary Super Admin can delete a Super Admin account.',
         });
       }
     }
@@ -781,6 +912,23 @@ export const updateUserAdmin = async (req: Request, res: Response) => {
     }
 
     const previousUniversityId = user.universityId;
+    const operator = (req as any).user;
+
+    // Safety: Protect Primary Super Admin (10001)
+    if (user.universityId === PRIMARY_SUPER_ADMIN_ID) {
+      if (role && role !== 'super_admin') {
+        return res.status(400).json({
+          success: false,
+          message: `Primary Super Admin (${PRIMARY_SUPER_ADMIN_ID}) cannot be demoted or removed.`,
+        });
+      }
+      if (operator?.universityId !== PRIMARY_SUPER_ADMIN_ID) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only the Primary Super Admin can modify their own account details.',
+        });
+      }
+    }
 
     // Validate universityId if changed
     if (universityId) {
@@ -854,11 +1002,15 @@ export const updateUserAdmin = async (req: Request, res: Response) => {
     // Role
     let roleChanged = false;
     const oldRole = user.role;
+    let demotedSuperAdminInfo: any = null;
+
     if (role && role !== user.role) {
       const validRoles = ['super_admin', 'department_admin', 'staff'];
       if (!validRoles.includes(role)) {
         return res.status(400).json({ success: false, message: 'Invalid role.' });
       }
+
+      // Prevent removing the last super admin & secondary admin cannot unilaterally demote another super admin
       if (user.role === 'super_admin' && role !== 'super_admin') {
         const superAdminCount = await User.countDocuments({ role: 'super_admin' });
         if (superAdminCount <= 1) {
@@ -867,7 +1019,48 @@ export const updateUserAdmin = async (req: Request, res: Response) => {
             message: 'At least one Super Admin must remain.',
           });
         }
+        if (operator?.universityId !== PRIMARY_SUPER_ADMIN_ID && operator?._id?.toString() !== user._id.toString()) {
+          return res.status(403).json({
+            success: false,
+            message: 'Only the Primary Super Admin can change another Super Admin\'s role.',
+          });
+        }
       }
+
+      // If promoting to super_admin
+      if (role === 'super_admin' && user.role !== 'super_admin') {
+        if (operator && operator.universityId !== PRIMARY_SUPER_ADMIN_ID) {
+          const promoterUser = await User.findById(operator._id);
+          if (promoterUser && promoterUser.role === 'super_admin' && promoterUser.universityId !== user.universityId) {
+            promoterUser.role = 'staff';
+            if (promoterUser.baseDepartment && promoterUser.department !== promoterUser.baseDepartment) {
+              promoterUser.department = promoterUser.baseDepartment;
+            }
+            await promoterUser.save();
+            demotedSuperAdminInfo = promoterUser;
+
+            sendSuperAdminTransferEmail(
+              promoterUser.email,
+              promoterUser.name,
+              promoterUser.universityId,
+              user.name
+            ).catch((err) => console.error('Error sending Super Admin transfer email:', err));
+          }
+        }
+
+        // Clean up staff assignments
+        await StaffAssignment.updateMany(
+          { staffId: user._id, isActive: true },
+          { $set: { isActive: false } }
+        );
+        if (user.role === 'department_admin') {
+          await StaffAssignment.updateMany(
+            { adminId: user._id, isActive: true },
+            { $set: { isActive: false } }
+          );
+        }
+      }
+
       user.role = role;
       roleChanged = true;
     }
@@ -875,7 +1068,14 @@ export const updateUserAdmin = async (req: Request, res: Response) => {
     await user.save();
 
     if (roleChanged) {
-      if (oldRole !== 'department_admin' && user.role === 'department_admin') {
+      if (oldRole !== 'super_admin' && user.role === 'super_admin') {
+        sendSuperAdminPromotionEmail(
+          user.email,
+          user.name,
+          user.universityId,
+          operator?.name || (operator?.universityId === PRIMARY_SUPER_ADMIN_ID ? 'Primary Super Admin (10001)' : 'Super Admin')
+        ).catch((err) => console.error('Error sending super admin promotion email in updateUserAdmin:', err));
+      } else if (oldRole !== 'department_admin' && user.role === 'department_admin') {
         sendRolePromotionEmail(
           user.email,
           user.name,
@@ -915,9 +1115,18 @@ export const updateUserAdmin = async (req: Request, res: Response) => {
 
     const updatedUser = await User.findById(userId).select('-passwordHash');
 
+    let successMessage = 'User details updated successfully';
+    if (roleChanged && user.role === 'super_admin') {
+      if (demotedSuperAdminInfo) {
+        successMessage = `Successfully promoted ${user.name} (${user.universityId}) to Super Admin. Your Super Admin privileges were transferred to them, and your account has reverted to Staff.`;
+      } else {
+        successMessage = `Successfully appointed ${user.name} (${user.universityId}) as Super Admin. Primary Super Admin (${PRIMARY_SUPER_ADMIN_ID}) remains active.`;
+      }
+    }
+
     return res.status(200).json({
       success: true,
-      message: 'User details updated successfully',
+      message: successMessage,
       data: { user: updatedUser },
     });
   } catch (error: any) {
@@ -1054,4 +1263,104 @@ export const changeDepartmentAdmin = async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, message: error.message || 'Server Error' });
   }
 };
+
+// POST /api/users/transfer-super-admin
+export const transferSuperAdmin = async (req: Request, res: Response) => {
+  try {
+    const { targetUserId } = req.body;
+    const operator = (req as any).user;
+
+    if (!targetUserId) {
+      return res.status(400).json({ success: false, message: 'targetUserId is required.' });
+    }
+
+    const targetUser = await User.findById(targetUserId);
+    if (!targetUser) {
+      return res.status(404).json({ success: false, message: 'Target user not found.' });
+    }
+
+    if (!targetUser.isActive) {
+      return res.status(400).json({ success: false, message: 'Cannot transfer Super Admin privileges to a deactivated account.' });
+    }
+
+    if (targetUser.universityId === PRIMARY_SUPER_ADMIN_ID) {
+      return res.status(400).json({ success: false, message: 'User is already the Primary Super Admin.' });
+    }
+
+    if (targetUser.role === 'super_admin') {
+      return res.status(400).json({ success: false, message: 'Selected user is already a Super Admin.' });
+    }
+
+    if (operator?._id?.toString() === targetUser._id.toString()) {
+      return res.status(400).json({ success: false, message: 'Cannot transfer privileges to yourself.' });
+    }
+
+    const isOperatorPrimary = operator?.universityId === PRIMARY_SUPER_ADMIN_ID;
+    let operatorDemoted = false;
+    let demotedUserInfo: any = null;
+
+    if (!isOperatorPrimary) {
+      // Operator is a delegated super admin: they transfer the mantle and step down to staff!
+      const operatorUser = await User.findById(operator._id);
+      if (operatorUser && operatorUser.role === 'super_admin') {
+        operatorUser.role = 'staff';
+        const targetBase = operatorUser.baseDepartment ||
+          (await VerifiedUser.findOne({ universityId: operatorUser.universityId }))?.department ||
+          operatorUser.department;
+        if (targetBase) {
+          operatorUser.department = targetBase;
+          if (!operatorUser.baseDepartment) {
+            operatorUser.baseDepartment = targetBase;
+          }
+        }
+        await operatorUser.save();
+        operatorDemoted = true;
+        demotedUserInfo = operatorUser;
+
+        sendSuperAdminTransferEmail(
+          operatorUser.email,
+          operatorUser.name,
+          operatorUser.universityId,
+          targetUser.name
+        ).catch((err) => console.error('Error sending Super Admin transfer email to previous admin:', err));
+      }
+    }
+
+    // Step down any existing subordinate staff assignment for targetUser (cannot report to someone else)
+    await StaffAssignment.updateMany(
+      { staffId: targetUser._id, isActive: true },
+      { $set: { isActive: false } }
+    );
+
+    // Promote targetUser to super_admin
+    targetUser.role = 'super_admin';
+    await targetUser.save();
+
+    // Send promotion notification to the new super admin
+    sendSuperAdminPromotionEmail(
+      targetUser.email,
+      targetUser.name,
+      targetUser.universityId,
+      operator?.name
+    ).catch((err) => console.error('Error sending promotion email to new Super Admin:', err));
+
+    const message = isOperatorPrimary
+      ? `Super Admin privileges granted to ${targetUser.name} (${targetUser.universityId}). As Primary Super Admin (10001), your root access remains active.`
+      : `Super Admin privileges transferred successfully to ${targetUser.name} (${targetUser.universityId}). Your account has stepped down to Staff.`;
+
+    return res.status(200).json({
+      success: true,
+      message,
+      data: {
+        promotedUser: await User.findById(targetUser._id).select('-passwordHash'),
+        operatorDemoted,
+        demotedUser: demotedUserInfo ? await User.findById(demotedUserInfo._id).select('-passwordHash') : null,
+      },
+    });
+  } catch (error: any) {
+    console.error('Error transferring super admin:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Server Error' });
+  }
+};
+
 

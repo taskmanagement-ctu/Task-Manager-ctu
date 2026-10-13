@@ -565,3 +565,320 @@ export const sendRosterAdditionEmail = async (
   }
 };
 
+/**
+ * Send an email notifying a user that they have been granted Super Administrator privileges
+ */
+export const sendSuperAdminPromotionEmail = async (
+  toEmail: string,
+  recipientName: string,
+  universityId: string,
+  promotedByName?: string
+) => {
+  if (!toEmail) return;
+
+  const subject = `Institutional Leadership: Super Administrator Access Granted 🛡️`;
+  const appUrl = process.env.FRONTEND_URL || 'https://taskdesk.ctuniversity.in';
+  const loginUrl = `${appUrl}/login`;
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <title>Super Administrator Access - CT University TaskDesk</title>
+      <style>
+        body { margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; }
+        .wrapper { max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 14px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08); }
+        .header { background: #0f172a; padding: 28px 24px; text-align: center; }
+        .header h1 { margin: 0; font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.02em; }
+        .header p { margin: 6px 0 0; font-size: 11px; font-weight: 600; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.08em; }
+        .body { padding: 32px 28px; }
+        .badge { display: inline-block; background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; font-size: 12px; font-weight: 800; padding: 6px 14px; border-radius: 20px; letter-spacing: 0.04em; margin-bottom: 16px; }
+        .greeting { font-size: 17px; font-weight: 700; color: #0f172a; margin-bottom: 12px; }
+        .desc { font-size: 14px; line-height: 1.6; color: #475569; margin-bottom: 20px; }
+        .info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0; }
+        .info-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
+        .info-label { color: #64748b; font-weight: 500; }
+        .info-value { color: #0f172a; font-weight: 700; text-align: right; }
+        .privileges-card { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 10px; padding: 16px; margin: 20px 0; }
+        .privileges-title { font-size: 13px; font-weight: 700; color: #6b21a8; margin-bottom: 8px; }
+        .privileges-list { margin: 0; padding-left: 20px; font-size: 13px; color: #7e22ce; line-height: 1.6; }
+        .cta-container { text-align: center; margin: 28px 0 12px; }
+        .cta-btn { display: inline-block; background-color: #0f172a; color: #ffffff !important; text-decoration: none; font-size: 14px; font-weight: 700; padding: 12px 28px; border-radius: 8px; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25); }
+        .footer { background: #f8fafc; padding: 18px 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
+      </style>
+    </head>
+    <body>
+      <div class="wrapper">
+        <div class="header">
+          <h1>CT University TaskDesk</h1>
+          <p>System Administration &amp; Governance</p>
+        </div>
+        <div class="body">
+          <div class="badge">👑 SUPER ADMINISTRATOR</div>
+          <div class="greeting">Greetings, ${recipientName || 'Administrator'}!</div>
+          <div class="desc">
+            You have been officially granted <strong>Super Administrator</strong> authority across CT University TaskDesk.
+          </div>
+          <div class="info-card">
+            <div class="info-row">
+              <span class="info-label">University ID:</span>
+              <span class="info-value">${universityId}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Role:</span>
+              <span class="info-value" style="color: #6b21a8;">Super Administrator</span>
+            </div>
+            ${
+              promotedByName
+                ? `<div class="info-row" style="margin-bottom: 0;">
+                     <span class="info-label">Granted By:</span>
+                     <span class="info-value">${promotedByName}</span>
+                   </div>`
+                : ''
+            }
+          </div>
+          <div class="privileges-card">
+            <div class="privileges-title">🛡️ System Authority:</div>
+            <ul class="privileges-list">
+              <li>Full access to university-wide task administration and audits</li>
+              <li>Manage department admins, personnel, and roster structures</li>
+              <li>Supervise NAAC evaluations, reports, and compliance metrics</li>
+            </ul>
+          </div>
+          <div class="cta-container">
+            <a href="${loginUrl}" class="cta-btn">Access Super Admin Console &rarr;</a>
+          </div>
+        </div>
+        <div class="footer">
+          &copy; ${new Date().getFullYear()} CT University • TaskDesk Institutional Access
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    return await transporter.sendMail({
+      from: `"CT University TaskDesk" <${process.env.EMAIL_USER || 'taskmanagement@ctuniversity.in'}>`,
+      to: toEmail,
+      subject,
+      html,
+    });
+  } catch (error) {
+    console.error(`Failed to send Super Admin promotion email to ${toEmail}:`, error);
+  }
+};
+
+/**
+ * Send an email notifying a previous delegated super admin that their mantle was transferred
+ */
+export const sendSuperAdminTransferEmail = async (
+  toEmail: string,
+  recipientName: string,
+  universityId: string,
+  newSuperAdminName: string
+) => {
+  if (!toEmail) return;
+
+  const subject = `Update: Super Administrator Role Transferred - CT University TaskDesk`;
+  const appUrl = process.env.FRONTEND_URL || 'https://taskdesk.ctuniversity.in';
+  const loginUrl = `${appUrl}/login`;
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <title>Super Admin Role Transfer - CT University TaskDesk</title>
+      <style>
+        body { margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; }
+        .wrapper { max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 14px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08); }
+        .header { background: #0f172a; padding: 28px 24px; text-align: center; }
+        .header h1 { margin: 0; font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.02em; }
+        .header p { margin: 6px 0 0; font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; }
+        .body { padding: 32px 28px; }
+        .badge { display: inline-block; background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; font-size: 12px; font-weight: 800; padding: 6px 14px; border-radius: 20px; letter-spacing: 0.04em; margin-bottom: 16px; }
+        .greeting { font-size: 17px; font-weight: 700; color: #0f172a; margin-bottom: 12px; }
+        .desc { font-size: 14px; line-height: 1.6; color: #475569; margin-bottom: 20px; }
+        .info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0; }
+        .info-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
+        .info-label { color: #64748b; font-weight: 500; }
+        .info-value { color: #0f172a; font-weight: 700; text-align: right; }
+        .cta-container { text-align: center; margin: 28px 0 12px; }
+        .cta-btn { display: inline-block; background-color: #2563eb; color: #ffffff !important; text-decoration: none; font-size: 14px; font-weight: 700; padding: 12px 28px; border-radius: 8px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25); }
+        .footer { background: #f8fafc; padding: 18px 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
+      </style>
+    </head>
+    <body>
+      <div class="wrapper">
+        <div class="header">
+          <h1>CT University TaskDesk</h1>
+          <p>Role Notification</p>
+        </div>
+        <div class="body">
+          <div class="badge">ROLE UPDATE</div>
+          <div class="greeting">Hello, ${recipientName || 'Colleague'}!</div>
+          <div class="desc">
+            Your Super Administrator privileges have been transferred to <strong>${newSuperAdminName}</strong>. Your account has returned to Staff status.
+          </div>
+          <div class="info-card">
+            <div class="info-row">
+              <span class="info-label">University ID:</span>
+              <span class="info-value">${universityId}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">New Role:</span>
+              <span class="info-value">Staff</span>
+            </div>
+            <div class="info-row" style="margin-bottom: 0;">
+              <span class="info-label">Transferred To:</span>
+              <span class="info-value" style="color: #6b21a8;">${newSuperAdminName}</span>
+            </div>
+          </div>
+          <div class="cta-container">
+            <a href="${loginUrl}" class="cta-btn">Sign In to TaskDesk &rarr;</a>
+          </div>
+        </div>
+        <div class="footer">
+          &copy; ${new Date().getFullYear()} CT University • TaskDesk Institutional Access
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    return await transporter.sendMail({
+      from: `"CT University TaskDesk" <${process.env.EMAIL_USER || 'taskmanagement@ctuniversity.in'}>`,
+      to: toEmail,
+      subject,
+      html,
+    });
+  } catch (error) {
+    console.error(`Failed to send Super Admin transfer email to ${toEmail}:`, error);
+  }
+};
+
+/**
+ * Send an email notification when a task or subtask is assigned to a user
+ */
+export const sendTaskAssignedEmail = async (
+  toEmail: string,
+  recipientName: string,
+  taskTitle: string,
+  taskId: string,
+  assignedByName: string,
+  assignedByRole: string,
+  deadline: Date | string,
+  description?: string
+) => {
+  if (!toEmail) return;
+
+  const formattedDeadline = deadline
+    ? new Date(deadline).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      })
+    : 'Not specified';
+
+  const roleLabel =
+    assignedByRole === 'super_admin'
+      ? 'Super Administrator'
+      : assignedByRole === 'department_admin'
+      ? 'Department Administrator'
+      : 'Colleague';
+
+  const subject = `New Task Assigned: [Task #${taskId || ''}] ${taskTitle} - CT University TaskDesk`;
+  const appUrl = process.env.FRONTEND_URL || 'https://taskdesk.ctuniversity.in';
+  const taskUrl = `${appUrl}/tasks`;
+
+  const descSnippet = description
+    ? description.length > 250
+      ? `${description.substring(0, 250)}...`
+      : description
+    : 'No description provided.';
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <title>New Task Assignment - CT University TaskDesk</title>
+      <style>
+        body { margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; }
+        .wrapper { max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 14px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08); }
+        .header { background: #0f172a; padding: 28px 24px; text-align: center; }
+        .header h1 { margin: 0; font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.02em; }
+        .header p { margin: 6px 0 0; font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; }
+        .body { padding: 32px 28px; }
+        .badge { display: inline-block; background-color: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; font-size: 11px; font-weight: 800; padding: 5px 12px; border-radius: 20px; letter-spacing: 0.04em; margin-bottom: 16px; text-transform: uppercase; }
+        .greeting { font-size: 17px; font-weight: 700; color: #0f172a; margin-bottom: 10px; }
+        .desc { font-size: 14px; line-height: 1.6; color: #475569; margin-bottom: 20px; }
+        .task-card { background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #3b82f6; border-radius: 10px; padding: 18px; margin: 20px 0; }
+        .task-title { font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 12px; }
+        .info-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
+        .info-label { color: #64748b; font-weight: 500; }
+        .info-value { color: #0f172a; font-weight: 700; text-align: right; }
+        .task-desc-box { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #cbd5e1; font-size: 12.5px; color: #475569; line-height: 1.5; }
+        .cta-container { text-align: center; margin: 26px 0 10px; }
+        .cta-btn { display: inline-block; background-color: #2563eb; color: #ffffff !important; text-decoration: none; font-size: 14px; font-weight: 700; padding: 12px 28px; border-radius: 8px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25); }
+        .footer { background: #f8fafc; padding: 18px 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
+      </style>
+    </head>
+    <body>
+      <div class="wrapper">
+        <div class="header">
+          <h1>CT University TaskDesk</h1>
+          <p>Task Assignment Alert</p>
+        </div>
+        <div class="body">
+          <div class="badge">New Task Assigned</div>
+          <div class="greeting">Hello, ${recipientName || 'Colleague'}!</div>
+          <div class="desc">
+            You have been assigned a new task by <strong>${assignedByName}</strong> (${roleLabel}). Please review the task details below:
+          </div>
+          <div class="task-card">
+            <div class="task-title">
+              <span style="color: #2563eb; margin-right: 6px;">#${taskId || ''}</span> ${taskTitle}
+            </div>
+            <div class="info-row">
+              <span class="info-label">Assigned By:</span>
+              <span class="info-value">${assignedByName}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Due Date:</span>
+              <span class="info-value" style="color: #dc2626;">📅 ${formattedDeadline}</span>
+            </div>
+            <div class="task-desc-box">
+              <strong>Description:</strong><br />
+              ${descSnippet}
+            </div>
+          </div>
+          <div class="cta-container">
+            <a href="${taskUrl}" class="cta-btn">Open TaskDesk &amp; View Task &rarr;</a>
+          </div>
+        </div>
+        <div class="footer">
+          &copy; ${new Date().getFullYear()} CT University • TaskDesk Institutional Access
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    return await transporter.sendMail({
+      from: `"CT University TaskDesk" <${process.env.EMAIL_USER || 'taskmanagement@ctuniversity.in'}>`,
+      to: toEmail,
+      subject,
+      html,
+    });
+  } catch (error) {
+    console.error(`Failed to send Task Assigned email to ${toEmail}:`, error);
+  }
+};
+
+
+

@@ -10,6 +10,7 @@ import {
   getUserProfile,
   updateUserProfile,
   changeDepartmentAdmin,
+  transferSuperAdmin,
 } from '../controllers/userController';
 import { changePassword } from '../controllers/authController';
 import { authenticate, authorizeRoles } from '../middleware/auth';
@@ -66,5 +67,9 @@ router.delete('/:id', deleteUser);
 // @route   POST /api/users/change-department-admin
 // @desc    Change department admin, transferring active team assignments and setting old admin to unassigned staff
 router.post('/change-department-admin', changeDepartmentAdmin);
+
+// @route   POST /api/users/transfer-super-admin
+// @desc    Transfer or delegate Super Administrator role to another user
+router.post('/transfer-super-admin', transferSuperAdmin);
 
 export default router;

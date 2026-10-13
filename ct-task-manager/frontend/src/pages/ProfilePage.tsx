@@ -172,7 +172,7 @@ export const ProfilePage: React.FC = () => {
   };
 
   const roleDisplay = 
-    user.role === 'super_admin' ? 'Super Admin' :
+    user.role === 'super_admin' ? (user.universityId === '10001' ? 'Primary Super Admin' : 'Delegated Super Admin') :
     user.role === 'department_admin' ? 'Department Admin' : 'Staff Member';
 
   const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&background=0f172a&color=fff&size=128`;
@@ -187,7 +187,11 @@ export const ProfilePage: React.FC = () => {
             <div className="pp-name-row">
               <h1 className="pp-user-name">{user.name}</h1>
               <span className="pp-role-badge">
-                <Shield size={13} /> {roleDisplay}
+                {user.role === 'super_admin' && user.universityId === '10001' ? (
+                  <Crown size={13} color="#f59e0b" />
+                ) : (
+                  <Shield size={13} />
+                )} {roleDisplay}
               </span>
             </div>
             <p className="pp-user-id">University ID: <strong>{user.universityId || 'N/A'}</strong></p>
@@ -238,11 +242,15 @@ export const ProfilePage: React.FC = () => {
         {user.role === 'super_admin' ? (
           <div className="pp-admin-badge-box">
             <div className="pp-admin-badge-icon">
-              <Shield size={22} />
+              {user.universityId === '10001' ? <Crown size={22} color="#f59e0b" /> : <Shield size={22} />}
             </div>
             <div className="pp-admin-badge-text">
-              <span className="pp-admin-badge-title">System Administrator</span>
-              <span className="pp-admin-badge-sub">Task Evaluator & Full Access</span>
+              <span className="pp-admin-badge-title">
+                {user.universityId === '10001' ? 'Primary Super Administrator' : 'Delegated Super Administrator'}
+              </span>
+              <span className="pp-admin-badge-sub">
+                {user.universityId === '10001' ? 'Permanent Root Ownership & Governance' : 'Institutional Leadership & Full Access'}
+              </span>
             </div>
           </div>
         ) : (

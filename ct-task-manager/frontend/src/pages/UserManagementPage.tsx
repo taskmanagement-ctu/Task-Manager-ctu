@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, User, Department } from '../services/api';
+import { api, User, Department, SuperAdminInfo } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { 
   Search, 
   MoreVertical, 
@@ -11,6 +12,7 @@ import {
   ChevronRight,
   ShieldAlert,
   ShieldCheck,
+  Crown,
   User as UserIcon,
   Trash2,
   Ban,
@@ -21,7 +23,8 @@ import {
   Loader2,
   AlertCircle,
   RotateCcw,
-  Users
+  Users,
+  ArrowRightLeft
 } from 'lucide-react';
 import ExportDropdownMenu from '../components/ExportDropdownMenu';
 import { exportUsers } from '../utils/generalExport';
@@ -29,7 +32,9 @@ import './UserManagementPage.css';
 
 const UserManagementPage: React.FC = () => {
   const navigate = useNavigate();
+  const { currentUser: authUser, refreshUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
+  const [superAdminList, setSuperAdminList] = useState<SuperAdminInfo[]>([]);
   
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -75,6 +80,16 @@ const UserManagementPage: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
+  // Transfer Super Admin Modal State
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferTargetUser, setTransferTargetUser] = useState<User | null>(null);
+  const [transferCandidateId, setTransferCandidateId] = useState('');
+  const [transferSearch, setTransferSearch] = useState('');
+  const [isTransferring, setIsTransferring] = useState(false);
+  const [transferError, setTransferError] = useState<string | null>(null);
+  const [transferAllUsersList, setTransferAllUsersList] = useState<User[]>([]);
+  const [loadingCandidates, setLoadingCandidates] = useState(false);
+
   const handleExportUsers = async (format: 'excel' | 'pdf' | 'csv') => {
     try {
       setIsExporting(true);
@@ -107,6 +122,17 @@ const UserManagementPage: React.FC = () => {
     }
   };
 
+  const fetchSuperAdminList = async () => {
+    try {
+      const statsRes = await api.getUserStats();
+      if (statsRes.success && statsRes.data?.superAdminList) {
+        setSuperAdminList(statsRes.data.superAdminList);
+      }
+    } catch (err) {
+      console.error('Failed to load super admin stats:', err);
+    }
+  };
+
   const fetchUsers = async () => {
     try {
       setLoading(true);
@@ -133,6 +159,7 @@ const UserManagementPage: React.FC = () => {
 
   useEffect(() => {
     fetchUsers();
+    fetchSuperAdminList();
     // eslint-disable-next-line
   }, [page, roleFilter, departmentFilter, rosterFilter, statusFilter, search]);
 
@@ -156,7 +183,8 @@ const UserManagementPage: React.FC = () => {
       await api.updateUserStatus(selectedUser.id, statusAction);
       setShowStatusModal(false);
       setSelectedUser(null);
-      fetchUsers();
+      await fetchUsers();
+      await fetchSuperAdminList();
     } catch (err: any) {
       alert(err.message || 'Failed to update user status');
     } finally {
@@ -171,7 +199,8 @@ const UserManagementPage: React.FC = () => {
       await api.deleteUser(selectedUser.id);
       setShowDeleteModal(false);
       setSelectedUser(null);
-      fetchUsers();
+      await fetchUsers();
+      await fetchSuperAdminList();
     } catch (err: any) {
       alert(err.message || 'Failed to delete user');
     } finally {
@@ -254,10 +283,12 @@ const UserManagementPage: React.FC = () => {
       });
 
       if (res.success) {
-        setActionSuccessMessage(`Successfully updated details for ${editForm.name} (${uid}).`);
-        setTimeout(() => setActionSuccessMessage(''), 4500);
+        setActionSuccessMessage(res.message || `Successfully updated details for ${editForm.name} (${uid}).`);
+        setTimeout(() => setActionSuccessMessage(''), 6000);
         handleCloseEdit();
+        await refreshUser();
         await fetchUsers();
+        await fetchSuperAdminList();
       }
     } catch (err: any) {
       setEditError(err.message || 'Failed to update user details.');
@@ -266,9 +297,65 @@ const UserManagementPage: React.FC = () => {
     }
   };
 
-  const getRoleIcon = (role: string) => {
-    if (role === 'super_admin') return <ShieldAlert size={14} />;
-    if (role === 'department_admin') return <ShieldCheck size={14} />;
+  const handleOpenTransferModal = async (preselectedUser?: User) => {
+    setTransferError(null);
+    if (preselectedUser) {
+      setTransferTargetUser(preselectedUser);
+      setTransferCandidateId(preselectedUser.id || (preselectedUser as any)._id);
+    } else {
+      setTransferTargetUser(null);
+      setTransferCandidateId('');
+    }
+    setTransferSearch('');
+    setShowTransferModal(true);
+
+    try {
+      setLoadingCandidates(true);
+      const res = await api.getUsers({ limit: 1000, status: 'Active' });
+      if (res.success && res.data?.users) {
+        const eligible = res.data.users.filter((u: User) => u.universityId !== '10001' && u.role !== 'super_admin' && u.isActive);
+        setTransferAllUsersList(eligible);
+      }
+    } catch (err) {
+      console.error('Failed to load eligible users for Super Admin transfer', err);
+    } finally {
+      setLoadingCandidates(false);
+    }
+  };
+
+  const handleTransferSuperAdminSubmit = async () => {
+    const candidateId = transferCandidateId || transferTargetUser?.id || (transferTargetUser as any)?._id;
+    if (!candidateId) {
+      setTransferError('Please select a user to transfer Super Admin privileges to.');
+      return;
+    }
+
+    try {
+      setIsTransferring(true);
+      setTransferError(null);
+      const res = await api.transferSuperAdmin(candidateId);
+      if (res.success) {
+        setActionSuccessMessage(res.message);
+        setTimeout(() => setActionSuccessMessage(''), 8000);
+        setShowTransferModal(false);
+        setTransferTargetUser(null);
+        setTransferCandidateId('');
+        await refreshUser();
+        await fetchUsers();
+        await fetchSuperAdminList();
+      }
+    } catch (err: any) {
+      setTransferError(err.message || 'Failed to transfer Super Admin privileges.');
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
+  const getRoleIcon = (u: User) => {
+    if (u.role === 'super_admin') {
+      return u.universityId === '10001' ? <Crown size={14} color="#d97706" /> : <ShieldAlert size={14} />;
+    }
+    if (u.role === 'department_admin') return <ShieldCheck size={14} />;
     return <UserIcon size={14} />;
   };
 
@@ -298,10 +385,19 @@ const UserManagementPage: React.FC = () => {
     setPage(1);
   };
 
-  const formatRoleText = (role: string) => {
-    if (role === 'super_admin') return 'Super Admin';
-    if (role === 'department_admin') return 'Dept Admin';
+  const formatRoleText = (u: User) => {
+    if (u.role === 'super_admin') {
+      return u.universityId === '10001' ? 'Primary Super Admin' : 'Delegated Super Admin';
+    }
+    if (u.role === 'department_admin') return 'Dept Admin';
     return 'Staff';
+  };
+
+  const getRoleBadgeClass = (u: User) => {
+    if (u.role === 'super_admin') {
+      return u.universityId === '10001' ? 'badge-role badge-role-primary_super_admin' : 'badge-role badge-role-super_admin';
+    }
+    return `badge-role badge-role-${u.role}`;
   };
 
   const toggleDropdown = (userId: string, e: React.MouseEvent) => {
@@ -324,6 +420,105 @@ const UserManagementPage: React.FC = () => {
         <div className="um-action-success-banner">
           <CheckCircle size={18} className="um-action-success-icon" />
           <span>{actionSuccessMessage}</span>
+        </div>
+      )}
+
+      {/* --- Super Administrator Governance Panel --- */}
+      {superAdminList.length > 0 && (
+        <div className="um-governance-card">
+          <div className="um-governance-header">
+            <div className="um-governance-title-row">
+              <div className="um-governance-title-icon">
+                <Crown size={18} />
+              </div>
+              <div>
+                <h2 className="um-governance-title">Institutional Governance &amp; Super Administrators</h2>
+                <p className="um-governance-subtitle">
+                  {authUser?.universityId === '10001' 
+                    ? 'You are the Primary Super Admin (10001). Overview of active Super Administrators holding system privileges:' 
+                    : 'System Super Administrators with university-wide authority:'}
+                </p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <div className="um-governance-tag">
+                {superAdminList.length} Active {superAdminList.length === 1 ? 'Super Admin' : 'Super Admins'}
+              </div>
+              <button
+                type="button"
+                className="btn-transfer-superadmin"
+                onClick={() => handleOpenTransferModal()}
+                title="Transfer or appoint a new Super Administrator"
+              >
+                <ArrowRightLeft size={14} />
+                <span>Transfer Super Admin</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="um-governance-grid">
+            {/* Primary Super Admin Card */}
+            {superAdminList.filter(sa => sa.universityId === '10001').map(sa => (
+              <div key={sa.id || sa.universityId} className="um-gov-admin-box primary">
+                <div className="um-gov-admin-avatar primary" title="Root Super Administrator">
+                  👑
+                </div>
+                <div className="um-gov-admin-info">
+                  <div className="um-gov-admin-name">
+                    <span>{sa.name}</span>
+                    {authUser?.universityId === '10001' && (
+                      <span style={{ fontSize: '0.72rem', color: '#b45309', fontWeight: 700 }}>(You)</span>
+                    )}
+                  </div>
+                  <div className="um-gov-admin-meta">
+                    <span className="um-gov-admin-tag-primary">Permanent Root</span>
+                    <span>• ID: <strong>{sa.universityId}</strong></span>
+                    <span>• {sa.email}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Delegated Super Admins Cards */}
+            {superAdminList.filter(sa => sa.universityId !== '10001').length > 0 ? (
+              superAdminList.filter(sa => sa.universityId !== '10001').map(sa => (
+                <div key={sa.id || sa.universityId} className="um-gov-admin-box">
+                  <div className="um-gov-admin-avatar delegated" title="Delegated Super Administrator">
+                    <ShieldAlert size={18} />
+                  </div>
+                  <div className="um-gov-admin-info">
+                    <div className="um-gov-admin-name">
+                      <span>{sa.name}</span>
+                      {authUser?.universityId === sa.universityId && (
+                        <span style={{ fontSize: '0.72rem', color: '#4f46e5', fontWeight: 700 }}>(You)</span>
+                      )}
+                    </div>
+                    <div className="um-gov-admin-meta">
+                      <span className="um-gov-admin-tag-delegated">Delegated Super Admin</span>
+                      <span>• ID: <strong>{sa.universityId}</strong></span>
+                      <span>• {sa.email}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="um-gov-locate-btn"
+                    onClick={() => {
+                      setSearch(sa.universityId);
+                      setPage(1);
+                    }}
+                    title="Find in list"
+                  >
+                    Locate
+                  </button>
+                </div>
+              ))
+            ) : (
+              <div className="um-gov-no-delegated">
+                <ShieldCheck size={18} color="#94a3b8" />
+                <span>No delegated Super Admins currently active. Only Primary Super Admin (10001) holds system administrator access.</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -499,8 +694,8 @@ const UserManagementPage: React.FC = () => {
                     <div className="user-dept">{user.department || '-'}</div>
                   </td>
                   <td>
-                    <span className={`badge-role badge-role-${user.role}`}>
-                      {getRoleIcon(user.role)} {formatRoleText(user.role)}
+                    <span className={getRoleBadgeClass(user)}>
+                      {getRoleIcon(user)} {formatRoleText(user)}
                     </span>
                   </td>
                   <td>
@@ -509,10 +704,15 @@ const UserManagementPage: React.FC = () => {
                         <span className="status-dot red"></span>
                         Deactivated
                       </span>
+                    ) : user.universityId === '10001' ? (
+                      <span className="um-roster-badge um-roster-super" title="Primary Root Super Administrator (Permanent)">
+                        <Crown size={12} color="#f59e0b" />
+                        Primary Root
+                      </span>
                     ) : user.role === 'super_admin' ? (
-                      <span className="um-roster-badge um-roster-super" title="Super Administrator">
+                      <span className="um-roster-badge um-roster-super" title="Delegated Super Administrator">
                         <ShieldAlert size={12} />
-                        System Admin
+                        Delegated Admin
                       </span>
                     ) : user.role === 'department_admin' ? (
                       <span className="um-roster-badge um-roster-lead" title={`Department Team Lead (${user.rosterStaffCount || 0} assigned staff)`}>
@@ -542,9 +742,25 @@ const UserManagementPage: React.FC = () => {
                     </button>
                     {activeDropdown === user.id && (
                       <div className="action-dropdown" ref={dropdownRef}>
+                        {user.universityId !== '10001' && user.role !== 'super_admin' && user.isActive && (
+                          <button 
+                            className="dropdown-item" 
+                            onClick={() => {
+                              handleOpenTransferModal(user);
+                              setActiveDropdown(null);
+                            }}
+                            title="Transfer Super Admin privileges to this user"
+                          >
+                            <Crown size={15} color="#d97706" />
+                            <span>Transfer Super Admin</span>
+                          </button>
+                        )}
                         <button 
                           className="dropdown-item" 
+                          disabled={user.universityId === '10001' && authUser?.universityId !== '10001'}
+                          title={user.universityId === '10001' && authUser?.universityId !== '10001' ? 'Only Primary Super Admin can modify their own account' : undefined}
                           onClick={() => {
+                            if (user.universityId === '10001' && authUser?.universityId !== '10001') return;
                             handleOpenEdit(user);
                             setActiveDropdown(null);
                           }}
@@ -554,7 +770,10 @@ const UserManagementPage: React.FC = () => {
                         </button>
                         <button 
                           className="dropdown-item" 
+                          disabled={user.universityId === '10001'}
+                          title={user.universityId === '10001' ? 'Primary Super Admin account is permanent and cannot be deactivated' : undefined}
                           onClick={() => {
+                            if (user.universityId === '10001') return;
                             setSelectedUser(user);
                             setStatusAction(!user.isActive);
                             setShowStatusModal(true);
@@ -566,7 +785,10 @@ const UserManagementPage: React.FC = () => {
                         </button>
                         <button 
                           className="dropdown-item danger" 
+                          disabled={user.universityId === '10001'}
+                          title={user.universityId === '10001' ? 'Primary Super Admin account cannot be deleted' : undefined}
                           onClick={() => {
+                            if (user.universityId === '10001') return;
                             setSelectedUser(user);
                             setShowDeleteModal(true);
                             setActiveDropdown(null);
@@ -630,9 +852,13 @@ const UserManagementPage: React.FC = () => {
                     <span className="um-roster-badge um-roster-deactivated">
                       <span className="status-dot red"></span> Deactivated
                     </span>
+                  ) : user.universityId === '10001' ? (
+                    <span className="um-roster-badge um-roster-super" title="Primary Root Super Administrator (Permanent)">
+                      <Crown size={12} color="#f59e0b" /> Primary Root
+                    </span>
                   ) : user.role === 'super_admin' ? (
-                    <span className="um-roster-badge um-roster-super">
-                      <ShieldAlert size={12} /> System Admin
+                    <span className="um-roster-badge um-roster-super" title="Delegated Super Administrator">
+                      <ShieldAlert size={12} /> Delegated Admin
                     </span>
                   ) : user.role === 'department_admin' ? (
                     <span className="um-roster-badge um-roster-lead">
@@ -654,8 +880,8 @@ const UserManagementPage: React.FC = () => {
               </div>
 
               <div className="um-card-chips-row">
-                <span className={`badge-role badge-role-${user.role}`}>
-                  {getRoleIcon(user.role)} {formatRoleText(user.role)}
+                <span className={getRoleBadgeClass(user)}>
+                  {getRoleIcon(user)} {formatRoleText(user)}
                 </span>
                 <span className="um-card-id-chip">
                   ID: {user.universityId}
@@ -689,9 +915,25 @@ const UserManagementPage: React.FC = () => {
                 </button>
                 {activeDropdown === `mobile-${user.id}` && (
                   <div className="action-dropdown" ref={dropdownRef} style={{ top: '100%', right: '0', width: '100%' }}>
+                    {user.universityId !== '10001' && user.role !== 'super_admin' && user.isActive && (
+                      <button 
+                        className="dropdown-item" 
+                        onClick={() => {
+                          handleOpenTransferModal(user);
+                          setActiveDropdown(null);
+                        }}
+                        title="Transfer Super Admin privileges to this user"
+                      >
+                        <Crown size={15} color="#d97706" />
+                        <span>Transfer Super Admin</span>
+                      </button>
+                    )}
                     <button 
                       className="dropdown-item" 
+                      disabled={user.universityId === '10001' && authUser?.universityId !== '10001'}
+                      title={user.universityId === '10001' && authUser?.universityId !== '10001' ? 'Only Primary Super Admin can modify their own account' : undefined}
                       onClick={() => {
+                        if (user.universityId === '10001' && authUser?.universityId !== '10001') return;
                         handleOpenEdit(user);
                         setActiveDropdown(null);
                       }}
@@ -701,7 +943,10 @@ const UserManagementPage: React.FC = () => {
                     </button>
                     <button 
                       className="dropdown-item" 
+                      disabled={user.universityId === '10001'}
+                      title={user.universityId === '10001' ? 'Primary Super Admin account is permanent and cannot be deactivated' : undefined}
                       onClick={() => {
+                        if (user.universityId === '10001') return;
                         setSelectedUser(user);
                         setStatusAction(!user.isActive);
                         setShowStatusModal(true);
@@ -713,7 +958,10 @@ const UserManagementPage: React.FC = () => {
                     </button>
                     <button 
                       className="dropdown-item danger" 
+                      disabled={user.universityId === '10001'}
+                      title={user.universityId === '10001' ? 'Primary Super Admin account cannot be deleted' : undefined}
                       onClick={() => {
+                        if (user.universityId === '10001') return;
                         setSelectedUser(user);
                         setShowDeleteModal(true);
                         setActiveDropdown(null);
@@ -1023,12 +1271,42 @@ const UserManagementPage: React.FC = () => {
                     id="edit-role"
                     className="um-edit-select"
                     value={editForm.role}
+                    disabled={editModalUser.universityId === '10001'}
                     onChange={(e) => setEditForm(prev => ({ ...prev, role: e.target.value }))}
                   >
-                    <option value="staff">Staff</option>
-                    <option value="department_admin">Department Admin</option>
-                    <option value="super_admin">Super Admin</option>
+                    {editModalUser.universityId === '10001' ? (
+                      <option value="super_admin">Primary Super Admin (Permanent Root)</option>
+                    ) : (
+                      <>
+                        <option value="staff">Staff</option>
+                        <option value="department_admin">Department Admin</option>
+                        <option value="super_admin">Super Admin</option>
+                      </>
+                    )}
                   </select>
+
+                  {editModalUser.universityId === '10001' && (
+                    <div className="um-role-primary-notice">
+                      <Crown size={16} />
+                      <span>Primary Super Admin (10001) has permanent root authority and cannot be modified or demoted.</span>
+                    </div>
+                  )}
+
+                  {editModalUser.universityId !== '10001' && editForm.role === 'super_admin' && (
+                    authUser?.universityId === '10001' ? (
+                      <div className="um-role-primary-notice">
+                        <Crown size={16} />
+                        <span>You are appointing a Delegated Super Admin. You will remain the Primary Super Admin (10001).</span>
+                      </div>
+                    ) : (
+                      <div className="um-role-transfer-notice">
+                        <AlertTriangle size={18} />
+                        <div>
+                          <strong>Super Admin Transfer:</strong> Promoting this user to Super Admin will transfer your Super Admin privileges to them. You will revert to Staff status upon saving, while Primary Super Admin (10001) remains active.
+                        </div>
+                      </div>
+                    )
+                  )}
                 </div>
               </div>
 
@@ -1062,6 +1340,205 @@ const UserManagementPage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Transfer Super Admin Modal */}
+      {showTransferModal && (
+        <div 
+          className="modal-overlay" 
+          onClick={() => !isTransferring && setShowTransferModal(false)}
+        >
+          <div 
+            className="modal-content um-edit-modal-content" 
+            style={{ maxWidth: '580px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="um-modal-header">
+              <div 
+                className="um-modal-icon-edit" 
+                style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#ffffff' }}
+              >
+                <Crown size={22} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3 className="um-modal-title">Transfer Super Admin Privileges</h3>
+                <p className="um-modal-desc">
+                  Appoint or transfer institution-wide Super Administrator authority to an active user.
+                </p>
+              </div>
+              <button 
+                type="button" 
+                className="um-modal-close-icon-btn" 
+                onClick={() => !isTransferring && setShowTransferModal(false)}
+                disabled={isTransferring}
+                aria-label="Close transfer modal"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {transferError && (
+              <div className="um-edit-error-alert" style={{ marginBottom: '1rem' }}>
+                <AlertCircle size={16} />
+                <span>{transferError}</span>
+              </div>
+            )}
+
+            {/* Candidate Selector */}
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '0.4rem' }}>
+                Select Eligible Candidate *
+              </label>
+              
+              {loadingCandidates ? (
+                <div style={{ padding: '0.75rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.85rem', color: '#64748b' }}>
+                  Loading eligible users...
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <input
+                    type="text"
+                    className="um-search-input"
+                    style={{ width: '100%', padding: '0.6rem 0.85rem', fontSize: '0.85rem', border: '1px solid #d1d5db', borderRadius: '8px' }}
+                    placeholder="Search candidate by name, university ID or department..."
+                    value={transferSearch}
+                    onChange={(e) => setTransferSearch(e.target.value)}
+                  />
+
+                  <select
+                    style={{ 
+                      width: '100%', 
+                      padding: '0.65rem 0.85rem', 
+                      fontSize: '0.875rem', 
+                      border: '1px solid #d1d5db', 
+                      borderRadius: '8px',
+                      backgroundColor: '#ffffff',
+                      color: '#111827'
+                    }}
+                    value={transferCandidateId}
+                    onChange={(e) => {
+                      const selectedId = e.target.value;
+                      setTransferCandidateId(selectedId);
+                      const found = transferAllUsersList.find(u => (u.id === selectedId || (u as any)._id === selectedId));
+                      setTransferTargetUser(found || null);
+                    }}
+                  >
+                    <option value="">-- Choose User to Appoint --</option>
+                    {transferAllUsersList
+                      .filter(u => {
+                        if (!transferSearch.trim()) return true;
+                        const s = transferSearch.toLowerCase();
+                        return (
+                          u.name?.toLowerCase().includes(s) ||
+                          u.universityId?.toLowerCase().includes(s) ||
+                          u.email?.toLowerCase().includes(s) ||
+                          u.department?.toLowerCase().includes(s)
+                        );
+                      })
+                      .map(u => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} (ID: {u.universityId}) — {u.department || 'No Dept'} ({u.role})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Selected User Details Card */}
+            {transferTargetUser && (
+              <div style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '10px',
+                padding: '0.95rem 1rem',
+                marginBottom: '1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.85rem'
+              }}>
+                <div 
+                  className="user-avatar" 
+                  style={{ 
+                    width: '42px', 
+                    height: '42px', 
+                    backgroundImage: `url(https://ui-avatars.com/api/?name=${encodeURIComponent(transferTargetUser.name)}&background=e2e8f0&color=1e293b)`,
+                    flexShrink: 0
+                  }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>
+                    {transferTargetUser.name} <span style={{ color: '#64748b', fontWeight: 500, fontSize: '0.82rem' }}>({transferTargetUser.universityId})</span>
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.15rem' }}>
+                    {transferTargetUser.email} • {transferTargetUser.department || 'Unassigned Dept'}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: '0.2rem' }}>
+                    Current Role: <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{transferTargetUser.role.replace('_', ' ')}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Contextual Warning & Explanation Notice */}
+            {authUser?.universityId === '10001' ? (
+              <div className="um-role-primary-notice" style={{ marginBottom: '1.5rem' }}>
+                <Crown size={18} style={{ flexShrink: 0, marginTop: '2px', color: '#7c3aed' }} />
+                <div>
+                  <strong style={{ color: '#6d28d9' }}>Primary Super Admin Delegation:</strong>
+                  <p style={{ margin: '0.25rem 0 0', fontSize: '0.83rem', lineHeight: 1.45, color: '#5b21b6' }}>
+                    You are the permanent Primary Super Admin (<strong>10001</strong>). Delegating Super Admin privileges to {transferTargetUser ? <strong>{transferTargetUser.name}</strong> : 'the selected user'} will elevate them to <strong>Delegated Super Admin</strong>. Your root access remains permanent and unaffected.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="um-role-transfer-notice" style={{ marginBottom: '1.5rem' }}>
+                <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: '2px', color: '#d97706' }} />
+                <div>
+                  <strong style={{ color: '#b45309' }}>Privilege Handover &amp; Step-Down:</strong>
+                  <p style={{ margin: '0.25rem 0 0', fontSize: '0.83rem', lineHeight: 1.45, color: '#92400e' }}>
+                    You are currently a <strong>Delegated Super Admin</strong>. Transferring Super Admin privileges will promote {transferTargetUser ? <strong>{transferTargetUser.name}</strong> : 'the candidate'} to Super Admin, and <strong>your account will automatically step down to Staff</strong> in your department. The Primary Super Admin (<strong>10001</strong>) will remain unaffected.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div className="modal-actions">
+              <button 
+                type="button" 
+                className="btn-paginate" 
+                onClick={() => setShowTransferModal(false)}
+                disabled={isTransferring}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                className="btn-add-user" 
+                style={{ 
+                  background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                  borderColor: '#d97706',
+                  color: '#ffffff',
+                  cursor: (isTransferring || !transferCandidateId) ? 'not-allowed' : 'pointer',
+                  opacity: (!transferCandidateId && !isTransferring) ? 0.6 : 1
+                }} 
+                onClick={handleTransferSuperAdminSubmit}
+                disabled={isTransferring || !transferCandidateId}
+              >
+                {isTransferring ? (
+                  <>
+                    <Loader2 size={16} className="um-spin-icon" /> Transferring Privileges...
+                  </>
+                ) : (
+                  <>
+                    <Crown size={15} /> Confirm &amp; Transfer Super Admin
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

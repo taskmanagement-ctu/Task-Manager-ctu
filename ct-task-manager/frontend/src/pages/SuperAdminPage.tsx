@@ -14,7 +14,8 @@ import {
   AlertTriangle,
   Filter,
   ChevronDown,
-  ArrowUp
+  ArrowUp,
+  ShieldAlert
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -31,13 +32,22 @@ const SuperAdminPage = () => {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [chatTask, setChatTask] = useState<any | null>(null);
 
-  const [userStats, setUserStats] = useState({
+  const [userStats, setUserStats] = useState<{
+    totalUsers: number;
+    activeUsers: number;
+    inactiveUsers: number;
+    superAdmins: number;
+    departmentAdmins: number;
+    staff: number;
+    superAdminList?: any[];
+  }>({
     totalUsers: 0,
     activeUsers: 0,
     inactiveUsers: 0,
     superAdmins: 0,
     departmentAdmins: 0,
-    staff: 0
+    staff: 0,
+    superAdminList: []
   });
 
   const [taskMetrics, setTaskMetrics] = useState({
@@ -49,6 +59,7 @@ const SuperAdminPage = () => {
 
   const [recentTasks, setRecentTasks] = useState<any[]>([]);
   const [tasksAwaitingReview, setTasksAwaitingReview] = useState<any[]>([]);
+  const [delegatedAdminTasks, setDelegatedAdminTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Department/School filter
@@ -109,6 +120,18 @@ const SuperAdminPage = () => {
         // Fetch Recent Activity (Latest tasks — fetch more so filter has enough to show)
         const recentRes = await api.getTasks({ limit: 50 });
         setRecentTasks(recentRes.data.tasks);
+
+        // Fetch Tasks by Delegated Super Admins (for Primary Super Admin 10001 institutional oversight)
+        if (currentUser?.universityId === '10001') {
+          try {
+            const delegatedRes = await api.getTasks({ limit: 10, delegatedAdminOnly: 'true' });
+            if (delegatedRes?.data?.tasks) {
+              setDelegatedAdminTasks(delegatedRes.data.tasks);
+            }
+          } catch (err) {
+            console.error('Failed to fetch delegated super admin tasks:', err);
+          }
+        }
 
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
@@ -208,12 +231,20 @@ const SuperAdminPage = () => {
           <div className="sa-metric-value">{loading ? '...' : userStats.departmentAdmins}</div>
         </div>
 
-        <div className="sa-metric-card">
+        <div 
+          className="sa-metric-card" 
+          style={{ cursor: 'pointer' }} 
+          onClick={() => navigate('/super-admin/users')}
+          title="Manage Super Administrators"
+        >
           <div className="sa-metric-header">
             <span className="sa-metric-title">Super Admins</span>
             <Shield className="sa-metric-icon" size={18} />
           </div>
           <div className="sa-metric-value">{loading ? '...' : userStats.superAdmins}</div>
+          <div style={{ color: '#6366f1', fontSize: '0.74rem', marginTop: '0.35rem', fontWeight: 600 }}>
+            {userStats.superAdmins > 1 ? `1 Primary • ${userStats.superAdmins - 1} Delegated` : '1 Primary (10001)'}
+          </div>
         </div>
       </div>
 
@@ -267,6 +298,78 @@ const SuperAdminPage = () => {
             View all pending reviews &rarr;
           </a>
         </div>
+
+        {/* Delegated Super Admins' Tasks Oversight Card (Visible to Primary Super Admin 10001) */}
+        {currentUser?.universityId === '10001' && (
+          <div className="sa-review-card" style={{ marginTop: '1.25rem', borderTop: '3px solid #7c3aed' }}>
+            <div className="sa-review-header">
+              <div className="sa-review-title-group">
+                <div className="sa-review-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#4c1d95' }}>
+                  <ShieldAlert size={20} color="#7c3aed" /> Tasks Created &amp; Assigned by Other Super Admins
+                </div>
+                <div className="sa-review-desc">
+                  Institutional oversight of tasks created by delegated Super Administrators across university departments.
+                </div>
+              </div>
+              <div className="sa-review-count" style={{ backgroundColor: '#ede9fe', color: '#6d28d9' }}>
+                {loading ? '...' : delegatedAdminTasks.length}
+              </div>
+            </div>
+
+            <div className="sa-review-list">
+              {delegatedAdminTasks.length > 0 ? (
+                delegatedAdminTasks.map(task => {
+                  const urgency = calculateUrgency(task);
+                  const cardStyle = getUrgencyCardStyle(urgency);
+                  const urgencyColor = getUrgencyColor(urgency);
+
+                  return (
+                    <div 
+                      key={task._id} 
+                      className="sa-review-item" 
+                      style={{ backgroundColor: cardStyle.backgroundColor, borderLeft: '4px solid #7c3aed', cursor: 'pointer' }}
+                      onClick={() => handleTaskClick(task)}
+                    >
+                      <div className="sa-review-info">
+                        <div className="sa-review-item-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
+                          <span style={{ color: '#7c3aed', fontWeight: 700 }}>#{task.taskId || ''}</span>
+                          <span>{task.title}</span>
+                        </div>
+                        <div className="sa-review-meta" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.35rem' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', color: '#5b21b6', fontWeight: 600 }}>
+                            <ShieldAlert size={13} /> Created by: {task.createdBy?.name || 'Delegated Admin'} ({task.createdBy?.universityId})
+                          </span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <UsersIcon size={13} /> Assigned to: {task.assignedTo?.name || 'Unassigned'} {task.assignedTo?.universityId ? `(${task.assignedTo.universityId})` : ''} {task.assignedTo?.department ? `• ${task.assignedTo.department}` : ''}
+                          </span>
+                          <span style={{ color: urgencyColor, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <Clock size={13} /> Due: {new Date(task.deadline).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="sa-badge-inprogress" style={{ background: '#f5f3ff', color: '#6d28d9', border: '1px solid #ddd6fe', textTransform: 'capitalize' }}>
+                        {task.status?.replace('_', ' ') || 'Pending'}
+                      </span>
+                    </div>
+                  );
+                })
+              ) : (
+                <div style={{ color: '#64748b', fontSize: '0.9rem', padding: '1rem 0' }}>
+                  No tasks have been created by delegated super admins yet.
+                </div>
+              )}
+            </div>
+
+            <a 
+              href="#" 
+              className="sa-view-all-link" 
+              style={{ color: '#7c3aed' }}
+              onClick={(e) => { e.preventDefault(); navigate('/super-admin/tasks?delegatedAdminOnly=true'); }}
+            >
+              View all tasks by other Super Admins &rarr;
+            </a>
+          </div>
+        )}
       </div>
 
       {/* BOTTOM ROW */}
