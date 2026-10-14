@@ -55,6 +55,31 @@ const NaacDashboardPage: React.FC = () => {
   // Chart label display mode: 'short' (Super Admin Short Code), 'full' (Full Department Name)
   const [chartLabelMode, setChartLabelMode] = useState<'short' | 'full'>('short');
 
+  // Chart department filter & direct navigation ref
+  const [selectedChartDept, setSelectedChartDept] = useState<string>('all');
+  const chartSectionRef = useRef<HTMLDivElement>(null);
+
+  const handleSelectDeptAndJumpToChart = (deptValue: string) => {
+    setSelectedChartDept(deptValue);
+    setTimeout(() => {
+      chartSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
+  };
+
+  const getFilteredChartData = () => {
+    if (selectedChartDept === 'active') {
+      return data.filter(d => d.totalTasksGiven > 0);
+    }
+    if (selectedChartDept === 'top10') {
+      return [...data].sort((a, b) => (b.completionRate || 0) - (a.completionRate || 0)).slice(0, 10);
+    }
+    if (selectedChartDept !== 'all') {
+      const match = data.filter(d => d.department.toLowerCase() === selectedChartDept.toLowerCase());
+      return match.length > 0 ? match : data;
+    }
+    return data;
+  };
+
   // Unified Export Dropdown States
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isDeptExportMenuOpen, setIsDeptExportMenuOpen] = useState(false);
@@ -140,6 +165,31 @@ const NaacDashboardPage: React.FC = () => {
             <p>Comprehensive university-wide performance, department rankings & ratings.</p>
           </div>
           <div className="naac-header-actions">
+            {/* Direct dropdown that goes directly to chart */}
+            <div className="naac-header-jump-dropdown-wrapper">
+              <div className="naac-jump-control" title="Select department and go directly to chart">
+                <BarChart3 size={15} className="naac-jump-icon" />
+                <select 
+                  className="naac-header-chart-select"
+                  value={selectedChartDept}
+                  onChange={(e) => handleSelectDeptAndJumpToChart(e.target.value)}
+                >
+                  <option value="" disabled>Go directly to Chart...</option>
+                  <option value="all">📊 View All Departments in Chart</option>
+                  <option value="active">🔥 View Active Departments ({activeDeptsCount})</option>
+                  <option value="top10">🏆 View Top 10 Departments</option>
+                  <optgroup label="Directly Go to Department:">
+                    {data.map(d => (
+                      <option key={d.department} value={d.department}>
+                        {d.department} {d.code ? `(${d.code})` : ''} - ${d.totalTasksGiven} tasks
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+                <ChevronDown size={14} className="naac-jump-chevron" />
+              </div>
+            </div>
+
             <div className="naac-export-dropdown-wrapper" ref={exportMenuRef}>
               <button 
                 className="naac-unified-export-btn"
@@ -330,14 +380,39 @@ const NaacDashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Chart Section */}
-        <div className="naac-section-card">
+        {/* Chart Section - Shifted from X-Axis to Y-Axis (Horizontal Bar Chart) */}
+        <div className="naac-section-card" ref={chartSectionRef} id="naac-chart-section">
           <div className="section-header-flex" style={{ flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
             <div>
-              <h3 className="section-title">Task Progression & Completion Rate</h3>
-              <p className="section-subtitle">Comparison across university departments & schools</p>
+              <h3 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <BarChart3 size={20} color="#021c3b" /> Task Progression &amp; Completion Rate
+              </h3>
+              <p className="section-subtitle">Comparison across university departments &amp; schools (Department on Y-Axis, Tasks on X-Axis)</p>
             </div>
             <div className="naac-chart-header-controls">
+              {/* Department Filter Dropdown */}
+              <div className="naac-chart-filter-wrapper">
+                <Building2 size={14} className="naac-filter-icon" />
+                <select 
+                  className="naac-chart-filter-select"
+                  value={selectedChartDept}
+                  onChange={(e) => setSelectedChartDept(e.target.value)}
+                  title="Filter departments in chart"
+                >
+                  <option value="all">All Departments ({data.length})</option>
+                  <option value="active">Active Only ({activeDeptsCount})</option>
+                  <option value="top10">Top 10 Departments</option>
+                  <optgroup label="Single Department:">
+                    {data.map(d => (
+                      <option key={d.department} value={d.department}>
+                        {d.department} {d.code ? `(${d.code})` : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+                <ChevronDown size={13} className="naac-chart-chevron" />
+              </div>
+
               {/* Legend */}
               <div className="naac-chart-legend-group">
                 <span className="naac-legend-item">
@@ -351,15 +426,15 @@ const NaacDashboardPage: React.FC = () => {
                 </span>
               </div>
 
-              {/* X-Axis Label Toggles */}
+              {/* Y-Axis Label Toggles */}
               <div className="naac-axis-control-wrapper">
-                <span className="naac-toggle-lbl">X-Axis:</span>
+                <span className="naac-toggle-lbl">Y-Axis:</span>
                 <div className="naac-label-toggle-group">
                   <button 
                     type="button"
                     className={`naac-toggle-btn ${chartLabelMode === 'short' ? 'active' : ''}`}
                     onClick={() => setChartLabelMode('short')}
-                    title="Display Department Short Code set by Super Admin"
+                    title="Display Department Short Code on Y-Axis"
                   >
                     Short Code
                   </button>
@@ -367,7 +442,7 @@ const NaacDashboardPage: React.FC = () => {
                     type="button"
                     className={`naac-toggle-btn ${chartLabelMode === 'full' ? 'active' : ''}`}
                     onClick={() => setChartLabelMode('full')}
-                    title="Display Full Department Name set by Super Admin"
+                    title="Display Full Department Name on Y-Axis"
                   >
                     Full Name
                   </button>
@@ -376,49 +451,74 @@ const NaacDashboardPage: React.FC = () => {
             </div>
           </div>
           
-          <div style={{ width: '100%', height: chartLabelMode === 'full' ? 390 : 360, marginTop: '20px' }}>
-            <ResponsiveContainer>
-              <BarChart
-                data={data}
-                margin={{ top: 20, right: 15, left: -15, bottom: chartLabelMode === 'full' ? 35 : 15 }}
-                barGap={4}
-                barSize={18}
-              >
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e9ecef" />
-                <XAxis 
-                  dataKey="department" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  interval={0}
-                  tickFormatter={getChartTickLabel}
-                  tick={{ 
-                    fontSize: chartLabelMode === 'full' ? 9.5 : 10.5, 
-                    fill: '#475569', 
-                    fontWeight: 600 
+          {(() => {
+            const filteredChartData = getFilteredChartData();
+            const rowHeight = chartLabelMode === 'full' ? 42 : 36;
+            const dynamicHeight = Math.max(340, filteredChartData.length * rowHeight + 50);
+
+            return (
+              <div className="naac-chart-outer-container">
+                <div 
+                  className="naac-chart-scroll-wrapper"
+                  style={{ 
+                    width: '100%', 
+                    maxHeight: filteredChartData.length > 12 ? '650px' : 'none', 
+                    overflowY: filteredChartData.length > 12 ? 'auto' : 'visible',
+                    overflowX: 'hidden',
+                    marginTop: '20px'
                   }}
-                  dy={chartLabelMode === 'full' ? 14 : 10}
-                />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fontSize: 11, fill: '#6c757d' }}
-                />
-                <Tooltip 
-                  cursor={{fill: '#f8f9fa'}}
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                  labelFormatter={(label: any) => {
-                    const deptName = String(label || '');
-                    const item = data.find(d => d.department.toLowerCase() === deptName.toLowerCase());
-                    const code = item?.code?.trim();
-                    return code ? `${deptName} (${code})` : deptName;
-                  }}
-                />
-                <Bar dataKey="totalTasksCompleted" name="Completed" fill="#021c3b" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="totalTasksInReview" name="In Progress" fill="#5c728a" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="totalTasksPending" name="Pending" fill="#dadddf" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+                >
+                  <div style={{ width: '100%', height: dynamicHeight, minHeight: 340 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        layout="vertical"
+                        data={filteredChartData}
+                        margin={{ top: 15, right: 30, left: 10, bottom: 15 }}
+                        barGap={3}
+                        barSize={14}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} vertical={true} stroke="#e9ecef" />
+                        <XAxis 
+                          type="number"
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{ fontSize: 11, fill: '#64748b' }}
+                          allowDecimals={false}
+                        />
+                        <YAxis 
+                          type="category"
+                          dataKey="department" 
+                          axisLine={false} 
+                          tickLine={false} 
+                          interval={0}
+                          width={chartLabelMode === 'full' ? 240 : 130}
+                          tickFormatter={getChartTickLabel}
+                          tick={{ 
+                            fontSize: chartLabelMode === 'full' ? 10.5 : 11, 
+                            fill: '#1e293b', 
+                            fontWeight: 600 
+                          }}
+                        />
+                        <Tooltip 
+                          cursor={{ fill: '#f1f5f9' }}
+                          contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+                          labelFormatter={(label: any) => {
+                            const deptName = String(label || '');
+                            const item = data.find(d => d.department.toLowerCase() === deptName.toLowerCase());
+                            const code = item?.code?.trim();
+                            return code ? `${deptName} (${code})` : deptName;
+                          }}
+                        />
+                        <Bar dataKey="totalTasksCompleted" name="Completed" fill="#021c3b" radius={[0, 4, 4, 0]} />
+                        <Bar dataKey="totalTasksInReview" name="In Progress" fill="#5c728a" radius={[0, 4, 4, 0]} />
+                        <Bar dataKey="totalTasksPending" name="Pending" fill="#dadddf" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Departmental Breakdown List */}

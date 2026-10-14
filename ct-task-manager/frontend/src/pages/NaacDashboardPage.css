@@ -1705,3 +1705,124 @@
   }
 }
 
+
+
+/* ─── Direct Dropdown to Chart ─── */
+.naac-header-jump-dropdown-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.naac-jump-control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0 2rem 0 2.2rem;
+  height: 38px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.naac-jump-control:hover,
+.naac-jump-control:focus-within {
+  border-color: #0f172a;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+}
+
+.naac-jump-icon {
+  position: absolute;
+  left: 0.75rem;
+  color: #2563eb;
+  pointer-events: none;
+}
+
+.naac-header-chart-select {
+  border: none;
+  background: transparent;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #1e293b;
+  cursor: pointer;
+  outline: none;
+  padding: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  font-family: inherit;
+  max-width: 220px;
+}
+
+.naac-jump-chevron {
+  position: absolute;
+  right: 0.7rem;
+  color: #64748b;
+  pointer-events: none;
+}
+
+/* In-Chart Department Filter Dropdown */
+.naac-chart-filter-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0 1.8rem 0 2rem;
+  height: 32px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.naac-filter-icon {
+  position: absolute;
+  left: 0.65rem;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.naac-chart-filter-select {
+  border: none;
+  background: transparent;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  font-family: inherit;
+  max-width: 190px;
+}
+
+.naac-chart-chevron {
+  position: absolute;
+  right: 0.55rem;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+/* Chart Scroll Container */
+.naac-chart-scroll-wrapper {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f8fafc;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.naac-chart-scroll-wrapper::-webkit-scrollbar {
+  width: 6px;
+}
+
+.naac-chart-scroll-wrapper::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+
+.naac-chart-scroll-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.naac-chart-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

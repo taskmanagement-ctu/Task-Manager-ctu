@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ChevronDown, Paperclip, FileText, Star, Building2, MessageSquare, Video, Plus, Check, X } from 'lucide-react';
+import { Search, ChevronDown, Paperclip, FileText, Star, Building2, MessageSquare, Video, Plus, Check, X, Layers, ArrowLeft, ExternalLink, Trash2 } from 'lucide-react';
 import { api } from '../services/api';
 import { calculateUrgency, getUrgencyColor, getUrgencyLabel } from '../utils/taskUrgency';
+import ConfirmDeleteModal from './ConfirmDeleteModal';
 import './TaskModal.css';
 
 // Auto-compress image files to ~500KB max
@@ -51,8 +52,10 @@ const compressFiles = async (files: File[]): Promise<File[]> => {
 };
 
 // Date format helper
-const formatDateTimeDDMMYYYY = (dateString: string) => {
+const formatDateTimeDDMMYYYY = (dateString?: string | Date) => {
+  if (!dateString) return '—';
   const d = new Date(dateString);
+  if (isNaN(d.getTime())) return '—';
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
@@ -166,6 +169,7 @@ const AttachmentList: React.FC<{ fileIds: string[]; title: string }> = ({ fileId
           })
         )}
       </div>
+
     </div>
   );
 };
@@ -192,9 +196,10 @@ const TaskModal: React.FC<TaskModalProps> = ({
   onOpenChat 
 }) => {
   const [task, setTask] = useState<any>(initialTask);
+  const [parentMainTask, setParentMainTask] = useState<any>(!initialTask.isSubtask ? initialTask : null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [subtasks, setSubtasks] = useState<any[]>([]);
+  const [subtasks, setSubtasks] = useState<any[]>(initialTask.subtasks || []);
   
   // Edit mode
   const [isEditing, setIsEditing] = useState(false);
@@ -298,10 +303,19 @@ const TaskModal: React.FC<TaskModalProps> = ({
   const [isRejecting, setIsRejecting] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
 
+  const resolveUserName = (userObj: any) => {
+    if (!userObj) return '';
+    if (userObj.universityId === '24051' || userObj.email === 'vc@ctuniversity.in' || userObj.name?.toLowerCase().includes('nitin')) {
+      return "Vice Chancellor's Office";
+    }
+    return userObj.name || '';
+  };
+
   const formatName = (userObj: any) => {
     if (!userObj) return <span style={{ color: '#94a3b8' }}>Unassigned</span>;
     const isMe = userObj._id === currentUser.id || userObj.id === currentUser.id;
-    const name = isMe ? 'me' : userObj.name;
+    const resolved = resolveUserName(userObj);
+    const name = isMe ? (resolved === "Vice Chancellor's Office" ? "me (Vice Chancellor's Office)" : 'me') : resolved;
     const staffId = userObj.universityId || 'N/A';
     const dept = userObj.department ? ` • ${userObj.department}` : '';
     return <>{name} <span style={{ color: '#64748b', fontSize: '0.85rem' }}>(ID: {staffId}{dept})</span></>;
@@ -310,7 +324,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
   const formatNameString = (userObj: any) => {
     if (!userObj) return 'Unassigned';
     const isMe = userObj._id === currentUser.id || userObj.id === currentUser.id;
-    const name = isMe ? 'me' : userObj.name;
+    const resolved = resolveUserName(userObj);
+    const name = isMe ? (resolved === "Vice Chancellor's Office" ? "me (Vice Chancellor's Office)" : 'me') : resolved;
     const staffId = userObj.universityId ? ` (ID: ${userObj.universityId})` : '';
     const dept = userObj.department ? ` • ${userObj.department}` : '';
     return `${name}${staffId}${dept}`;
@@ -381,6 +396,9 @@ const TaskModal: React.FC<TaskModalProps> = ({
     setModalSubtaskSuccess('');
 
     if (initialTask && !initialTask.isSubtask) {
+      if (initialTask.subtasks && initialTask.subtasks.length > 0) {
+        setSubtasks(initialTask.subtasks);
+      }
       fetchSubtasks();
     }
   }, [initialTask]);
@@ -468,8 +486,33 @@ const TaskModal: React.FC<TaskModalProps> = ({
   const isCreator = Boolean(
     (task.createdBy?._id && (task.createdBy._id === currentUser.id || task.createdBy._id === currentUser._id)) ||
     (task.createdBy?.id && (task.createdBy.id === currentUser.id || task.createdBy.id === currentUser._id)) ||
-    (typeof task.createdBy === 'string' && (task.createdBy === currentUser.id || task.createdBy === currentUser._id))
+    (typeof task.createdBy === 'string' && (task.createdBy === currentUser.id || task.createdBy === currentUser._id)) ||
+    (task.createdBy?.universityId && currentUser?.universityId && task.createdBy.universityId === currentUser.universityId)
   );
+
+  const isSuperAdmin = currentUser?.role === 'super_admin';
+  const canDelete = isSuperAdmin || isCreator;
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
+
+  const handleDeleteTaskModal = () => {
+    if (!canDelete || loading) return;
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDeleteModal = async () => {
+    try {
+      setLoading(true);
+      await api.deleteTask(task._id);
+      setShowDeleteConfirm(false);
+      onClose();
+      onRefresh();
+    } catch (err: any) {
+      console.error('Failed to delete task', err);
+      alert(`Error deleting task: ${err.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const canRateOnApproval = currentUser.role === 'super_admin' || (currentUser.role === 'department_admin' && isCreator);
 
@@ -626,6 +669,28 @@ const TaskModal: React.FC<TaskModalProps> = ({
 
         {!isEditing ? (
           <>
+            {parentMainTask && task.isSubtask && (
+              <button
+                type="button"
+                onClick={() => setTask(parentMainTask)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  backgroundColor: '#ede9fe',
+                  color: '#6d28d9',
+                  border: '1px solid #ddd6fe',
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '6px',
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  marginBottom: '0.85rem'
+                }}
+              >
+                <ArrowLeft size={14} /> Back to Main Task #{parentMainTask.taskId} Deck
+              </button>
+            )}
             <div className="tm-top-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem', paddingRight: '2.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
               <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 700, color: '#0f172a', flex: 1, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <div>
@@ -646,6 +711,11 @@ const TaskModal: React.FC<TaskModalProps> = ({
                   {getUrgencyLabel(urgency)}
                 </span>
                 {task.isSubtask && <span style={{ fontSize: '0.7rem', backgroundColor: '#e2e8f0', color: '#475569', padding: '0.2rem 0.6rem', borderRadius: '4px', verticalAlign: 'middle' }}>SUBTASK</span>}
+                {!task.isSubtask && subtasks.length > 0 && (
+                  <span className="tm-deck-badge-pill" title={`Assembled Card Deck with ${subtasks.length} subtasks`}>
+                    <Layers size={12} /> Card Deck ({subtasks.length} Subtasks)
+                  </span>
+                )}
               </h2>
               <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                 {onOpenChat && (
@@ -675,6 +745,32 @@ const TaskModal: React.FC<TaskModalProps> = ({
                         {task.comments.length}
                       </span>
                     )}
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    type="button"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                      backgroundColor: "#fef2f2",
+                      color: "#b91c1c",
+                      border: "1px solid #fecaca",
+                      padding: "0.45rem 0.85rem",
+                      borderRadius: "8px",
+                      fontSize: "0.82rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      boxShadow: "0 1px 2px rgba(185, 28, 28, 0.08)",
+                      transition: "all 0.15s ease"
+                    }}
+                    onClick={handleDeleteTaskModal}
+                    title="Delete this task (Creator or Super Admin)"
+                    disabled={loading}
+                  >
+                    <Trash2 size={14} />
+                    <span>Delete Task</span>
                   </button>
                 )}
               </div>
@@ -708,6 +804,10 @@ const TaskModal: React.FC<TaskModalProps> = ({
               <div>
                 <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600, marginBottom: '0.25rem' }}>Deadline</div>
                 <div style={{ fontWeight: 500, color: '#0f172a' }}>{formatDateTimeDDMMYYYY(task.deadline)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600, marginBottom: '0.25rem' }}>Created Date</div>
+                <div style={{ fontWeight: 500, color: '#0f172a' }}>{formatDateTimeDDMMYYYY(task.createdAt)}</div>
               </div>
               <div>
                 <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600, marginBottom: '0.25rem' }}>Created By</div>
@@ -1389,16 +1489,93 @@ const TaskModal: React.FC<TaskModalProps> = ({
                 {subtasks.length === 0 ? (
                   <p style={{ color: '#888', fontStyle: 'italic' }}>No subtasks created yet.</p>
                 ) : (
-                  <div style={{ display: 'grid', gap: '0.75rem' }}>
+                  <div style={{ display: 'grid', gap: '0.85rem' }}>
                     {subtasks.map(st => (
-                      <div key={st._id} style={{ padding: '0.75rem', backgroundColor: '#f1f5f9', borderRadius: '6px', borderLeft: `3px solid ${st.status === 'approved' ? '#10b981' : st.status === 'rejected' ? '#ef4444' : '#3b82f6'}` }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                          <strong style={{ fontSize: '0.95rem' }}>#{st.taskId} - {st.title}</strong>
-                          <span style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>{st.status.replace(/_/g, ' ').toUpperCase()}</span>
+                      <div 
+                        key={st._id} 
+                        id={`subtask-card-${st._id}`}
+                        className="tm-subtask-deck-card"
+                        style={{ 
+                          padding: '1rem', 
+                          backgroundColor: '#ffffff', 
+                          borderRadius: '8px', 
+                          border: '1px solid #e2e8f0',
+                          borderLeft: `4px solid ${st.status === 'approved' ? '#10b981' : st.status === 'rejected' ? '#ef4444' : st.status === 'submitted_for_review' ? '#f59e0b' : '#3b82f6'}`,
+                          boxShadow: '0 2px 4px rgba(15, 23, 42, 0.04)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.5rem'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: 800, color: '#3b82f6', fontSize: '0.85rem' }}>#{st.taskId}</span>
+                            <strong style={{ fontSize: '0.98rem', color: '#0f172a' }}>{st.title}</strong>
+                          </div>
+                          <span className={`tm-status-pill status-${st.status}`} style={{ fontSize: '0.72rem', padding: '0.2rem 0.55rem', borderRadius: '12px', fontWeight: 600, textTransform: 'capitalize', backgroundColor: st.status === 'approved' ? '#dcfce7' : st.status === 'rejected' ? '#fee2e2' : '#e0e7ff', color: st.status === 'approved' ? '#166534' : st.status === 'rejected' ? '#991b1b' : '#3730a3' }}>
+                            {st.status?.replace(/_/g, ' ')}
+                          </span>
                         </div>
-                        <div style={{ fontSize: '0.85rem', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
-                          <span>Assigned: {formatNameString(st.delegatedTo || st.assignedTo)}</span>
-                          <span>Due: {formatDateTimeDDMMYYYY(st.deadline)}</span>
+
+                        {st.description && st.description !== st.title && (
+                          <p style={{ margin: 0, fontSize: '0.84rem', color: '#64748b', lineHeight: 1.4 }}>
+                            {st.description}
+                          </p>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem', color: '#475569', flexWrap: 'wrap', gap: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem', marginTop: '0.25rem' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                            👤 <strong>Assigned:</strong> {formatNameString(st.delegatedTo || st.assignedTo)}
+                          </span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                            📅 <strong>Due:</strong> {formatDateTimeDDMMYYYY(st.deadline)}
+                          </span>
+                          <div style={{ display: 'flex', gap: '0.4rem' }}>
+                            {onOpenChat && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenChat(st)}
+                                style={{
+                                  padding: '0.25rem 0.6rem',
+                                  backgroundColor: '#f1f5f9',
+                                  border: '1px solid #cbd5e1',
+                                  borderRadius: '6px',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.3rem'
+                                }}
+                                title="Chat regarding this subtask"
+                              >
+                                <MessageSquare size={12} /> Chat
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setParentMainTask(task);
+                                setTask(st);
+                              }}
+                              style={{
+                                padding: '0.25rem 0.6rem',
+                                backgroundColor: '#021c3b',
+                                color: '#ffffff',
+                                border: 'none',
+                                borderRadius: '6px',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.3rem'
+                              }}
+                              title="View full details and manage this subtask"
+                            >
+                              <ExternalLink size={12} /> View Details
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1457,6 +1634,17 @@ const TaskModal: React.FC<TaskModalProps> = ({
           </div>
         )}
       </div>
+
+      {/* In-App Verification Modal to Delete Task */}
+      <ConfirmDeleteModal 
+        isOpen={showDeleteConfirm}
+        taskId={task.taskId}
+        taskTitle={task.title}
+        subtaskCount={subtasks?.length || 0}
+        isDeleting={loading}
+        onConfirm={handleConfirmDeleteModal}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </div>
   );
 };

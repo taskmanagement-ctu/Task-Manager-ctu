@@ -15,7 +15,8 @@ import {
   Filter,
   ChevronDown,
   ArrowUp,
-  ShieldAlert
+  ShieldAlert,
+  Layers
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -317,47 +318,72 @@ const SuperAdminPage = () => {
             </div>
 
             <div className="sa-review-list">
-              {delegatedAdminTasks.length > 0 ? (
-                delegatedAdminTasks.map(task => {
+              {(() => {
+                const parentIds = new Set(delegatedAdminTasks.filter((t: any) => !t.isSubtask).map((t: any) => (t._id || t.id)?.toString()));
+                const assembledDelegatedTasks = delegatedAdminTasks.filter((t: any) => {
+                  if (!t.isSubtask) return true;
+                  const pId = (t.parentTaskId?._id || t.parentTaskId)?.toString();
+                  return !parentIds.has(pId);
+                });
+
+                if (assembledDelegatedTasks.length === 0) {
+                  return (
+                    <div style={{ color: '#64748b', fontSize: '0.9rem', padding: '1rem 0' }}>
+                      No tasks have been created by delegated super admins yet.
+                    </div>
+                  );
+                }
+
+                return assembledDelegatedTasks.map(task => {
                   const urgency = calculateUrgency(task);
                   const cardStyle = getUrgencyCardStyle(urgency);
                   const urgencyColor = getUrgencyColor(urgency);
+                  const subCount = task.subtasks?.length || task.subtaskCount || 0;
+                  const isDeck = !task.isSubtask && subCount > 0;
 
                   return (
-                    <div 
-                      key={task._id} 
-                      className="sa-review-item" 
-                      style={{ backgroundColor: cardStyle.backgroundColor, borderLeft: '4px solid #7c3aed', cursor: 'pointer' }}
-                      onClick={() => handleTaskClick(task)}
-                    >
-                      <div className="sa-review-info">
-                        <div className="sa-review-item-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
-                          <span style={{ color: '#7c3aed', fontWeight: 700 }}>#{task.taskId || ''}</span>
-                          <span>{task.title}</span>
+                    <div key={task._id} className={`sa-deck-container ${isDeck ? 'is-deck' : ''}`}>
+                      {isDeck && (
+                        <>
+                          <div className="sa-deck-layer-2" />
+                          <div className="sa-deck-layer-1" />
+                        </>
+                      )}
+                      <div 
+                        className={`sa-review-item ${isDeck ? 'sa-deck-item' : ''}`} 
+                        style={{ backgroundColor: cardStyle.backgroundColor, borderLeft: '4px solid #7c3aed', cursor: 'pointer' }}
+                        onClick={() => handleTaskClick(task)}
+                      >
+                        <div className="sa-review-info">
+                          <div className="sa-review-item-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, flexWrap: 'wrap' }}>
+                            <span style={{ color: '#7c3aed', fontWeight: 700 }}>#{task.taskId || ''}</span>
+                            <span>{task.title}</span>
+                            {isDeck && (
+                              <span className="sa-deck-pill" title={`Assembled Card Deck with ${subCount} subtasks stacked backward`}>
+                                <Layers size={11} /> {subCount} Subtasks Deck
+                              </span>
+                            )}
+                          </div>
+                          <div className="sa-review-meta" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.35rem' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', color: '#5b21b6', fontWeight: 600 }}>
+                              <ShieldAlert size={13} /> Created by: {task.createdBy?.name || 'Delegated Admin'} ({task.createdBy?.universityId})
+                            </span>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                              <UsersIcon size={13} /> Assigned to: {task.assignedTo?.name || 'Unassigned'} {task.assignedTo?.universityId ? `(${task.assignedTo.universityId})` : ''} {task.assignedTo?.department ? `• ${task.assignedTo.department}` : ''}
+                            </span>
+                            <span style={{ color: urgencyColor, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                              <Clock size={13} /> Due: {new Date(task.deadline).toLocaleDateString()}
+                            </span>
+                          </div>
                         </div>
-                        <div className="sa-review-meta" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.35rem' }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', color: '#5b21b6', fontWeight: 600 }}>
-                            <ShieldAlert size={13} /> Created by: {task.createdBy?.name || 'Delegated Admin'} ({task.createdBy?.universityId})
-                          </span>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                            <UsersIcon size={13} /> Assigned to: {task.assignedTo?.name || 'Unassigned'} {task.assignedTo?.universityId ? `(${task.assignedTo.universityId})` : ''} {task.assignedTo?.department ? `• ${task.assignedTo.department}` : ''}
-                          </span>
-                          <span style={{ color: urgencyColor, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                            <Clock size={13} /> Due: {new Date(task.deadline).toLocaleDateString()}
-                          </span>
-                        </div>
+                        <span className="sa-badge-inprogress" style={{ background: '#f5f3ff', color: '#6d28d9', border: '1px solid #ddd6fe', textTransform: 'capitalize' }}>
+                          {task.status?.replace('_', ' ') || 'Pending'}
+                        </span>
                       </div>
-                      <span className="sa-badge-inprogress" style={{ background: '#f5f3ff', color: '#6d28d9', border: '1px solid #ddd6fe', textTransform: 'capitalize' }}>
-                        {task.status?.replace('_', ' ') || 'Pending'}
-                      </span>
                     </div>
                   );
-                })
-              ) : (
-                <div style={{ color: '#64748b', fontSize: '0.9rem', padding: '1rem 0' }}>
-                  No tasks have been created by delegated super admins yet.
-                </div>
-              )}
+                });
+              })()}
             </div>
 
             <a 
@@ -523,7 +549,7 @@ const SuperAdminPage = () => {
                           <div className="sa-assignee-avatar">
                             {task.assignedTo?.name ? task.assignedTo.name.charAt(0) : '?'}
                           </div>
-                          <span className="sa-assignee-id">{task.assignedTo?.name || 'Unassigned'}</span>
+                          <span className="sa-assignee-id">{task.assignedTo?.name || 'Unassigned'} {task.assignedTo?.universityId ? `(${task.assignedTo.universityId})` : ''}</span>
                         </div>
                       </td>
                       <td><span className={`sa-status-badge ${getStatusBadgeClass(task.status)}`}>{task.status.replace(/_/g, ' ')}</span></td>

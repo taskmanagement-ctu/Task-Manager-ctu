@@ -771,7 +771,8 @@ export const sendTaskAssignedEmail = async (
   assignedByName: string,
   assignedByRole: string,
   deadline: Date | string,
-  description?: string
+  description?: string,
+  assignedByEmail?: string
 ) => {
   if (!toEmail) return;
 
@@ -783,14 +784,27 @@ export const sendTaskAssignedEmail = async (
       })
     : 'Not specified';
 
-  const roleLabel =
-    assignedByRole === 'super_admin'
+  const isVcOffice = (
+    assignedByEmail?.toLowerCase() === 'vc@ctuniversity.in' ||
+    assignedByName?.toLowerCase().includes('vice chancellor') ||
+    assignedByName?.toLowerCase().includes('nitin')
+  );
+
+  const senderDisplayName = isVcOffice 
+    ? "Vice Chancellor's Office" 
+    : (assignedByName || 'CT University TaskDesk');
+
+  const senderEmailAddress = assignedByEmail || (isVcOffice ? 'vc@ctuniversity.in' : (process.env.EMAIL_USER || 'taskmanagement@ctuniversity.in'));
+
+  const roleLabel = isVcOffice
+    ? "Vice Chancellor's Office"
+    : (assignedByRole === 'super_admin'
       ? 'Super Administrator'
       : assignedByRole === 'department_admin'
       ? 'Department Administrator'
-      : 'Colleague';
+      : 'Colleague');
 
-  const subject = `New Task Assigned: [Task #${taskId || ''}] ${taskTitle} - CT University TaskDesk`;
+  const subject = `New Task Assigned by ${senderDisplayName}: [Task #${taskId || ''}] ${taskTitle} - CT University TaskDesk`;
   const appUrl = process.env.FRONTEND_URL || 'https://taskdesk.ctuniversity.in';
   const taskUrl = `${appUrl}/tasks`;
 
@@ -837,7 +851,7 @@ export const sendTaskAssignedEmail = async (
           <div class="badge">New Task Assigned</div>
           <div class="greeting">Hello, ${recipientName || 'Colleague'}!</div>
           <div class="desc">
-            You have been assigned a new task by <strong>${assignedByName}</strong> (${roleLabel}). Please review the task details below:
+            You have been assigned a new task by <strong>${senderDisplayName}</strong> (${roleLabel}). Please review the task details below:
           </div>
           <div class="task-card">
             <div class="task-title">
@@ -845,7 +859,7 @@ export const sendTaskAssignedEmail = async (
             </div>
             <div class="info-row">
               <span class="info-label">Assigned By:</span>
-              <span class="info-value">${assignedByName}</span>
+              <span class="info-value">${senderDisplayName} &lt;${senderEmailAddress}&gt;</span>
             </div>
             <div class="info-row">
               <span class="info-label">Due Date:</span>
@@ -870,7 +884,8 @@ export const sendTaskAssignedEmail = async (
 
   try {
     return await transporter.sendMail({
-      from: `"CT University TaskDesk" <${process.env.EMAIL_USER || 'taskmanagement@ctuniversity.in'}>`,
+      from: `"${senderDisplayName}" <${senderEmailAddress}>`,
+      replyTo: `"${senderDisplayName}" <${senderEmailAddress}>`,
       to: toEmail,
       subject,
       html,

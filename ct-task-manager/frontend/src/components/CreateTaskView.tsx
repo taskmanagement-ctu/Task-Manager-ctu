@@ -115,11 +115,10 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
   ]);
   const [activeTab, setActiveTab] = useState(0);
 
-  // Video formats (.mp4, .mov, .avi, .mkv, .webm) now supported alongside documents and images
+  // Standard document, sheet, slide, and image formats
   const availableExtensions = [
     '.pdf', '.docx', '.xlsx', '.pptx', '.csv', 
     '.jpg', '.png', 
-    '.mp4', '.mov', '.avi', '.mkv', '.webm', 
     '.zip'
   ];
 
@@ -447,10 +446,19 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
 
   const selectedTask = mainTasks.find(mt => mt._id === parentTaskId);
 
+  const getDisplayName = (u: any) => {
+    if (!u) return 'Unassigned';
+    if (u.universityId === '24051' || u.email === 'vc@ctuniversity.in' || u.name?.toLowerCase().includes('nitin')) {
+      return "Vice Chancellor's Office";
+    }
+    return u.name;
+  };
+
   const formatNameString = (userObj: any) => {
     if (!userObj) return 'Unassigned';
     const isMe = currentUser && (userObj._id === currentUser.id || userObj.id === currentUser.id);
-    const name = isMe ? 'me' : userObj.name;
+    const rawName = getDisplayName(userObj);
+    const name = isMe ? (rawName === "Vice Chancellor's Office" ? "me (Vice Chancellor's Office)" : 'me') : rawName;
     const staffId = userObj.universityId ? ` (ID: ${userObj.universityId})` : '';
     const dept = userObj.isSuperAdminTeamMember ? ' • Super Admin Team' : (userObj.department ? ` • ${userObj.department}` : '');
     return `${name}${staffId}${dept}`;
@@ -695,7 +703,7 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
                     <div className="ct-selected-chips-container">
                       {(isChipsExpanded ? selectedAssignees : selectedAssignees.slice(0, 2)).map(u => (
                         <span key={u._id || u.id} className="ct-selected-chip" title={formatNameString(u)} onClick={(e) => e.stopPropagation()}>
-                          <span className="ct-chip-name">{currentUser && ((u._id || u.id) === currentUser.id || (u._id || u.id) === currentUser._id) ? 'me' : u.name}</span>
+                          <span className="ct-chip-name">{currentUser && ((u._id || u.id) === currentUser.id || (u._id || u.id) === currentUser._id) ? (getDisplayName(u) === "Vice Chancellor's Office" ? "me (Vice Chancellor's Office)" : 'me') : getDisplayName(u)}</span>
                           {u.universityId && <span className="ct-chip-id">({u.universityId})</span>}
                           <button
                             type="button"
@@ -874,7 +882,7 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
                             />
                             <div className="ct-assignee-info">
                               <div className="ct-assignee-primary">
-                                <span className="ct-assignee-name">{currentUser && (userId === currentUser.id || userId === currentUser._id) ? 'me' : a.name}</span>
+                                <span className="ct-assignee-name">{currentUser && (userId === currentUser.id || userId === currentUser._id) ? (getDisplayName(a) === "Vice Chancellor's Office" ? "me (Vice Chancellor's Office)" : 'me') : getDisplayName(a)}</span>
                                 {a.isSuperAdminTeamMember && (
                                   <span className="ct-role-tag" style={{ background: '#eff6ff', color: '#2563eb', borderColor: '#bfdbfe' }}>
                                     Team
@@ -1098,7 +1106,7 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
                             <div className="ct-selected-chips-container">
                               {(isInlineChipsExpanded ? selectedInlineAssignees : selectedInlineAssignees.slice(0, 2)).map(u => (
                                 <span key={u._id || u.id} className="ct-selected-chip" title={formatNameString(u)} onClick={(e) => e.stopPropagation()}>
-                                  <span className="ct-chip-name">{currentUser && ((u._id || u.id) === currentUser.id || (u._id || u.id) === currentUser._id) ? 'me' : u.name}</span>
+                                  <span className="ct-chip-name">{currentUser && ((u._id || u.id) === currentUser.id || (u._id || u.id) === currentUser._id) ? (getDisplayName(u) === "Vice Chancellor's Office" ? "me (Vice Chancellor's Office)" : 'me') : getDisplayName(u)}</span>
                                   {u.universityId && <span className="ct-chip-id">({u.universityId})</span>}
                                   <button
                                     type="button"
@@ -1276,7 +1284,7 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
                                     />
                                     <div className="ct-assignee-info">
                                       <div className="ct-assignee-primary">
-                                        <span className="ct-assignee-name">{currentUser && (userId === currentUser.id || userId === currentUser._id) ? 'me' : a.name}</span>
+                                        <span className="ct-assignee-name">{currentUser && (userId === currentUser.id || userId === currentUser._id) ? (getDisplayName(a) === "Vice Chancellor's Office" ? "me (Vice Chancellor's Office)" : 'me') : getDisplayName(a)}</span>
                                         {a.isSuperAdminTeamMember && <span className="ct-role-tag team">Team</span>}
                                         {a.role?.includes('admin') && <span className="ct-role-tag admin">Admin</span>}
                                         {a.role === 'staff' && <span className="ct-role-tag staff">Staff</span>}

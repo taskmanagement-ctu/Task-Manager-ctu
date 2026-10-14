@@ -429,9 +429,9 @@ const UserManagementPage: React.FC = () => {
           <div className="um-governance-header">
             <div className="um-governance-title-row">
               <div className="um-governance-title-icon">
-                <Crown size={18} />
+                <Crown size={20} />
               </div>
-              <div>
+              <div className="um-governance-title-text">
                 <h2 className="um-governance-title">Institutional Governance &amp; Super Administrators</h2>
                 <p className="um-governance-subtitle">
                   {authUser?.universityId === '10001' 
@@ -440,9 +440,10 @@ const UserManagementPage: React.FC = () => {
                 </p>
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <div className="um-governance-actions">
               <div className="um-governance-tag">
-                {superAdminList.length} Active {superAdminList.length === 1 ? 'Super Admin' : 'Super Admins'}
+                <Users size={13} />
+                <span>{superAdminList.length} Active {superAdminList.length === 1 ? 'Super Admin' : 'Super Admins'}</span>
               </div>
               <button
                 type="button"
@@ -460,20 +461,33 @@ const UserManagementPage: React.FC = () => {
             {/* Primary Super Admin Card */}
             {superAdminList.filter(sa => sa.universityId === '10001').map(sa => (
               <div key={sa.id || sa.universityId} className="um-gov-admin-box primary">
-                <div className="um-gov-admin-avatar primary" title="Root Super Administrator">
-                  👑
-                </div>
-                <div className="um-gov-admin-info">
-                  <div className="um-gov-admin-name">
-                    <span>{sa.name}</span>
-                    {authUser?.universityId === '10001' && (
-                      <span style={{ fontSize: '0.72rem', color: '#b45309', fontWeight: 700 }}>(You)</span>
-                    )}
+                <div className="um-gov-card-header">
+                  <div className="um-gov-admin-avatar primary" title="Root Super Administrator">
+                    <Crown size={20} />
                   </div>
-                  <div className="um-gov-admin-meta">
-                    <span className="um-gov-admin-tag-primary">Permanent Root</span>
-                    <span>• ID: <strong>{sa.universityId}</strong></span>
-                    <span>• {sa.email}</span>
+                  <div className="um-gov-identity">
+                    <div className="um-gov-name-row">
+                      <span className="um-gov-name" title={sa.name}>{sa.name}</span>
+                      {authUser?.universityId === '10001' && (
+                        <span className="um-gov-you-badge">You</span>
+                      )}
+                    </div>
+                    <div className="um-gov-role-row">
+                      <span className="um-gov-admin-tag-primary">
+                        <Crown size={11} /> Permanent Root
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="um-gov-card-footer">
+                  <div className="um-gov-info-chip id-chip" title={`Employee ID: ${sa.universityId}`}>
+                    <span className="um-gov-chip-label">ID:</span>
+                    <strong>{sa.universityId}</strong>
+                  </div>
+                  <div className="um-gov-info-chip email-chip" title={sa.email}>
+                    <Mail size={12} className="um-gov-chip-icon" />
+                    <span className="um-gov-chip-email">{sa.email}</span>
                   </div>
                 </div>
               </div>
@@ -482,34 +496,48 @@ const UserManagementPage: React.FC = () => {
             {/* Delegated Super Admins Cards */}
             {superAdminList.filter(sa => sa.universityId !== '10001').length > 0 ? (
               superAdminList.filter(sa => sa.universityId !== '10001').map(sa => (
-                <div key={sa.id || sa.universityId} className="um-gov-admin-box">
-                  <div className="um-gov-admin-avatar delegated" title="Delegated Super Administrator">
-                    <ShieldAlert size={18} />
-                  </div>
-                  <div className="um-gov-admin-info">
-                    <div className="um-gov-admin-name">
-                      <span>{sa.name}</span>
-                      {authUser?.universityId === sa.universityId && (
-                        <span style={{ fontSize: '0.72rem', color: '#4f46e5', fontWeight: 700 }}>(You)</span>
-                      )}
+                <div key={sa.id || sa.universityId} className="um-gov-admin-box delegated">
+                  <div className="um-gov-card-header">
+                    <div className="um-gov-admin-avatar delegated" title="Delegated Super Administrator">
+                      <ShieldAlert size={20} />
                     </div>
-                    <div className="um-gov-admin-meta">
-                      <span className="um-gov-admin-tag-delegated">Delegated Super Admin</span>
-                      <span>• ID: <strong>{sa.universityId}</strong></span>
-                      <span>• {sa.email}</span>
+                    <div className="um-gov-identity">
+                      <div className="um-gov-name-row">
+                        <span className="um-gov-name" title={sa.name}>{sa.name}</span>
+                        {authUser?.universityId === sa.universityId && (
+                          <span className="um-gov-you-badge">You</span>
+                        )}
+                      </div>
+                      <div className="um-gov-role-row">
+                        <span className="um-gov-admin-tag-delegated">
+                          <ShieldAlert size={11} /> Delegated Super Admin
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="um-gov-locate-btn"
+                      onClick={() => {
+                        setSearch(sa.universityId);
+                        setPage(1);
+                      }}
+                      title="Find in directory"
+                    >
+                      <Search size={12} />
+                      <span>Locate</span>
+                    </button>
+                  </div>
+
+                  <div className="um-gov-card-footer">
+                    <div className="um-gov-info-chip id-chip" title={`Employee ID: ${sa.universityId}`}>
+                      <span className="um-gov-chip-label">ID:</span>
+                      <strong>{sa.universityId}</strong>
+                    </div>
+                    <div className="um-gov-info-chip email-chip" title={sa.email}>
+                      <Mail size={12} className="um-gov-chip-icon" />
+                      <span className="um-gov-chip-email">{sa.email}</span>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="um-gov-locate-btn"
-                    onClick={() => {
-                      setSearch(sa.universityId);
-                      setPage(1);
-                    }}
-                    title="Find in list"
-                  >
-                    Locate
-                  </button>
                 </div>
               ))
             ) : (

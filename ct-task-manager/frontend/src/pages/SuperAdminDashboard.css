@@ -236,6 +236,77 @@
   box-shadow: 0 1px 2px rgba(0,0,0,0.02);
 }
 
+/* ─── List View Card Deck Effect ─────────────────────────────────── */
+.sa-deck-container {
+  position: relative;
+  width: 100%;
+  margin-bottom: 0.65rem;
+  transition: all 0.25s ease;
+}
+
+.sa-deck-container.is-deck {
+  padding-top: 6px;
+  padding-right: 6px;
+}
+
+.sa-deck-layer-2 {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 10px;
+  bottom: 10px;
+  background: #ede9fe;
+  border: 1px solid #ddd6fe;
+  border-radius: 8px;
+  z-index: 1;
+  transition: transform 0.2s ease;
+  pointer-events: none;
+}
+
+.sa-deck-layer-1 {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  left: 5px;
+  bottom: 5px;
+  background: #f5f3ff;
+  border: 1px solid #e0e7ff;
+  border-radius: 8px;
+  z-index: 2;
+  transition: transform 0.2s ease;
+  pointer-events: none;
+}
+
+.sa-deck-container.is-deck:hover .sa-deck-layer-2 {
+  transform: translate(4px, -3px);
+  border-color: #c4b5fd;
+}
+
+.sa-deck-container.is-deck:hover .sa-deck-layer-1 {
+  transform: translate(2px, -1.5px);
+  border-color: #c4b5fd;
+}
+
+.sa-deck-item {
+  position: relative;
+  z-index: 3;
+}
+
+.sa-deck-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background-color: #ede9fe;
+  color: #6d28d9;
+  border: 1px solid #ddd6fe;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
 .sa-review-item.border-yellow { border-left-color: #f59e0b; }
 .sa-review-item.border-green { border-left-color: #10b981; }
 

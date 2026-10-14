@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, CheckCircle2, CornerDownRight, MessageSquare, ChevronDown, ChevronUp, ExternalLink, Plus, X, Check, Loader2, ListTree } from 'lucide-react';
+import { Calendar, Clock, CheckCircle2, CornerDownRight, MessageSquare, ChevronDown, ChevronUp, ExternalLink, Plus, X, Check, Loader2, ListTree, Layers, Trash2 } from 'lucide-react';
 import { api } from '../services/api';
 import { calculateUrgency, getUrgencyCardStyle, getUrgencyLabel, getUrgencyColor } from '../utils/taskUrgency';
+import ConfirmDeleteModal from './ConfirmDeleteModal';
 import './TaskCard.css';
 
 interface TaskCardProps {
@@ -13,6 +14,7 @@ interface TaskCardProps {
   forceExpanded?: boolean | null;
   availableAssignees?: any[];
   onSubtaskCreated?: () => void;
+  onTaskDeleted?: () => void;
 }
 
 const formatToLocalDateTimeInput = (dateString?: string | Date) => {
@@ -36,15 +38,22 @@ const TaskCard: React.FC<TaskCardProps> = ({
   onOpenChat,
   forceExpanded,
   availableAssignees = [],
-  onSubtaskCreated
+  onSubtaskCreated,
+  onTaskDeleted
 }) => {
   const [progress, setProgress] = useState<any>(null);
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
   // Subtasks downwards drawer state
   const [isSubtasksOpen, setIsSubtasksOpen] = useState<boolean>(false);
-  const [subtasksList, setSubtasksList] = useState<any[]>([]);
+  const [subtasksList, setSubtasksList] = useState<any[]>(task.subtasks || []);
   const [loadingSubtasks, setLoadingSubtasks] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (task.subtasks && task.subtasks.length > 0) {
+      setSubtasksList(task.subtasks);
+    }
+  }, [task.subtasks]);
 
   // Inline subtask creation state
   const [isAddingSubtask, setIsAddingSubtask] = useState<boolean>(false);
@@ -56,6 +65,40 @@ const TaskCard: React.FC<TaskCardProps> = ({
   const [subtaskError, setSubtaskError] = useState<string>('');
   const [subtaskSuccess, setSubtaskSuccess] = useState<string>('');
   const [internalAssignees, setInternalAssignees] = useState<any[]>(availableAssignees);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
+
+  // Permission: Task Creator or Super Admin (10001 or delegated)
+  const creatorId = task.createdBy?._id || task.createdBy?.id || (typeof task.createdBy === 'string' ? task.createdBy : null);
+  const currentUserId = currentUser?.id || currentUser?._id;
+  const isCreator = Boolean(
+    (creatorId && currentUserId && creatorId.toString() === currentUserId.toString()) ||
+    (task.createdBy?.universityId && currentUser?.universityId && task.createdBy.universityId === currentUser.universityId)
+  );
+  const isSuperAdmin = currentUser?.role === 'super_admin';
+  const canDelete = isSuperAdmin || isCreator;
+
+  const handleDeleteTask = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!canDelete || isDeleting) return;
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      setIsDeleting(true);
+      await api.deleteTask(task._id);
+      setShowDeleteConfirm(false);
+      if (onTaskDeleted) {
+        onTaskDeleted();
+      }
+    } catch (err: any) {
+      console.error('Failed to delete task', err);
+      alert(`Error deleting task: ${err.message || 'Unknown error'}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   useEffect(() => {
     if (availableAssignees && availableAssignees.length > 0) {
@@ -204,6 +247,10 @@ const TaskCard: React.FC<TaskCardProps> = ({
     currentUser?.role === 'department_admin'
   );
   
+  // Card Deck detection
+  const subtaskCount = (task.subtasks?.length ?? 0) || task.subtaskCount || progress?.total || 0;
+  const hasDeck = !task.isSubtask && subtaskCount > 0;
+  
   // Calculate urgency from deadline (frozen at submission/completion if submitted/completed)
   const urgency = calculateUrgency(task);
   const cardStyle = getUrgencyCardStyle(urgency);
@@ -231,8 +278,10 @@ const TaskCard: React.FC<TaskCardProps> = ({
   }
 
   // Format date to dd/mm/yyyy
-  const formatDateDDMMYYYY = (dateString: string) => {
+  const formatDateDDMMYYYY = (dateString?: string | Date) => {
+    if (!dateString) return '—';
     const d = new Date(dateString);
+    if (isNaN(d.getTime())) return '—';
     const day = String(d.getDate()).padStart(2, '0');
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const year = d.getFullYear();
@@ -281,7 +330,6 @@ const TaskCard: React.FC<TaskCardProps> = ({
   };
 
   const commentCount = task.comments?.length || 0;
-  const currentUserId = currentUser?._id || currentUser?.id;
   const hasUnread = Boolean(
     task.comments &&
     task.comments.length > 0 &&
@@ -290,8 +338,6 @@ const TaskCard: React.FC<TaskCardProps> = ({
       return !c.readBy.some((uid: any) => (uid?._id || uid)?.toString() === currentUserId?.toString());
     })
   );
-
-  const isSuperAdmin = currentUser?.role === 'super_admin';
   const showDelegated = Boolean(task.delegatedTo?.name && !isSuperAdmin);
   const displayAssignee = showDelegated ? task.delegatedTo : task.assignedTo;
 
@@ -306,20 +352,34 @@ const TaskCard: React.FC<TaskCardProps> = ({
   };
 
   return (
-    <div 
-      className={`tc-card ${isExpanded ? 'tc-is-expanded' : 'tc-is-collapsed'}`} 
-      style={cardStyle} 
-      onClick={handleCardClick}
-    >
-      {/* ── Header ── */}
-      <div className="tc-header">
-        <div className="tc-type">
-          {task.isSubtask ? (
-            <><CornerDownRight size={13} /> SUBTASK #{task.taskId}</>
-          ) : (
-            <span style={{ fontWeight: 800 }}>#{task.taskId}</span>
-          )}
-        </div>
+    <div className={`tc-deck-container ${hasDeck ? 'is-deck' : ''}`}>
+      {hasDeck && (
+        <>
+          <div className="tc-deck-layer-2" />
+          <div className="tc-deck-layer-1" />
+        </>
+      )}
+      <div 
+        className={`tc-card ${isExpanded ? 'tc-is-expanded' : 'tc-is-collapsed'} ${hasDeck ? 'tc-has-deck' : ''}`} 
+        style={cardStyle} 
+        onClick={handleCardClick}
+      >
+        {/* ── Header ── */}
+        <div className="tc-header">
+          <div className="tc-type">
+            {task.isSubtask ? (
+              <><CornerDownRight size={13} /> SUBTASK #{task.taskId}</>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: 800 }}>#{task.taskId}</span>
+                {hasDeck && (
+                  <span className="tc-deck-tag" title={`Card Deck with ${subtaskCount} subtasks stacked backward`}>
+                    <Layers size={11} /> DECK ({subtaskCount})
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         
         <div className="tc-header-right">
           <div className="tc-urgency-badge">
@@ -366,7 +426,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
           fontWeight: 600
         }}>
           <span>🛡️</span>
-          <span>Created &amp; Assigned by Super Admin: <strong>{task.createdBy.name}</strong> ({task.createdBy.universityId})</span>
+          <span>Created &amp; Assigned by Super Admin: <strong>{(task.createdBy?.universityId === '24051' || task.createdBy?.email === 'vc@ctuniversity.in' || task.createdBy?.name?.toLowerCase().includes('nitin')) ? "Vice Chancellor's Office" : task.createdBy.name}</strong> ({task.createdBy.universityId})</span>
         </div>
       )}
 
@@ -390,15 +450,15 @@ const TaskCard: React.FC<TaskCardProps> = ({
           <div className="tc-subtasks-section" onClick={(e) => e.stopPropagation()}>
             <div className="tc-subtasks-header">
               <div className="tc-subtasks-header-left">
-                {progress && progress.total > 0 ? (
+                {subtaskCount > 0 ? (
                   <button 
                     type="button"
                     className={`tc-subtasks-toggle-btn ${isSubtasksOpen ? 'open' : ''}`}
                     onClick={handleToggleSubtasks}
-                    title={isSubtasksOpen ? "Hide subtasks" : "View subtasks downwards"}
+                    title={isSubtasksOpen ? "Hide deck subtasks" : "View subtasks downwards in deck"}
                   >
-                    <ListTree size={13} />
-                    <span>Subtasks ({progress.approved}/{progress.total})</span>
+                    <Layers size={13} />
+                    <span>Deck ({progress?.approved || 0}/{subtaskCount})</span>
                     {isSubtasksOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                   </button>
                 ) : (
@@ -585,9 +645,14 @@ const TaskCard: React.FC<TaskCardProps> = ({
                             </span>
                           </div>
                           <div className="tc-subtask-item-meta">
-                            <span className="tc-subtask-item-assignee">
-                              👤 {stAssignee ? (stAssignee.name || stAssignee.universityId) : 'Unassigned'}
+                            <span className="tc-subtask-item-assignee" title={stAssignee ? `${stAssignee.name || ''} (${stAssignee.universityId || 'No ID'})` : 'Unassigned'}>
+                              👤 {stAssignee ? `${stAssignee.name || ''} ${stAssignee.universityId ? `(${stAssignee.universityId})` : ''}`.trim() || 'Unassigned' : 'Unassigned'}
                             </span>
+                            {st.createdAt && (
+                              <span className="tc-subtask-item-date" title={`Created: ${new Date(st.createdAt).toLocaleString()}`}>
+                                🕒 {formatDateDDMMYYYY(st.createdAt)}
+                              </span>
+                            )}
                             <span className="tc-subtask-item-date">
                               📅 {formatDateDDMMYYYY(st.deadline)}
                             </span>
@@ -624,8 +689,11 @@ const TaskCard: React.FC<TaskCardProps> = ({
       {/* ── Footer / Meta Row ── */}
       <div className="tc-footer">
         <div className="tc-footer-left">
-          {/* Assignee */}
-          <div className="tc-assignee">
+          {/* Assignee (Name & ID) */}
+          <div 
+            className="tc-assignee" 
+            title={displayAssignee ? `${displayAssignee.name || 'User'} (${displayAssignee.universityId || 'No ID'})` : 'Unassigned'}
+          >
             <div className="tc-avatar">
               {displayAssignee?.name ? (
                 <img 
@@ -635,10 +703,25 @@ const TaskCard: React.FC<TaskCardProps> = ({
                 />
               ) : '?'}
             </div>
-            <span className="tc-assignee-id">
-              {displayAssignee ? (displayAssignee.universityId || displayAssignee.name?.substring(0, 10)) : 'Unassigned'}
-            </span>
+            <div className="tc-assignee-info">
+              <span className="tc-assignee-name">
+                {(displayAssignee?.universityId === '24051' || displayAssignee?.email === 'vc@ctuniversity.in' || displayAssignee?.name?.toLowerCase().includes('nitin')) ? "Vice Chancellor's Office" : (displayAssignee?.name || 'Unassigned')}
+              </span>
+              {displayAssignee?.universityId && (
+                <span className="tc-assignee-id">
+                  ({displayAssignee.universityId})
+                </span>
+              )}
+            </div>
           </div>
+
+          {/* Task Created Date */}
+          {task.createdAt && (
+            <div className="tc-created-date" title={`Created on: ${new Date(task.createdAt).toLocaleString()}`}>
+              <Clock size={12} />
+              <span>Created: {formatDateDDMMYYYY(task.createdAt)}</span>
+            </div>
+          )}
           
           {/* Deadline */}
           <div className={`tc-deadline ${isOverdue ? 'overdue' : ''}`} style={{ color: isOverdue ? '#dc2626' : urgencyColor }}>
@@ -654,6 +737,20 @@ const TaskCard: React.FC<TaskCardProps> = ({
         </div>
 
         <div className="tc-footer-right">
+          {/* Delete Button (Creator or Super Admin) */}
+          {canDelete && (
+            <button 
+              type="button"
+              className="tc-delete-btn"
+              title="Delete this task (Creator or Super Admin)"
+              onClick={handleDeleteTask}
+              disabled={isDeleting}
+            >
+              {isDeleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+              <span>{isDeleting ? 'Deleting...' : 'Delete'}</span>
+            </button>
+          )}
+
           {/* Chat Button */}
           {onOpenChat && (
             <button 
@@ -689,6 +786,18 @@ const TaskCard: React.FC<TaskCardProps> = ({
         </div>
       </div>
     </div>
+
+    {/* In-App Verification Modal to Delete Task */}
+    <ConfirmDeleteModal 
+      isOpen={showDeleteConfirm}
+      taskId={task.taskId}
+      taskTitle={task.title}
+      subtaskCount={task.subtasks?.length || subtasksList.length || 0}
+      isDeleting={isDeleting}
+      onConfirm={handleConfirmDelete}
+      onCancel={() => setShowDeleteConfirm(false)}
+    />
+  </div>
   );
 };
 

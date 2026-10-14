@@ -283,9 +283,11 @@ const TaskChatDrawer: React.FC<TaskChatDrawerProps> = ({
     counterpart = isMeCreator ? assignee : creator;
   }
 
-  const counterpartName = counterpart?.name || (showTabs 
-    ? (activeTab === 'super_admin' ? 'Super Admin' : (task.delegatedTo?.name || 'Staff Member'))
-    : (isMeCreator ? (task.delegatedTo?.name || 'Department Admin') : 'Super Admin'));
+  const counterpartName = (counterpart?.universityId === '24051' || counterpart?.email === 'vc@ctuniversity.in' || counterpart?.name?.toLowerCase().includes('nitin'))
+    ? "Vice Chancellor's Office"
+    : (counterpart?.name || (showTabs 
+        ? (activeTab === 'super_admin' ? 'Super Admin' : (task.delegatedTo?.name || 'Staff Member'))
+        : (isMeCreator ? (task.delegatedTo?.name || 'Department Admin') : 'Super Admin')));
   const counterpartId = counterpart?.universityId || counterpart?.employeeId || '';
   const counterpartRole = counterpart?.role || (showTabs
     ? (activeTab === 'super_admin' ? 'super_admin' : 'staff')
