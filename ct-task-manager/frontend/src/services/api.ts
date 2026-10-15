@@ -876,6 +876,13 @@ export const api = {
       method: 'PATCH',
       body: formData || new FormData(),
     });
+  },
+
+  uploadTaskAttachments: async (id: string, formData: FormData): Promise<{ success: boolean; message: string; data?: any }> => {
+    return fetchWithAuth(`/api/tasks/${id}/attachments`, {
+      method: 'POST',
+      body: formData,
+    });
   },
 
   getNaacReport: async (): Promise<{ success: boolean; data: any }> => {

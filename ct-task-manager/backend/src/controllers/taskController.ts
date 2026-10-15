@@ -585,10 +585,12 @@ export const updateTask = async (req: Request, res: Response) => {
     // Authorization
     if (user.role === 'staff') {
       return res.status(403).json({ success: false, message: 'Forbidden. Staff cannot edit task content.' });
-    } else if (user.role === 'department_admin') {
-      if (task.createdBy.toString() !== user._id.toString()) {
-        return res.status(403).json({ success: false, message: 'Forbidden. Department Admin can only edit tasks they created.' });
-      }
+    } else if (task.createdBy.toString() !== user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Forbidden. You cannot edit a task that you did not create.' });
+
+
+
+
     }
 
     // Only allow editing when status is pending
@@ -860,7 +862,12 @@ export const submitReview = async (req: Request, res: Response) => {
 
     // Validate required extensions if any
     if (task.requiredCompletionExtensions && task.requiredCompletionExtensions.length > 0) {
-      const files = req.files as Express.Multer.File[] || [];
+      const files = req.files as Express.Multer.File[] || [];
+      for (const file of files) {
+        if (file.size > 5 * 1024 * 1024) {
+          return res.status(400).json({ success: false, message: `File "${file.originalname}" exceeds the 5MB limit. Please select files smaller than 5MB.` });
+        }
+      }
       const fileExts = files.map(f => {
         const parts = f.originalname.split('.');
         return '.' + parts[parts.length - 1].toLowerCase();
@@ -884,6 +891,12 @@ export const submitReview = async (req: Request, res: Response) => {
     }
 
     // Handle File Uploads via GridFSBucket for completionAttachments
+    const uploadedReviewFiles = (req.files as Express.Multer.File[]) || [];
+    for (const file of uploadedReviewFiles) {
+      if (file.size > 5 * 1024 * 1024) {
+        return res.status(400).json({ success: false, message: `File "${file.originalname}" exceeds the 5MB limit. Please select files smaller than 5MB.` });
+      }
+    }
     const attachmentIds: mongoose.Types.ObjectId[] = [];
     if (req.files && Array.isArray(req.files) && req.files.length > 0) {
       const db = mongoose.connection.db;
@@ -1863,6 +1876,89 @@ export const deleteTask = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Internal server error while deleting task.',
+      error: error.message
+    });
+  }
+};
+ 
+// POST /api/tasks/:id/attachments
+// Allows assignee/staff/admin to upload deliverables/files (<5MB, any format)
+export const uploadTaskAttachments = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = req.user;
+
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: 'Invalid task ID format.' });
+    }
+
+    const task = await Task.findById(id);
+    if (!task) {
+      return res.status(404).json({ success: false, message: 'Task not found.' });
+    }
+
+    const files = (req.files as Express.Multer.File[]) || [];
+    if (files.length === 0) {
+      return res.status(400).json({ success: false, message: 'Please select at least one file to upload.' });
+    }
+
+    // Strict 5MB size limit check for each file
+    const MAX_FILE_SIZE = 5 * 1024 * 1024;
+    for (const file of files) {
+      if (file.size > MAX_FILE_SIZE) {
+        return res.status(400).json({
+          success: false,
+          message: `File "${file.originalname}" (${(file.size / (1024 * 1024)).toFixed(2)} MB) exceeds the 5MB limit. Please upload files under 5MB.`
+        });
+      }
+    }
+
+    // Upload files to GridFS
+    const attachmentIds: mongoose.Types.ObjectId[] = [];
+    const db = mongoose.connection.db;
+    if (db) {
+      const bucket = new mongoose.mongo.GridFSBucket(db, {
+        bucketName: 'attachments'
+      });
+
+      for (const file of files) {
+        await new Promise<void>((resolve, reject) => {
+          const uploadStream = bucket.openUploadStream(file.originalname, {
+            contentType: file.mimetype
+          });
+          uploadStream.end(file.buffer);
+          uploadStream.on('finish', () => {
+            attachmentIds.push(uploadStream.id as mongoose.Types.ObjectId);
+            resolve();
+          });
+          uploadStream.on('error', reject);
+        });
+      }
+    }
+
+    // Append to completionAttachments so they are visible under submitted documents/deliverables
+    task.completionAttachments = [...(task.completionAttachments || []), ...attachmentIds];
+    await task.save();
+
+    const populatedTask = await Task.findById(task._id)
+      .populate('createdBy', 'name email role universityId department')
+      .populate('assignedTo', 'name email role universityId department')
+      .populate('delegatedTo', 'name email role universityId department');
+
+    return res.status(200).json({
+      success: true,
+      message: `${files.length} file${files.length > 1 ? 's' : ''} uploaded successfully.`,
+      data: { task: populatedTask }
+    });
+  } catch (error: any) {
+    console.error('Error uploading task attachments:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to upload attachments.',
       error: error.message
     });
   }

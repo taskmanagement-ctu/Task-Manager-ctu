@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ChevronDown, Paperclip, FileText, Star, Building2, MessageSquare, Video, Plus, Check, X, Layers, ArrowLeft, ExternalLink, Trash2 } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, Paperclip, FileText, Star, Building2, MessageSquare, Video, Plus, Check, X, Layers, ArrowLeft, ExternalLink, Trash2, User, Clock, AlignLeft, FileSpreadsheet, Image as ImageIcon, File as FileIcon, Download, Loader2, CheckCircle2, Sparkles, FolderUp, AlertCircle } from 'lucide-react';
 import { api } from '../services/api';
 import { calculateUrgency, getUrgencyColor, getUrgencyLabel } from '../utils/taskUrgency';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
@@ -77,20 +77,67 @@ const formatToLocalDateTimeInput = (dateString?: string | Date) => {
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
-const isVideoFilename = (filename: string) => {
-  const ext = (filename || '').toLowerCase();
-  return ext.endsWith('.mp4') || ext.endsWith('.mov') || ext.endsWith('.webm') || ext.endsWith('.mkv') || ext.endsWith('.avi');
-};
-
 const EMPTY_ARRAY: any[] = [];
 
-const AttachmentList: React.FC<{ fileIds: string[]; title: string }> = ({ fileIds, title }) => {
+interface AttachmentListProps {
+  fileIds: string[];
+  title?: string;
+  hideCardWrap?: boolean;
+}
+
+const getFileInfo = (filename: string) => {
+  const ext = (filename || '').split('.').pop()?.toLowerCase() || '';
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext)) {
+    return { type: 'image', label: ext.toUpperCase(), color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' };
+  }
+  if (['mp4', 'mov', 'webm', 'mkv', 'avi'].includes(ext)) {
+    return { type: 'video', label: ext.toUpperCase(), color: '#9333ea', bg: '#faf5ff', border: '#f3e8ff' };
+  }
+  if (['pdf'].includes(ext)) {
+    return { type: 'pdf', label: 'PDF', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' };
+  }
+  if (['xls', 'xlsx', 'csv'].includes(ext)) {
+    return { type: 'sheet', label: ext.toUpperCase(), color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' };
+  }
+  if (['doc', 'docx', 'txt', 'rtf', 'odt'].includes(ext)) {
+    return { type: 'doc', label: ext.toUpperCase(), color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' };
+  }
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
+    return { type: 'archive', label: ext.toUpperCase(), color: '#d97706', bg: '#fffbeb', border: '#fde68a' };
+  }
+  return { type: 'other', label: ext ? ext.toUpperCase() : 'FILE', color: '#475569', bg: '#f8fafc', border: '#e2e8f0' };
+};
+
+const renderFileTypeIcon = (type: string, color: string) => {
+  switch (type) {
+    case 'image': return <ImageIcon size={16} color={color} />;
+    case 'video': return <Video size={16} color={color} />;
+    case 'pdf': return <FileText size={16} color={color} />;
+    case 'sheet': return <FileSpreadsheet size={16} color={color} />;
+    case 'doc': return <FileText size={16} color={color} />;
+    case 'archive': return <FolderUp size={16} color={color} />;
+    default: return <FileIcon size={16} color={color} />;
+  }
+};
+
+const formatFileSize = (bytes?: number) => {
+  if (!bytes || bytes === 0) return '0 KB';
+  const k = 1024;
+  if (bytes < k * 1024) {
+    return `${Math.round(bytes / k)} KB`;
+  }
+  return `${(bytes / (k * 1024)).toFixed(1)} MB`;
+};
+
+const AttachmentList: React.FC<AttachmentListProps> = ({ fileIds, title, hideCardWrap = false }) => {
   const [files, setFiles] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const fileIdsKey = Array.isArray(fileIds) ? fileIds.join(',') : '';
 
   useEffect(() => {
     let isMounted = true;
     const fetchFiles = async () => {
+      setLoading(true);
       try {
         const fetchedFiles = await Promise.all(
           (fileIds || []).map(async (id) => {
@@ -107,12 +154,15 @@ const AttachmentList: React.FC<{ fileIds: string[]; title: string }> = ({ fileId
         }
       } catch (err) {
         console.error(err);
+      } finally {
+        if (isMounted) setLoading(false);
       }
     };
     if (fileIds && fileIds.length > 0) {
       fetchFiles();
     } else if (isMounted) {
       setFiles([]);
+      setLoading(false);
     }
     return () => { isMounted = false; };
   }, [fileIdsKey]);
@@ -121,55 +171,89 @@ const AttachmentList: React.FC<{ fileIds: string[]; title: string }> = ({ fileId
 
   const apiUrl = import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : (import.meta.env.DEV ? 'http://localhost:5000' : '');
 
-  return (
-    <div style={{ margin: '1rem 0', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', width: '100%', boxSizing: 'border-box' }}>
-      <div style={{ fontSize: '0.75rem', color: '#475569', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-        <Paperclip size={14} />
-        {title}
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-        {files.length === 0 ? (
-          <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Loading files...</span>
-        ) : (
-          files.map((file, i) => {
-            const isVideo = isVideoFilename(file.filename);
-            return (
-              <a
-                key={file._id || i}
-                href={`${apiUrl}/api/files/${file._id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ 
-                  display: 'inline-flex', 
-                  alignItems: 'center', 
-                  gap: '0.6rem', 
-                  color: isVideo ? '#7c3aed' : '#2563eb', 
-                  textDecoration: 'none', 
-                  fontSize: '0.875rem', 
-                  backgroundColor: '#ffffff', 
-                  padding: '0.6rem 0.85rem', 
-                  borderRadius: '6px', 
-                  border: isVideo ? '1px solid #ddd6fe' : '1px solid #cbd5e1',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-                }}
-              >
-                {isVideo ? (
-                  <Video size={16} color="#7c3aed" style={{ flexShrink: 0 }} />
-                ) : (
-                  <FileText size={16} color="#3b82f6" style={{ flexShrink: 0 }} />
-                )}
-                <span style={{ fontWeight: 600, color: '#0f172a', wordBreak: 'break-all' }}>{file.filename}</span>
-                {isVideo && (
-                  <span style={{ fontSize: '0.68rem', fontWeight: 700, background: '#ede9fe', color: '#6d28d9', padding: '0.1rem 0.4rem', borderRadius: '4px', textTransform: 'uppercase' }}>Video</span>
-                )}
-                <span style={{ color: '#64748b', fontSize: '0.8rem', marginLeft: 'auto', flexShrink: 0, paddingLeft: '0.5rem' }}>({Math.round((file.length || 0) / 1024)} KB)</span>
-              </a>
-            );
-          })
-        )}
-      </div>
+  const content = (
+    <div className="tm-file-items-list">
+      {loading ? (
+        <div className="tm-file-loading-skeleton">
+          <Loader2 size={15} className="tm-spin" style={{ color: '#021c3b' }} />
+          <span>Loading attached files...</span>
+        </div>
+      ) : files.length === 0 ? (
+        <span style={{ color: '#94a3b8', fontSize: '0.82rem' }}>No file details available</span>
+      ) : (
+        files.map((file, i) => {
+          const info = getFileInfo(file.filename);
+          return (
+            <div key={file._id || i} className="tm-file-item-card">
+              <div className="tm-file-item-left">
+                <div 
+                  className="tm-file-type-icon-box"
+                  style={{ backgroundColor: info.bg, borderColor: info.border, color: info.color }}
+                >
+                  {renderFileTypeIcon(info.type, info.color)}
+                </div>
+                <div className="tm-file-info-col">
+                  <span className="tm-file-name" title={file.filename}>
+                    {file.filename}
+                  </span>
+                  <div className="tm-file-meta-row">
+                    <span className="tm-file-badge" style={{ color: info.color, backgroundColor: info.bg, borderColor: info.border }}>
+                      {info.label}
+                    </span>
+                    <span className="tm-file-size">
+                      {formatFileSize(file.length)}
+                    </span>
+                  </div>
+                </div>
+              </div>
 
+              <div className="tm-file-actions-row">
+                <a
+                  href={`${apiUrl}/api/files/${file._id}`}
+                  download={file.filename}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="tm-file-action-btn tm-file-download-btn"
+                  title="Download file directly"
+                >
+                  <Download size={13} />
+                  <span>Download</span>
+                </a>
+                <a
+                  href={`${apiUrl}/api/files/${file._id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="tm-file-action-btn tm-file-view-btn"
+                  title="Open file in new tab"
+                >
+                  <ExternalLink size={13} />
+                </a>
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+
+  if (hideCardWrap) {
+    return content;
+  }
+
+  return (
+    <div className="tm-attachments-card">
+      {title && (
+        <div className="tm-attachments-header">
+          <Paperclip size={14} className="tm-attachments-icon" />
+          <span>{title}</span>
+          {files.length > 0 && (
+            <span className="tm-attachments-count">{files.length}</span>
+          )}
+        </div>
+      )}
+      <div style={{ padding: '0.85rem 1rem' }}>
+        {content}
+      </div>
     </div>
   );
 };
@@ -200,6 +284,52 @@ const TaskModal: React.FC<TaskModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [subtasks, setSubtasks] = useState<any[]>(initialTask.subtasks || []);
+  
+  // Compact Metadata Details Toggle
+  const [showMoreDetails, setShowMoreDetails] = useState<boolean>(false);
+
+  // Assignee Direct Work File Upload (<5MB, Any format)
+  const [isUploadingWorkFile, setIsUploadingWorkFile] = useState(false);
+  const [workFileError, setWorkFileError] = useState('');
+  const [workFileSuccess, setWorkFileSuccess] = useState('');
+  const workFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleWorkFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const files = Array.from(e.target.files);
+    setWorkFileError('');
+    setWorkFileSuccess('');
+
+    // Strict 5MB limit check per file
+    const MAX_SIZE = 5 * 1024 * 1024;
+    const oversizedFiles = files.filter(f => f.size > MAX_SIZE);
+    if (oversizedFiles.length > 0) {
+      setWorkFileError(
+        `File "${oversizedFiles[0].name}" (${(oversizedFiles[0].size / (1024 * 1024)).toFixed(2)} MB) exceeds the 5MB limit. Please select files under 5MB.`
+      );
+      if (workFileInputRef.current) workFileInputRef.current.value = '';
+      return;
+    }
+
+    try {
+      setIsUploadingWorkFile(true);
+      const formData = new FormData();
+      files.forEach(f => formData.append('attachments', f));
+      const res = await api.uploadTaskAttachments(task._id, formData);
+      if (res.success) {
+        setWorkFileSuccess(`${files.length} file${files.length > 1 ? 's' : ''} sent successfully!`);
+        refreshTaskData();
+        setTimeout(() => setWorkFileSuccess(''), 4000);
+      } else {
+        setWorkFileError(res.message || 'Failed to upload files.');
+      }
+    } catch (err: any) {
+      setWorkFileError(err.message || 'Failed to upload files.');
+    } finally {
+      setIsUploadingWorkFile(false);
+      if (workFileInputRef.current) workFileInputRef.current.value = '';
+    }
+  };
   
   // Edit mode
   const [isEditing, setIsEditing] = useState(false);
@@ -467,12 +597,6 @@ const TaskModal: React.FC<TaskModalProps> = ({
   };
 
 
-  const canEdit = (currentUser.role === 'super_admin' || currentUser.role === 'department_admin') && 
-    task.status === 'pending';
-  
-  const canAssign = (currentUser.role === 'super_admin' || currentUser.role === 'department_admin') && 
-    task.status !== 'submitted_for_review' && task.status !== 'approved';
-  
   const currentUserId = currentUser.id || currentUser._id;
   const isAssignedStaff = currentUser.role === 'staff' && Boolean(
     (task.assignedTo && (task.assignedTo._id === currentUserId || task.assignedTo.id === currentUserId || task.assignedTo === currentUserId)) ||
@@ -491,6 +615,13 @@ const TaskModal: React.FC<TaskModalProps> = ({
   );
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
+
+  // Only the user who created the task can edit its details (while still pending)
+  const canEdit = isCreator && task.status === 'pending';
+  
+  const canAssign = (currentUser.role === 'super_admin' || currentUser.role === 'department_admin') && 
+    task.status !== 'submitted_for_review' && task.status !== 'approved';
+  
   const canDelete = isSuperAdmin || isCreator;
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
 
@@ -600,6 +731,14 @@ const TaskModal: React.FC<TaskModalProps> = ({
         }
       }
 
+      const MAX_SIZE = 5 * 1024 * 1024;
+      const oversized = reviewFiles.filter(f => f.size > MAX_SIZE);
+      if (oversized.length > 0) {
+        setFileError(`File "${oversized[0].name}" exceeds the 5MB limit. Please select files under 5MB.`);
+        setLoading(false);
+        return;
+      }
+
       let formData: FormData | undefined = undefined;
       if (reviewFiles.length > 0) {
         formData = new FormData();
@@ -692,31 +831,54 @@ const TaskModal: React.FC<TaskModalProps> = ({
               </button>
             )}
             <div className="tm-top-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem', paddingRight: '2.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-              <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 700, color: '#0f172a', flex: 1, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <div>
-                  <span style={{ color: '#64748b', marginRight: '0.5rem' }}>#{task.taskId}</span>
-                  {task.title}
-                </div>
-                <span style={{ 
-                  background: getUrgencyColor(urgency) + '20', 
-                  color: getUrgencyColor(urgency), 
-                  border: `1px solid ${getUrgencyColor(urgency)}40`, 
-                  padding: '0.15rem 0.5rem', 
-                  borderRadius: '4px', 
-                  fontSize: '0.7rem',
-                  textTransform: 'uppercase',
-                  fontWeight: 600,
-                  whiteSpace: 'nowrap'
-                }}>
-                  {getUrgencyLabel(urgency)}
-                </span>
-                {task.isSubtask && <span style={{ fontSize: '0.7rem', backgroundColor: '#e2e8f0', color: '#475569', padding: '0.2rem 0.6rem', borderRadius: '4px', verticalAlign: 'middle' }}>SUBTASK</span>}
-                {!task.isSubtask && subtasks.length > 0 && (
-                  <span className="tm-deck-badge-pill" title={`Assembled Card Deck with ${subtasks.length} subtasks`}>
-                    <Layers size={12} /> Card Deck ({subtasks.length} Subtasks)
+              <div style={{ flex: 1, minWidth: '240px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.45rem', flexWrap: 'wrap' }}>
+                  <span className="tm-task-id-tag">#{task.taskId}</span>
+                  
+                  {/* Priority / Urgency Badge */}
+                  <span style={{ 
+                    background: getUrgencyColor(urgency) + '20', 
+                    color: getUrgencyColor(urgency), 
+                    border: `1px solid ${getUrgencyColor(urgency)}40`, 
+                    padding: '0.18rem 0.55rem', 
+                    borderRadius: '6px', 
+                    fontSize: '0.72rem',
+                    textTransform: 'uppercase',
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {getUrgencyLabel(urgency)}
                   </span>
-                )}
-              </h2>
+
+                  {/* Status Badge in Header */}
+                  <span style={{ 
+                    display: 'inline-flex', 
+                    alignItems: 'center',
+                    padding: '0.18rem 0.6rem', 
+                    borderRadius: '6px', 
+                    fontSize: '0.72rem', 
+                    fontWeight: 700, 
+                    backgroundColor: statusStyle.bg, 
+                    color: statusStyle.color,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase'
+                  }}>
+                    {statusStyle.text}
+                  </span>
+
+                  {task.isSubtask && <span style={{ fontSize: '0.72rem', backgroundColor: '#e2e8f0', color: '#475569', padding: '0.18rem 0.55rem', borderRadius: '6px', fontWeight: 600 }}>SUBTASK</span>}
+                  {!task.isSubtask && subtasks.length > 0 && (
+                    <span className="tm-deck-badge-pill" title={`Assembled Card Deck with ${subtasks.length} subtasks`}>
+                      <Layers size={12} /> Card Deck ({subtasks.length} Subtasks)
+                    </span>
+                  )}
+                </div>
+
+                <h2 style={{ margin: '0.15rem 0 0 0', fontSize: '1.35rem', fontWeight: 700, color: '#0f172a', lineHeight: '1.35' }}>
+                  {task.title}
+                </h2>
+              </div>
               <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                 {onOpenChat && (
                   <button
@@ -782,9 +944,16 @@ const TaskModal: React.FC<TaskModalProps> = ({
               </div>
             )}
             
-            <p style={{ whiteSpace: 'pre-wrap', backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '8px', margin: '1rem 0', color: '#334155', lineHeight: '1.6', border: '1px solid #e2e8f0' }}>
-              {task.description}
-            </p>
+            {/* Task Description Section */}
+            <div className="tm-desc-container">
+              <div className="tm-desc-header">
+                <AlignLeft size={14} className="tm-desc-icon" />
+                <span>TASK DESCRIPTION</span>
+              </div>
+              <div className="tm-desc-body">
+                {task.description ? task.description : <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>No additional description provided.</span>}
+              </div>
+            </div>
 
             {task.attachments && task.attachments.length > 0 && (
                 <AttachmentList fileIds={task.attachments} title="Initial Attachments" />
@@ -796,111 +965,139 @@ const TaskModal: React.FC<TaskModalProps> = ({
               </div>
             )}
 
-            <div className="tm-meta-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem', padding: '1.25rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600, marginBottom: '0.25rem' }}>Status</div>
-                <span style={{ display: 'inline-block', padding: '0.25rem 0.75rem', borderRadius: '9999px', fontSize: '0.8rem', fontWeight: 600, backgroundColor: statusStyle.bg, color: statusStyle.color }}>{statusStyle.text}</span>
-              </div>
-              <div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600, marginBottom: '0.25rem' }}>Deadline</div>
-                <div style={{ fontWeight: 500, color: '#0f172a' }}>{formatDateTimeDDMMYYYY(task.deadline)}</div>
-              </div>
-              <div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600, marginBottom: '0.25rem' }}>Created Date</div>
-                <div style={{ fontWeight: 500, color: '#0f172a' }}>{formatDateTimeDDMMYYYY(task.createdAt)}</div>
-              </div>
-              <div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600, marginBottom: '0.25rem' }}>Created By</div>
-                <div style={{ fontWeight: 500, color: '#0f172a' }}>{formatName(task.createdBy)}</div>
-              </div>
-              {currentUser.role === 'super_admin' ? (
-                <div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600, marginBottom: '0.25rem' }}>Assigned To</div>
-                  <div style={{ fontWeight: 500, color: '#0f172a' }}>{formatName(task.assignedTo)}</div>
+            {/* Compact Metadata Summary Bar (Assigned By, Deadline + Details toggle) */}
+            <div className="tm-compact-summary-bar">
+              <div className="tm-summary-primary-row">
+                {/* Assigned By */}
+                <div className="tm-summary-item">
+                  <div className="tm-summary-label">
+                    <User size={13} className="tm-summary-icon" />
+                    <span>ASSIGNED BY</span>
+                  </div>
+                  <div className="tm-summary-val">{formatName(task.createdBy)}</div>
                 </div>
-              ) : (
-                <>
+
+                {/* Deadline */}
+                <div className="tm-summary-item">
+                  <div className="tm-summary-label">
+                    <Clock size={13} className="tm-summary-icon" />
+                    <span>DEADLINE</span>
+                  </div>
+                  <div className="tm-summary-val deadline-val">
+                    {formatDateTimeDDMMYYYY(task.deadline)}
+                  </div>
+                </div>
+
+                {/* Details Button */}
+                <div className="tm-summary-action">
+                  <button 
+                    type="button" 
+                    className={`tm-details-pill-btn ${showMoreDetails ? 'active' : ''}`}
+                    onClick={() => setShowMoreDetails(!showMoreDetails)}
+                    title={showMoreDetails ? "Hide full metadata" : "Show full metadata"}
+                  >
+                    <span>{showMoreDetails ? 'Hide Details' : 'Details'}</span>
+                    {showMoreDetails ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Collapsible Expanded Details */}
+              {showMoreDetails && (
+                <div className="tm-expanded-meta-grid">
                   <div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600, marginBottom: '0.25rem' }}>
-                      {task.delegatedTo ? 'Assigned Staff' : 'Assigned To'}
+                    <div className="tm-sub-label">Created Date</div>
+                    <div className="tm-sub-val">{formatDateTimeDDMMYYYY(task.createdAt)}</div>
+                  </div>
+
+                  {currentUser.role === 'super_admin' ? (
+                    <div>
+                      <div className="tm-sub-label">Assigned To</div>
+                      <div className="tm-sub-val">{formatName(task.assignedTo)}</div>
                     </div>
-                    <div style={{ fontWeight: 500, color: '#0f172a' }}>
-                      {task.delegatedTo ? formatName(task.delegatedTo) : formatName(task.assignedTo)}
+                  ) : (
+                    <>
+                      <div>
+                        <div className="tm-sub-label">
+                          {task.delegatedTo ? 'Assigned Staff' : 'Assigned To'}
+                        </div>
+                        <div className="tm-sub-val">
+                          {task.delegatedTo ? formatName(task.delegatedTo) : formatName(task.assignedTo)}
+                        </div>
+                      </div>
+                      
+                      {task.delegatedTo && (
+                        <div>
+                          <div className="tm-sub-label">Assigned Dept Admin</div>
+                          <div className="tm-sub-val">{formatName(task.assignedTo)}</div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  <div>
+                    <div className="tm-sub-label">Completion Date</div>
+                    <div className="tm-sub-val">
+                      {task.completedAt 
+                        ? formatDateTimeDDMMYYYY(task.completedAt) 
+                        : (task.status === 'completed' || task.status === 'approved' ? 'Completed' : 'Not completed yet')}
                     </div>
                   </div>
-                  
-                  {task.delegatedTo && (
-                    <div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600, marginBottom: '0.25rem' }}>Assigned Dept Admin</div>
-                      <div style={{ fontWeight: 500, color: '#0f172a' }}>{formatName(task.assignedTo)}</div>
+
+                  {task.requiredCompletionExtensions && task.requiredCompletionExtensions.length > 0 && (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <div className="tm-sub-label">Required Completion Formats</div>
+                      <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.2rem' }}>
+                        {task.requiredCompletionExtensions.map((ext: string) => (
+                          <span key={ext} style={{ fontSize: '0.75rem', backgroundColor: '#e2e8f0', padding: '0.15rem 0.45rem', borderRadius: '4px', color: '#475569', fontWeight: 600 }}>{ext}</span>
+                        ))}
+                      </div>
                     </div>
                   )}
-                </>
-              )}
-              
-              {/* Completion Date */}
-              <div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600, marginBottom: '0.25rem' }}>Completion Date</div>
-                <div style={{ fontWeight: 500, color: task.completedAt || task.status === 'completed' || task.status === 'approved' ? '#0f172a' : '#64748b' }}>
-                  {task.completedAt 
-                    ? formatDateTimeDDMMYYYY(task.completedAt) 
-                    : (task.status === 'completed' || task.status === 'approved' ? 'Completed' : 'Not completed yet')}
+
+                  {/* Completion Timeline Delta */}
+                  {(task.status === 'completed' || task.status === 'approved') && task.completedAt && (() => {
+                    const completedDate = new Date(task.completedAt);
+                    const deadlineDate = new Date(task.deadline);
+                    const diffTime = deadlineDate.getTime() - completedDate.getTime();
+                    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                    let timelineText = '';
+                    let timelineColor = '';
+                    let timelineIcon = '';
+                    if (diffDays > 0) {
+                      timelineText = `Completed ${diffDays} day${diffDays !== 1 ? 's' : ''} before deadline`;
+                      timelineColor = '#10b981';
+                      timelineIcon = '✅';
+                    } else if (diffDays < 0) {
+                      timelineText = `Completed ${Math.abs(diffDays)} day${Math.abs(diffDays) !== 1 ? 's' : ''} after deadline (overdue)`;
+                      timelineColor = '#ef4444';
+                      timelineIcon = '⚠️';
+                    } else {
+                      timelineText = 'Completed exactly on deadline';
+                      timelineColor = '#f59e0b';
+                      timelineIcon = '✅';
+                    }
+                    return (
+                      <div style={{ gridColumn: '1 / -1', marginTop: '0.25rem' }}>
+                        <div style={{ 
+                          display: 'inline-flex', 
+                          alignItems: 'center', 
+                          gap: '0.4rem',
+                          padding: '0.35rem 0.75rem', 
+                          borderRadius: '6px', 
+                          fontSize: '0.82rem', 
+                          fontWeight: 600,
+                          backgroundColor: timelineColor + '15',
+                          color: timelineColor,
+                          border: `1px solid ${timelineColor}30`
+                        }}>
+                          {timelineIcon} {timelineText}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
-              </div>
-              
-              {task.requiredCompletionExtensions && task.requiredCompletionExtensions.length > 0 && (
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600, marginBottom: '0.25rem' }}>Required Completion Formats</div>
-                  <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
-                    {task.requiredCompletionExtensions.map((ext: string) => (
-                      <span key={ext} style={{ fontSize: '0.75rem', backgroundColor: '#e2e8f0', padding: '0.1rem 0.4rem', borderRadius: '4px', color: '#475569' }}>{ext}</span>
-                    ))}
-                  </div>
-                </div>
               )}
-              
-              {/* Completion Timeline Delta Info */}
-              {(task.status === 'completed' || task.status === 'approved') && task.completedAt && (() => {
-                const completedDate = new Date(task.completedAt);
-                const deadlineDate = new Date(task.deadline);
-                const diffTime = deadlineDate.getTime() - completedDate.getTime();
-                const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-                let timelineText = '';
-                let timelineColor = '';
-                let timelineIcon = '';
-                if (diffDays > 0) {
-                  timelineText = `Completed ${diffDays} day${diffDays !== 1 ? 's' : ''} before deadline`;
-                  timelineColor = '#10b981';
-                  timelineIcon = '✅';
-                } else if (diffDays < 0) {
-                  timelineText = `Completed ${Math.abs(diffDays)} day${Math.abs(diffDays) !== 1 ? 's' : ''} after deadline (overdue)`;
-                  timelineColor = '#ef4444';
-                  timelineIcon = '⚠️';
-                } else {
-                  timelineText = 'Completed exactly on deadline';
-                  timelineColor = '#f59e0b';
-                  timelineIcon = '✅';
-                }
-                return (
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <div style={{ 
-                      display: 'inline-flex', 
-                      alignItems: 'center', 
-                      gap: '0.4rem',
-                      padding: '0.4rem 0.75rem', 
-                      borderRadius: '6px', 
-                      fontSize: '0.85rem', 
-                      fontWeight: 600,
-                      backgroundColor: timelineColor + '15',
-                      color: timelineColor,
-                      border: `1px solid ${timelineColor}30`
-                    }}>
-                      {timelineIcon} {timelineText}
-                    </div>
-                  </div>
-                );
-              })()}
-              
             </div>
 
             {/* Performance Rating & Feedback Banner on Rated Task */}
@@ -939,10 +1136,140 @@ const TaskModal: React.FC<TaskModalProps> = ({
               </div>
             )}
 
-            {/* Submitted Completion Documents (Proof of Work) */}
-            {task.completionAttachments && task.completionAttachments.length > 0 && (
-              <AttachmentList fileIds={task.completionAttachments} title="Submitted Documents" />
-            )}
+            {/* Assignee Deliverables & Work Files (Direct Upload <5MB, Any format) */}
+            <div className="tm-deliverables-card">
+              <div className="tm-deliverables-header">
+                <div className="tm-deliv-title-group">
+                  <div className="tm-deliv-header-icon-box">
+                    <FolderUp size={15} />
+                  </div>
+                  <div className="tm-deliv-title-wrap">
+                    <span className="tm-deliv-title">
+                      DELIVERABLES &amp; WORK FILES
+                    </span>
+                    {task.completionAttachments && task.completionAttachments.length > 0 && (
+                      <span className="tm-deliv-count-badge">
+                        {task.completionAttachments.length} {task.completionAttachments.length === 1 ? 'file' : 'files'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Upload File button for the person who got the task / assignee */}
+                {(canPerformStaffActions || isSuperAdmin || isCreator) && (
+                  <div className="tm-deliv-header-actions">
+                    <input 
+                      type="file" 
+                      multiple 
+                      ref={workFileInputRef} 
+                      style={{ display: 'none' }} 
+                      accept="*/*"
+                      onChange={handleWorkFileUpload} 
+                    />
+                    <button
+                      type="button"
+                      className="tm-upload-file-btn"
+                      onClick={() => workFileInputRef.current?.click()}
+                      disabled={isUploadingWorkFile || loading}
+                      title="Upload files in any format (max 5 MB each)"
+                    >
+                      {isUploadingWorkFile ? (
+                        <>
+                          <Loader2 size={13} className="tm-spin" />
+                          <span>Uploading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FolderUp size={13} />
+                          <span>Send / Attach File</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Specs & info pills */}
+              <div className="tm-deliv-specs-bar">
+                <span className="tm-deliv-spec-pill">
+                  <Sparkles size={11} className="tm-spec-sparkle" />
+                  <span>All formats accepted (PDF, Docs, Excel, Images, ZIP)</span>
+                </span>
+                <span className="tm-deliv-spec-pill">
+                  <CheckCircle2 size={11} className="tm-spec-check" />
+                  <span>Max 5 MB per file</span>
+                </span>
+              </div>
+
+              {workFileError && (
+                <div className="tm-file-alert error">
+                  <div className="tm-alert-content">
+                    <AlertCircle size={14} className="tm-alert-icon" />
+                    <span>{workFileError}</span>
+                  </div>
+                  <button type="button" onClick={() => setWorkFileError('')} aria-label="Dismiss">&times;</button>
+                </div>
+              )}
+              {workFileSuccess && (
+                <div className="tm-file-alert success">
+                  <div className="tm-alert-content">
+                    <CheckCircle2 size={14} className="tm-alert-icon" />
+                    <span>{workFileSuccess}</span>
+                  </div>
+                  <button type="button" onClick={() => setWorkFileSuccess('')} aria-label="Dismiss">&times;</button>
+                </div>
+              )}
+
+              {task.completionAttachments && task.completionAttachments.length > 0 ? (
+                <div className="tm-deliv-content-loaded">
+                  <AttachmentList fileIds={task.completionAttachments} hideCardWrap={true} />
+                  
+                  {(canPerformStaffActions || isSuperAdmin || isCreator) && (
+                    <div className="tm-deliv-add-more-row">
+                      <button
+                        type="button"
+                        className="tm-deliv-add-more-btn"
+                        onClick={() => workFileInputRef.current?.click()}
+                        disabled={isUploadingWorkFile || loading}
+                      >
+                        <Plus size={13} />
+                        <span>Add another file</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                (canPerformStaffActions || isSuperAdmin || isCreator) ? (
+                  <div 
+                    className="tm-deliv-empty-dropzone"
+                    onClick={() => workFileInputRef.current?.click()}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') workFileInputRef.current?.click(); }}
+                    title="Click here to upload files (max 5 MB each)"
+                  >
+                    <div className="tm-dropzone-icon-circle">
+                      <FolderUp size={22} />
+                    </div>
+                    <div className="tm-dropzone-title">
+                      No deliverables or work files uploaded yet
+                    </div>
+                    <div className="tm-dropzone-subtitle">
+                      Click here or use the button above to attach scripts, sheets, proofs, or documents
+                    </div>
+                    <span className="tm-dropzone-cta-badge">
+                      <Plus size={12} />
+                      <span>Choose Files to Upload</span>
+                    </span>
+                  </div>
+                ) : (
+                  <div className="tm-deliv-empty-readonly">
+                    <Paperclip size={16} className="tm-empty-ro-icon" />
+                    <span>No deliverables or work files uploaded yet.</span>
+                  </div>
+                )
+              )}
+            </div>
 
             {/* Rejection Feedback Box */}
             {isRejecting && (
@@ -1268,10 +1595,18 @@ const TaskModal: React.FC<TaskModalProps> = ({
                               multiple 
                               ref={reviewFileInputRef}
                               style={{ display: 'none' }}
-                              accept={task.requiredCompletionExtensions?.length ? task.requiredCompletionExtensions.join(',') : undefined}
+                              accept={task.requiredCompletionExtensions?.length ? task.requiredCompletionExtensions.join(',') : '*/*'}
                               onChange={async (e) => {
                                 if (e.target.files) {
                                   const selected = Array.from(e.target.files);
+                                  // Check 5MB limit
+                                  const MAX_SIZE = 5 * 1024 * 1024;
+                                  const oversized = selected.filter(f => f.size > MAX_SIZE);
+                                  if (oversized.length > 0) {
+                                    setFileError(`File "${oversized[0].name}" (${(oversized[0].size / (1024 * 1024)).toFixed(2)} MB) exceeds the 5MB limit. Please select files under 5MB.`);
+                                    if (reviewFileInputRef.current) reviewFileInputRef.current.value = '';
+                                    return;
+                                  }
                                   // Auto-compress images
                                   const compressed = await compressFiles(selected);
                                   if (task.requiredCompletionExtensions?.length) {
