@@ -511,7 +511,8 @@ export const getTaskById = async (req: Request, res: Response) => {
       .populate('delegatedTo', 'name role department universityId email')
       .populate('ratedBy', 'name role universityId')
       .populate('ratedUser', 'name role department universityId')
-      .populate('parentTaskId', 'taskId title');
+      .populate('parentTaskId', 'taskId title')
+      .populate('comments.sender', 'name role department universityId employeeId email');
       
     if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
 
@@ -1947,7 +1948,8 @@ export const uploadTaskAttachments = async (req: Request, res: Response) => {
     const populatedTask = await Task.findById(task._id)
       .populate('createdBy', 'name email role universityId department')
       .populate('assignedTo', 'name email role universityId department')
-      .populate('delegatedTo', 'name email role universityId department');
+      .populate('delegatedTo', 'name email role universityId department')
+      .populate('comments.sender', 'name role department universityId employeeId email');
 
     return res.status(200).json({
       success: true,

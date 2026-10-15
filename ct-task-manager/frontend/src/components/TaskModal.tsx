@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ChevronDown, ChevronUp, Paperclip, FileText, Star, Building2, MessageSquare, Video, Plus, Check, X, Layers, ArrowLeft, ExternalLink, Trash2, User, Clock, AlignLeft, FileSpreadsheet, Image as ImageIcon, File as FileIcon, Download, Loader2, CheckCircle2, Sparkles, FolderUp, AlertCircle } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, Paperclip, FileText, Star, Building2, MessageSquare, Video, Plus, Check, X, Layers, ArrowLeft, ExternalLink, Trash2, User, Clock, AlignLeft, FileSpreadsheet, Image as ImageIcon, File as FileIcon, Download, Loader2, CheckCircle2, FolderUp, AlertCircle, Send } from 'lucide-react';
 import { api } from '../services/api';
 import { calculateUrgency, getUrgencyColor, getUrgencyLabel } from '../utils/taskUrgency';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
@@ -330,6 +330,52 @@ const TaskModal: React.FC<TaskModalProps> = ({
       if (workFileInputRef.current) workFileInputRef.current.value = '';
     }
   };
+
+  // Inline Assignee Comments & Work Notes
+  const [taskComments, setTaskComments] = useState<any[]>(initialTask.comments || []);
+  const [newCommentText, setNewCommentText] = useState('');
+  const [isPostingComment, setIsPostingComment] = useState(false);
+  const [commentError, setCommentError] = useState('');
+
+  const fetchComments = async (taskIdToFetch?: string) => {
+    const tId = taskIdToFetch || task?._id;
+    if (!tId) return;
+    try {
+      const res = await api.getTaskComments(tId);
+      if (res.success && res.data) {
+        setTaskComments(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to load comments in TaskModal:', err);
+    }
+  };
+
+  const handleAddComment = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!newCommentText.trim() || isPostingComment) return;
+
+    try {
+      setIsPostingComment(true);
+      setCommentError('');
+      const channelToSend = (currentUser?.role === 'super_admin' ? 'super_admin' : currentUser?.role === 'staff' ? 'staff' : 'general');
+      const res = await api.addTaskComment(task._id, newCommentText.trim(), channelToSend);
+      if (res.success) {
+        setTaskComments(res.data || []);
+        setNewCommentText('');
+        setTask((prev: any) => ({
+          ...prev,
+          comments: res.data || []
+        }));
+        if (onRefresh) onRefresh();
+      } else {
+        setCommentError(res.message || 'Failed to post comment.');
+      }
+    } catch (err: any) {
+      setCommentError(err.message || 'Failed to post comment.');
+    } finally {
+      setIsPostingComment(false);
+    }
+  };
   
   // Edit mode
   const [isEditing, setIsEditing] = useState(false);
@@ -488,6 +534,9 @@ const TaskModal: React.FC<TaskModalProps> = ({
       const res = await api.getTaskById(task._id);
       if (res.success) {
         setTask(res.data.task);
+        if (res.data.task.comments) {
+          setTaskComments(res.data.task.comments);
+        }
       }
     } catch (err) {
       console.error("Failed to refresh task data:", err);
@@ -511,6 +560,12 @@ const TaskModal: React.FC<TaskModalProps> = ({
     setIsSubmittingReview(false);
     setReviewFiles([]);
     setFileError('');
+    setTaskComments(initialTask.comments || []);
+    setNewCommentText('');
+    setCommentError('');
+    if (initialTask?._id) {
+      fetchComments(initialTask._id);
+    }
     setEditData({
       title: initialTask.title,
       description: initialTask.description,
@@ -1136,27 +1191,29 @@ const TaskModal: React.FC<TaskModalProps> = ({
               </div>
             )}
 
-            {/* Assignee Deliverables & Work Files (Direct Upload <5MB, Any format) */}
+            {/* Assignee Deliverables & Work Files (Compact Direct Upload <5MB) & Inline Comments */}
             <div className="tm-deliverables-card">
+              {/* Deliverables Header */}
               <div className="tm-deliverables-header">
                 <div className="tm-deliv-title-group">
                   <div className="tm-deliv-header-icon-box">
-                    <FolderUp size={15} />
+                    <FolderUp size={14} />
                   </div>
-                  <div className="tm-deliv-title-wrap">
-                    <span className="tm-deliv-title">
-                      DELIVERABLES &amp; WORK FILES
+                  <span className="tm-deliv-title">
+                    DELIVERABLES &amp; WORK FILES
+                  </span>
+                  {task.completionAttachments && task.completionAttachments.length > 0 && (
+                    <span className="tm-deliv-count-badge">
+                      {task.completionAttachments.length} {task.completionAttachments.length === 1 ? 'file' : 'files'}
                     </span>
-                    {task.completionAttachments && task.completionAttachments.length > 0 && (
-                      <span className="tm-deliv-count-badge">
-                        {task.completionAttachments.length} {task.completionAttachments.length === 1 ? 'file' : 'files'}
-                      </span>
-                    )}
-                  </div>
+                  )}
+                  <span className="tm-deliv-spec-inline">
+                    Max 5 MB • Any format
+                  </span>
                 </div>
 
-                {/* Upload File button for the person who got the task / assignee */}
-                {(canPerformStaffActions || isSuperAdmin || isCreator) && (
+                {/* Upload File button */}
+                {(canPerformStaffActions || isSuperAdmin || isCreator || currentUser?.role === 'department_admin') && (
                   <div className="tm-deliv-header-actions">
                     <input 
                       type="file" 
@@ -1168,20 +1225,20 @@ const TaskModal: React.FC<TaskModalProps> = ({
                     />
                     <button
                       type="button"
-                      className="tm-upload-file-btn"
+                      className="tm-upload-file-btn tm-btn-compact"
                       onClick={() => workFileInputRef.current?.click()}
                       disabled={isUploadingWorkFile || loading}
                       title="Upload files in any format (max 5 MB each)"
                     >
                       {isUploadingWorkFile ? (
                         <>
-                          <Loader2 size={13} className="tm-spin" />
+                          <Loader2 size={12} className="tm-spin" />
                           <span>Uploading...</span>
                         </>
                       ) : (
                         <>
-                          <FolderUp size={13} />
-                          <span>Send / Attach File</span>
+                          <FolderUp size={12} />
+                          <span>Attach File</span>
                         </>
                       )}
                     </button>
@@ -1189,22 +1246,10 @@ const TaskModal: React.FC<TaskModalProps> = ({
                 )}
               </div>
 
-              {/* Specs & info pills */}
-              <div className="tm-deliv-specs-bar">
-                <span className="tm-deliv-spec-pill">
-                  <Sparkles size={11} className="tm-spec-sparkle" />
-                  <span>All formats accepted (PDF, Docs, Excel, Images, ZIP)</span>
-                </span>
-                <span className="tm-deliv-spec-pill">
-                  <CheckCircle2 size={11} className="tm-spec-check" />
-                  <span>Max 5 MB per file</span>
-                </span>
-              </div>
-
               {workFileError && (
                 <div className="tm-file-alert error">
                   <div className="tm-alert-content">
-                    <AlertCircle size={14} className="tm-alert-icon" />
+                    <AlertCircle size={13} className="tm-alert-icon" />
                     <span>{workFileError}</span>
                   </div>
                   <button type="button" onClick={() => setWorkFileError('')} aria-label="Dismiss">&times;</button>
@@ -1213,18 +1258,19 @@ const TaskModal: React.FC<TaskModalProps> = ({
               {workFileSuccess && (
                 <div className="tm-file-alert success">
                   <div className="tm-alert-content">
-                    <CheckCircle2 size={14} className="tm-alert-icon" />
+                    <CheckCircle2 size={13} className="tm-alert-icon" />
                     <span>{workFileSuccess}</span>
                   </div>
                   <button type="button" onClick={() => setWorkFileSuccess('')} aria-label="Dismiss">&times;</button>
                 </div>
               )}
 
+              {/* Uploaded Files List OR Compact Drop Area */}
               {task.completionAttachments && task.completionAttachments.length > 0 ? (
                 <div className="tm-deliv-content-loaded">
                   <AttachmentList fileIds={task.completionAttachments} hideCardWrap={true} />
                   
-                  {(canPerformStaffActions || isSuperAdmin || isCreator) && (
+                  {(canPerformStaffActions || isSuperAdmin || isCreator || currentUser?.role === 'department_admin') && (
                     <div className="tm-deliv-add-more-row">
                       <button
                         type="button"
@@ -1232,43 +1278,144 @@ const TaskModal: React.FC<TaskModalProps> = ({
                         onClick={() => workFileInputRef.current?.click()}
                         disabled={isUploadingWorkFile || loading}
                       >
-                        <Plus size={13} />
+                        <Plus size={12} />
                         <span>Add another file</span>
                       </button>
                     </div>
                   )}
                 </div>
               ) : (
-                (canPerformStaffActions || isSuperAdmin || isCreator) ? (
+                (canPerformStaffActions || isSuperAdmin || isCreator || currentUser?.role === 'department_admin') ? (
                   <div 
-                    className="tm-deliv-empty-dropzone"
+                    className="tm-deliv-compact-dropzone"
                     onClick={() => workFileInputRef.current?.click()}
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') workFileInputRef.current?.click(); }}
                     title="Click here to upload files (max 5 MB each)"
                   >
-                    <div className="tm-dropzone-icon-circle">
-                      <FolderUp size={22} />
+                    <div className="tm-compact-dropzone-left">
+                      <div className="tm-compact-drop-icon">
+                        <FolderUp size={14} />
+                      </div>
+                      <div className="tm-compact-drop-text">
+                        <span className="tm-compact-drop-main">Click to attach deliverable files or proofs</span>
+                        <span className="tm-compact-drop-sub">(PDF, Docs, Excel, Images, ZIP — max 5 MB)</span>
+                      </div>
                     </div>
-                    <div className="tm-dropzone-title">
-                      No deliverables or work files uploaded yet
-                    </div>
-                    <div className="tm-dropzone-subtitle">
-                      Click here or use the button above to attach scripts, sheets, proofs, or documents
-                    </div>
-                    <span className="tm-dropzone-cta-badge">
-                      <Plus size={12} />
-                      <span>Choose Files to Upload</span>
+                    <span className="tm-compact-browse-btn">
+                      <Plus size={11} />
+                      <span>Browse Files</span>
                     </span>
                   </div>
                 ) : (
                   <div className="tm-deliv-empty-readonly">
-                    <Paperclip size={16} className="tm-empty-ro-icon" />
+                    <Paperclip size={14} className="tm-empty-ro-icon" />
                     <span>No deliverables or work files uploaded yet.</span>
                   </div>
                 )
               )}
+
+              {/* Divider between files and comments */}
+              <div className="tm-deliv-comments-divider" />
+
+              {/* Assignee Comment & Work Notes Section */}
+              <div className="tm-comments-section">
+                <div className="tm-comments-header">
+                  <div className="tm-comments-title-wrap">
+                    <MessageSquare size={13} className="tm-comments-title-icon" />
+                    <span className="tm-comments-title">Assignee Comments &amp; Work Notes</span>
+                    {taskComments && taskComments.length > 0 && (
+                      <span className="tm-comments-count-pill">{taskComments.length}</span>
+                    )}
+                  </div>
+                  {taskComments && taskComments.length > 2 && (
+                    <button
+                      type="button"
+                      className="tm-comments-open-drawer-btn"
+                      onClick={() => onOpenChat && onOpenChat(task)}
+                      title="Open full conversation thread"
+                    >
+                      <span>Open Full Discussion</span>
+                      <ExternalLink size={10} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Recent comments list */}
+                {taskComments && taskComments.length > 0 ? (
+                  <div className="tm-comments-list">
+                    {taskComments.slice(-3).map((cmt: any, idx: number) => {
+                      const senderObj = cmt.sender || {};
+                      const isMe = (senderObj._id || senderObj.id) === currentUserId;
+                      const senderName = isMe ? 'You' : (resolveUserName(senderObj) || senderObj.name || 'Assignee');
+                      const roleLabel = senderObj.role === 'super_admin' ? 'Super Admin' : senderObj.role === 'department_admin' ? 'Admin' : senderObj.role === 'staff' ? 'Staff' : '';
+                      
+                      return (
+                        <div key={cmt._id || idx} className={`tm-comment-bubble-item ${isMe ? 'mine' : ''}`}>
+                          <div className="tm-comment-meta">
+                            <span className="tm-comment-author">{senderName}</span>
+                            {roleLabel && <span className={`tm-comment-role-tag ${senderObj.role}`}>{roleLabel}</span>}
+                            <span className="tm-comment-date">{formatDateTimeDDMMYYYY(cmt.createdAt)}</span>
+                          </div>
+                          <div className="tm-comment-text">{cmt.message}</div>
+                        </div>
+                      );
+                    })}
+                    {taskComments.length > 3 && (
+                      <div className="tm-comments-more-hint" onClick={() => onOpenChat && onOpenChat(task)}>
+                        View all {taskComments.length} messages in Discussion &rarr;
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="tm-comments-empty-notice">
+                    No comments yet. Assignee can add work notes, queries, or remarks below.
+                  </div>
+                )}
+
+                {/* Inline Comment Input Box */}
+                <div className="tm-comment-box-wrap">
+                  <div className="tm-comment-input-row">
+                    <textarea
+                      className="tm-comment-textarea"
+                      rows={1}
+                      placeholder="Add a comment or work update (e.g. script draft ready, please review)..."
+                      value={newCommentText}
+                      onChange={(e) => setNewCommentText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleAddComment();
+                        }
+                      }}
+                      disabled={isPostingComment}
+                    />
+                    <button
+                      type="button"
+                      className="tm-comment-submit-btn"
+                      onClick={() => handleAddComment()}
+                      disabled={isPostingComment || !newCommentText.trim()}
+                      title="Post comment (Enter)"
+                    >
+                      {isPostingComment ? (
+                        <Loader2 size={12} className="tm-spin" />
+                      ) : (
+                        <>
+                          <Send size={11} />
+                          <span>Send</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  {commentError && (
+                    <div className="tm-comment-inline-error">
+                      <AlertCircle size={11} />
+                      <span>{commentError}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Rejection Feedback Box */}
