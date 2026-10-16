@@ -8,7 +8,7 @@ export interface ExportDropdownMenuProps {
   disabled?: boolean;
   label?: string;
   selectedCount?: number;
-  align?: 'left' | 'right';
+  align?: 'left' | 'right' | 'auto';
   className?: string;
 }
 
@@ -18,11 +18,29 @@ export const ExportDropdownMenu: React.FC<ExportDropdownMenuProps> = ({
   disabled = false,
   label = 'Export',
   selectedCount,
-  align = 'right',
+  align = 'auto',
   className = '',
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [computedAlign, setComputedAlign] = useState<'left' | 'right'>('left');
+
+  useEffect(() => {
+    if (isOpen && containerRef.current) {
+      if (align === 'auto') {
+        const rect = containerRef.current.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        // If aligning left would overflow right side of viewport:
+        if (rect.left + 290 > viewportWidth - 10 && rect.right >= 290) {
+          setComputedAlign('right');
+        } else {
+          setComputedAlign('left');
+        }
+      } else {
+        setComputedAlign(align);
+      }
+    }
+  }, [isOpen, align]);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -67,7 +85,7 @@ export const ExportDropdownMenu: React.FC<ExportDropdownMenuProps> = ({
       </button>
 
       {isOpen && (
-        <div className={`ct-export-menu align-${align}`}>
+        <div className={`ct-export-menu align-${computedAlign}`}>
           <div className="ct-export-menu-header">
             <span>Export Format</span>
             {selectedCount ? (

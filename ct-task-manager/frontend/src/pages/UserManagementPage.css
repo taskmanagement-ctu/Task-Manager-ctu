@@ -998,6 +998,7 @@
 }
 
 /* Institutional Governance Panel for Super Admins */
+/* Institutional Governance Panel for Super Admins */
 .um-governance-card {
   background: #ffffff;
   border-radius: 14px;
@@ -1007,6 +1008,9 @@
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 4px 12px rgba(15, 23, 42, 0.03);
   border: 1px solid #e2e8f0;
   border-left: 4px solid #f59e0b;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
 }
 
 .um-governance-header {
@@ -1023,7 +1027,7 @@
   align-items: flex-start;
   gap: 0.85rem;
   flex: 1;
-  min-width: 280px;
+  min-width: 0;
 }
 
 .um-governance-title-icon {
@@ -1065,7 +1069,7 @@
   align-items: center;
   gap: 0.65rem;
   flex-wrap: wrap;
-  flex-shrink: 0;
+  max-width: 100%;
 }
 
 .um-governance-tag {
@@ -1378,5 +1382,62 @@
   gap: 0.6rem;
   line-height: 1.45;
 }
+
+/* ─── Mobile Responsive Styles ────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .um-governance-card {
+    padding: 1rem 0.85rem;
+    border-radius: 12px;
+  }
+
+  .um-governance-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.85rem;
+    margin-bottom: 1rem;
+  }
+
+  .um-governance-title-row {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .um-governance-actions {
+    width: 100%;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+  }
+
+  .um-governance-tag {
+    align-self: flex-start;
+  }
+
+  .btn-transfer-superadmin {
+    width: 100%;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 0.55rem 0.85rem;
+    font-size: 0.82rem;
+  }
+
+  .um-governance-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+
+  .um-gov-admin-box {
+    padding: 0.85rem 0.75rem;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .um-gov-chip-email {
+    max-width: 160px;
+  }
+}
+
 
 

@@ -356,6 +356,7 @@ const TasksPage: React.FC = () => {
             <ExportDropdownMenu
               onExport={handleExportTasks}
               isExporting={isExporting}
+              align="left"
             />
             {user?.role !== 'staff' && (
               <button className="tasks-create-btn" onClick={() => setIsCreatingTask(true)}>
