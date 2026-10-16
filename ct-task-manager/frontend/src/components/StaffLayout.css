@@ -281,7 +281,11 @@
 .staff-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 1rem;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
 }
 @media (min-width: 1024px) {
   .staff-content {

@@ -353,7 +353,10 @@ const UserManagementPage: React.FC = () => {
 
   const getRoleIcon = (u: User) => {
     if (u.role === 'super_admin') {
-      return u.universityId === '10001' ? <Crown size={14} color="#d97706" /> : <ShieldAlert size={14} />;
+      if (authUser?.universityId === '10001') {
+        return u.universityId === '10001' ? <Crown size={14} color="#d97706" /> : <ShieldAlert size={14} />;
+      }
+      return <Crown size={14} color="#d97706" />;
     }
     if (u.role === 'department_admin') return <ShieldCheck size={14} />;
     return <UserIcon size={14} />;
@@ -387,7 +390,10 @@ const UserManagementPage: React.FC = () => {
 
   const formatRoleText = (u: User) => {
     if (u.role === 'super_admin') {
-      return u.universityId === '10001' ? 'Primary Super Admin' : 'Delegated Super Admin';
+      if (authUser?.universityId === '10001') {
+        return u.universityId === '10001' ? 'Primary Super Admin' : 'Delegated Super Admin';
+      }
+      return 'Super Admin';
     }
     if (u.role === 'department_admin') return 'Dept Admin';
     return 'Staff';
@@ -395,7 +401,10 @@ const UserManagementPage: React.FC = () => {
 
   const getRoleBadgeClass = (u: User) => {
     if (u.role === 'super_admin') {
-      return u.universityId === '10001' ? 'badge-role badge-role-primary_super_admin' : 'badge-role badge-role-super_admin';
+      if (authUser?.universityId === '10001') {
+        return u.universityId === '10001' ? 'badge-role badge-role-primary_super_admin' : 'badge-role badge-role-super_admin';
+      }
+      return 'badge-role badge-role-primary_super_admin';
     }
     return `badge-role badge-role-${u.role}`;
   };
@@ -432,18 +441,26 @@ const UserManagementPage: React.FC = () => {
                 <Crown size={20} />
               </div>
               <div className="um-governance-title-text">
-                <h2 className="um-governance-title">Institutional Governance &amp; Super Administrators</h2>
+                <h2 className="um-governance-title">
+                  {authUser?.universityId === '10001' 
+                    ? 'Institutional Governance & Super Administrators' 
+                    : 'System Administration'}
+                </h2>
                 <p className="um-governance-subtitle">
                   {authUser?.universityId === '10001' 
                     ? 'You are the Primary Super Admin (10001). Overview of active Super Administrators holding system privileges:' 
-                    : 'System Super Administrators with university-wide authority:'}
+                    : 'System Super Administrator with university-wide authority:'}
                 </p>
               </div>
             </div>
             <div className="um-governance-actions">
               <div className="um-governance-tag">
                 <Users size={13} />
-                <span>{superAdminList.length} Active {superAdminList.length === 1 ? 'Super Admin' : 'Super Admins'}</span>
+                <span>
+                  {authUser?.universityId === '10001' 
+                    ? `${superAdminList.length} Active ${superAdminList.length === 1 ? 'Super Admin' : 'Super Admins'}`
+                    : '1 Active Super Admin'}
+                </span>
               </div>
               <button
                 type="button"
@@ -458,8 +475,8 @@ const UserManagementPage: React.FC = () => {
           </div>
 
           <div className="um-governance-grid">
-            {/* Primary Super Admin Card */}
-            {superAdminList.filter(sa => sa.universityId === '10001').map(sa => (
+            {/* Primary Super Admin Card (Visible ONLY to Primary Super Admin 10001) */}
+            {authUser?.universityId === '10001' && superAdminList.filter(sa => sa.universityId === '10001').map(sa => (
               <div key={sa.id || sa.universityId} className="um-gov-admin-box primary">
                 <div className="um-gov-card-header">
                   <div className="um-gov-admin-avatar primary" title="Root Super Administrator">
@@ -468,9 +485,7 @@ const UserManagementPage: React.FC = () => {
                   <div className="um-gov-identity">
                     <div className="um-gov-name-row">
                       <span className="um-gov-name" title={sa.name}>{sa.name}</span>
-                      {authUser?.universityId === '10001' && (
-                        <span className="um-gov-you-badge">You</span>
-                      )}
+                      <span className="um-gov-you-badge">You</span>
                     </div>
                     <div className="um-gov-role-row">
                       <span className="um-gov-admin-tag-primary">
@@ -496,10 +511,16 @@ const UserManagementPage: React.FC = () => {
             {/* Delegated Super Admins Cards */}
             {superAdminList.filter(sa => sa.universityId !== '10001').length > 0 ? (
               superAdminList.filter(sa => sa.universityId !== '10001').map(sa => (
-                <div key={sa.id || sa.universityId} className="um-gov-admin-box delegated">
+                <div 
+                  key={sa.id || sa.universityId} 
+                  className={`um-gov-admin-box ${authUser?.universityId === '10001' ? 'delegated' : 'primary'}`}
+                >
                   <div className="um-gov-card-header">
-                    <div className="um-gov-admin-avatar delegated" title="Delegated Super Administrator">
-                      <ShieldAlert size={20} />
+                    <div 
+                      className={`um-gov-admin-avatar ${authUser?.universityId === '10001' ? 'delegated' : 'primary'}`} 
+                      title={authUser?.universityId === '10001' ? 'Delegated Super Administrator' : 'Super Administrator'}
+                    >
+                      {authUser?.universityId === '10001' ? <ShieldAlert size={20} /> : <Crown size={20} />}
                     </div>
                     <div className="um-gov-identity">
                       <div className="um-gov-name-row">
@@ -509,23 +530,31 @@ const UserManagementPage: React.FC = () => {
                         )}
                       </div>
                       <div className="um-gov-role-row">
-                        <span className="um-gov-admin-tag-delegated">
-                          <ShieldAlert size={11} /> Delegated Super Admin
-                        </span>
+                        {authUser?.universityId === '10001' ? (
+                          <span className="um-gov-admin-tag-delegated">
+                            <ShieldAlert size={11} /> Delegated Super Admin
+                          </span>
+                        ) : (
+                          <span className="um-gov-admin-tag-primary">
+                            <Crown size={11} /> Super Admin
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      className="um-gov-locate-btn"
-                      onClick={() => {
-                        setSearch(sa.universityId);
-                        setPage(1);
-                      }}
-                      title="Find in directory"
-                    >
-                      <Search size={12} />
-                      <span>Locate</span>
-                    </button>
+                    {authUser?.universityId === '10001' && (
+                      <button
+                        type="button"
+                        className="um-gov-locate-btn"
+                        onClick={() => {
+                          setSearch(sa.universityId);
+                          setPage(1);
+                        }}
+                        title="Find in directory"
+                      >
+                        <Search size={12} />
+                        <span>Locate</span>
+                      </button>
+                    )}
                   </div>
 
                   <div className="um-gov-card-footer">
@@ -541,10 +570,12 @@ const UserManagementPage: React.FC = () => {
                 </div>
               ))
             ) : (
-              <div className="um-gov-no-delegated">
-                <ShieldCheck size={18} color="#94a3b8" />
-                <span>No delegated Super Admins currently active. Only Primary Super Admin (10001) holds system administrator access.</span>
-              </div>
+              authUser?.universityId === '10001' && (
+                <div className="um-gov-no-delegated">
+                  <ShieldCheck size={18} color="#94a3b8" />
+                  <span>No delegated Super Admins currently active. Only Primary Super Admin (10001) holds system administrator access.</span>
+                </div>
+              )
             )}
           </div>
         </div>
@@ -1527,7 +1558,7 @@ const UserManagementPage: React.FC = () => {
                 <div>
                   <strong style={{ color: '#b45309' }}>Privilege Handover &amp; Step-Down:</strong>
                   <p style={{ margin: '0.25rem 0 0', fontSize: '0.83rem', lineHeight: 1.45, color: '#92400e' }}>
-                    You are currently a <strong>Delegated Super Admin</strong>. Transferring Super Admin privileges will promote {transferTargetUser ? <strong>{transferTargetUser.name}</strong> : 'the candidate'} to Super Admin, and <strong>your account will automatically step down to Staff</strong> in your department. The Primary Super Admin (<strong>10001</strong>) will remain unaffected.
+                    Transferring Super Admin privileges will promote {transferTargetUser ? <strong>{transferTargetUser.name}</strong> : 'the candidate'} to Super Admin, and <strong>your account will step down to Staff</strong> in your department. This action takes effect immediately once transferred.
                   </p>
                 </div>
               </div>

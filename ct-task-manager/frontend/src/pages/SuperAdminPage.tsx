@@ -242,9 +242,13 @@ const SuperAdminPage = () => {
             <span className="sa-metric-title">Super Admins</span>
             <Shield className="sa-metric-icon" size={18} />
           </div>
-          <div className="sa-metric-value">{loading ? '...' : userStats.superAdmins}</div>
+          <div className="sa-metric-value">
+            {loading ? '...' : (currentUser?.universityId === '10001' ? userStats.superAdmins : (userStats.superAdmins > 1 ? 1 : userStats.superAdmins))}
+          </div>
           <div style={{ color: '#6366f1', fontSize: '0.74rem', marginTop: '0.35rem', fontWeight: 600 }}>
-            {userStats.superAdmins > 1 ? `1 Primary • ${userStats.superAdmins - 1} Delegated` : '1 Primary (10001)'}
+            {currentUser?.universityId === '10001'
+              ? (userStats.superAdmins > 1 ? `1 Primary • ${userStats.superAdmins - 1} Delegated` : '1 Primary (10001)')
+              : 'Active System Super Admin'}
           </div>
         </div>
       </div>

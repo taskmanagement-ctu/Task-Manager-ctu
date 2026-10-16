@@ -966,3 +966,91 @@
   cursor: not-allowed;
   transform: none;
 }
+
+/* ─── Responsive Styles for Mobile ────────────────────────────── */
+@media (max-width: 640px) {
+  .tc-deck-container {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .tc-deck-container.is-deck {
+    padding-top: 5px;
+    padding-right: 5px;
+  }
+
+  .tc-card {
+    padding: 0.85rem 0.75rem;
+    border-radius: 10px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .tc-header {
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .tc-header-right {
+    gap: 0.35rem;
+  }
+
+  .tc-title {
+    font-size: 0.95rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .tc-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+    padding-top: 0.5rem;
+  }
+
+  .tc-footer-left {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .tc-assignee {
+    max-width: 100%;
+  }
+
+  .tc-assignee-name {
+    max-width: 120px;
+  }
+
+  .tc-footer-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    width: 100%;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+    border-top: 1px dashed #f1f5f9;
+    padding-top: 0.45rem;
+  }
+
+  .tc-delete-btn,
+  .tc-chat-btn,
+  .tc-expand-btn {
+    padding: 0.28rem 0.55rem;
+    font-size: 0.72rem;
+  }
+
+  .tc-subtask-item-main {
+    flex-wrap: wrap;
+  }
+
+  .tc-subtask-item-title {
+    max-width: 100%;
+    white-space: normal;
+    word-break: break-word;
+  }
+}

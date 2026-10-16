@@ -99,6 +99,22 @@ export const getUsers = async (req: Request, res: Response) => {
       query._id = { $in: assignedStaffIds };
     }
 
+    // Protection: Hide Primary Super Admin (10001) from all non-10001 users
+    const isPrimarySuperAdmin = (req as any).user?.universityId === PRIMARY_SUPER_ADMIN_ID;
+    if (!isPrimarySuperAdmin) {
+      if (query.$and) {
+        query.$and.push({ universityId: { $ne: PRIMARY_SUPER_ADMIN_ID } });
+      } else if (query.$or) {
+        query.$and = [
+          { $or: query.$or },
+          { universityId: { $ne: PRIMARY_SUPER_ADMIN_ID } }
+        ];
+        delete query.$or;
+      } else {
+        query.universityId = { $ne: PRIMARY_SUPER_ADMIN_ID };
+      }
+    }
+
     const total = await User.countDocuments(query);
     const users = await User.find(query)
       .select('-passwordHash')
@@ -180,14 +196,17 @@ export const getUsers = async (req: Request, res: Response) => {
 // GET /api/users/stats
 export const getUserStats = async (req: Request, res: Response) => {
   try {
-    const totalUsers = await User.countDocuments();
-    const activeUsers = await User.countDocuments({ isActive: true });
-    const inactiveUsers = await User.countDocuments({ isActive: false });
-    const superAdmins = await User.countDocuments({ role: 'super_admin' });
-    const departmentAdmins = await User.countDocuments({ role: 'department_admin' });
-    const staff = await User.countDocuments({ role: 'staff' });
+    const isPrimarySuperAdmin = (req as any).user?.universityId === PRIMARY_SUPER_ADMIN_ID;
+    const baseFilter: any = isPrimarySuperAdmin ? {} : { universityId: { $ne: PRIMARY_SUPER_ADMIN_ID } };
 
-    const superAdminUsers = await User.find({ role: 'super_admin' })
+    const totalUsers = await User.countDocuments(baseFilter);
+    const activeUsers = await User.countDocuments({ ...baseFilter, isActive: true });
+    const inactiveUsers = await User.countDocuments({ ...baseFilter, isActive: false });
+    const superAdmins = await User.countDocuments({ ...baseFilter, role: 'super_admin' });
+    const departmentAdmins = await User.countDocuments({ ...baseFilter, role: 'department_admin' });
+    const staff = await User.countDocuments({ ...baseFilter, role: 'staff' });
+
+    const superAdminUsers = await User.find({ ...baseFilter, role: 'super_admin' })
       .select('universityId name email phone department isActive createdAt')
       .lean();
 
@@ -225,8 +244,9 @@ export const getUserStats = async (req: Request, res: Response) => {
 // GET /api/users/:id
 export const getUserById = async (req: Request, res: Response) => {
   try {
+    const isPrimarySuperAdmin = (req as any).user?.universityId === PRIMARY_SUPER_ADMIN_ID;
     const user = await User.findById(req.params.id).select('-passwordHash');
-    if (!user) {
+    if (!user || (!isPrimarySuperAdmin && user.universityId === PRIMARY_SUPER_ADMIN_ID)) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
     return res.status(200).json({ success: true, data: { user } });
