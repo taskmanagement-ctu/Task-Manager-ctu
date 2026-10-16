@@ -1,11 +1,13 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
 import { 
   CheckCircle, ClipboardList, Building2, BarChart3, ChevronRight, 
-  Trophy, Star, Crown, X, Shield, FileSpreadsheet, FileText, Download, ChevronDown
+  Trophy, Star, Crown, X, Shield, FileSpreadsheet, FileText, Download, ChevronDown,
+  Search
 } from 'lucide-react';
 import { 
   exportNaacToExcel, exportNaacToPdf, 
@@ -52,6 +54,31 @@ const NaacDashboardPage: React.FC = () => {
   const [expandedDept, setExpandedDept] = useState<string | null>(null);
   const [selectedDeptModal, setSelectedDeptModal] = useState<DepartmentReport | null>(null);
 
+  // Tab State with URL query sync
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') || 'leaderboard';
+  const [activeTab, setActiveTab] = useState<'leaderboard' | 'progression' | 'breakdown'>(
+    ['leaderboard', 'progression', 'breakdown'].includes(initialTab)
+      ? (initialTab as any)
+      : 'leaderboard'
+  );
+
+  const handleTabChange = (tab: 'leaderboard' | 'progression' | 'breakdown') => {
+    setActiveTab(tab);
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', tab);
+      return next;
+    }, { replace: true });
+  };
+
+  // Leaderboard filters
+  const [lbSearch, setLbSearch] = useState('');
+  const [lbFilter, setLbFilter] = useState<'all' | 'top3' | 'top10' | 'active'>('all');
+
+  // Breakdown table filter
+  const [breakdownSearch, setBreakdownSearch] = useState('');
+
   // Chart label display mode: 'short' (Super Admin Short Code), 'full' (Full Department Name)
   const [chartLabelMode, setChartLabelMode] = useState<'short' | 'full'>('short');
 
@@ -60,6 +87,7 @@ const NaacDashboardPage: React.FC = () => {
   const chartSectionRef = useRef<HTMLDivElement>(null);
 
   const handleSelectDeptAndJumpToChart = (deptValue: string) => {
+    handleTabChange('progression');
     setSelectedChartDept(deptValue);
     setTimeout(() => {
       chartSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -146,6 +174,37 @@ const NaacDashboardPage: React.FC = () => {
     // Full Name: Return exact department name set by Super Admin
     return deptName;
   };
+
+  // Memoized Filtered Data for Leaderboard & Breakdown
+  const filteredLeaderboardData = useMemo(() => {
+    let list = [...data];
+    if (lbFilter === 'top3') {
+      list = list.filter(d => (d.rank || 999) <= 3);
+    } else if (lbFilter === 'top10') {
+      list = list.slice(0, 10);
+    } else if (lbFilter === 'active') {
+      list = list.filter(d => d.totalTasksGiven > 0);
+    }
+    if (lbSearch.trim()) {
+      const q = lbSearch.toLowerCase().trim();
+      list = list.filter(d => 
+        d.department.toLowerCase().includes(q) || 
+        (d.code && d.code.toLowerCase().includes(q)) ||
+        d.users.some(u => u.name.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [data, lbFilter, lbSearch]);
+
+  const filteredBreakdownData = useMemo(() => {
+    if (!breakdownSearch.trim()) return data;
+    const q = breakdownSearch.toLowerCase().trim();
+    return data.filter(d => 
+      d.department.toLowerCase().includes(q) || 
+      (d.code && d.code.toLowerCase().includes(q)) ||
+      d.users.some(u => u.name.toLowerCase().includes(q))
+    );
+  }, [data, breakdownSearch]);
 
   if (loading) return <div className="naac-loading"><div className="naac-spinner" /><span>Loading NAAC Report & Leaderboard...</span></div>;
   if (error) return <div className="naac-error">{error}</div>;
@@ -303,85 +362,191 @@ const NaacDashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Top Rated Departments Leaderboard Section */}
-        <div className="naac-section-card">
-          <div className="section-header-flex">
-            <div>
-              <h3 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Trophy size={20} color="#f59e0b" /> Top Rated Departments Leaderboard
-              </h3>
-              <p className="section-subtitle">Ranked by average star rating across all staff and department admins. Click any department to view staff ratings.</p>
-            </div>
-          </div>
+        {/* Modern Segmented Section Tabs */}
+        <div className="naac-tab-nav" role="tablist" aria-label="NAAC Dashboard Sections">
+          <button 
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'leaderboard'}
+            className={`naac-tab-btn ${activeTab === 'leaderboard' ? 'active' : ''}`}
+            onClick={() => handleTabChange('leaderboard')}
+          >
+            <Trophy size={18} className="naac-tab-icon trophy" />
+            <span className="naac-tab-title">1. Top Rated Leaderboard</span>
+            <span className="naac-tab-badge">{data.length}</span>
+          </button>
 
-          <div className="naac-lb-grid">
-            {data.map((dept, index) => {
-              const rank = dept.rank || (index + 1);
-              const admin = dept.users.find(u => u.role === 'department_admin');
-              const avgRating = dept.averageRating || 0;
-              const totalRatings = dept.totalRatings || 0;
+          <button 
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'progression'}
+            className={`naac-tab-btn ${activeTab === 'progression' ? 'active' : ''}`}
+            onClick={() => handleTabChange('progression')}
+          >
+            <BarChart3 size={18} className="naac-tab-icon chart" />
+            <span className="naac-tab-title">2. Task Progression & Completion</span>
+            <span className="naac-tab-badge accent">{overallRate}%</span>
+          </button>
 
-              return (
-                <div 
-                  key={dept.department} 
-                  className={`naac-lb-card ${rank === 1 ? 'gold-card' : rank === 2 ? 'silver-card' : rank === 3 ? 'bronze-card' : ''}`}
-                  onClick={() => setSelectedDeptModal(dept)}
-                >
-                  <div className="naac-lb-card-header">
-                    <span className={`naac-rank-badge rank-${rank <= 3 ? rank : 'default'}`}>
-                      {rank === 1 ? '🥇 Rank #1' : rank === 2 ? '🥈 Rank #2' : rank === 3 ? '🥉 Rank #3' : `Rank #${rank}`}
-                    </span>
-                    <div className="naac-score-pill">
-                      <Star size={14} fill={avgRating > 0 ? '#eab308' : 'none'} color="#eab308" />
-                      <strong>{avgRating > 0 ? avgRating.toFixed(1) : '—'}</strong>
-                      <span>/ 5.0</span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap', marginBottom: '0.25rem' }}>
-                    <h4 className="naac-lb-dept-name" style={{ margin: 0 }}>{dept.department}</h4>
-                    {dept.code && (
-                      <span className="dept-code-badge" title={`Department Short Code: ${dept.code}`}>
-                        {dept.code}
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div className="naac-lb-admin-line">
-                    <Shield size={13} />
-                    <span>Admin: <strong>{admin ? admin.name : 'No Admin Assigned'}</strong></span>
-                  </div>
-
-                  <div className="naac-lb-stats-row">
-                    <div className="naac-lb-stat">
-                      <span className="naac-lb-stat-lbl">Staff</span>
-                      <span className="naac-lb-stat-num">{dept.users.length}</span>
-                    </div>
-                    <div className="naac-lb-stat">
-                      <span className="naac-lb-stat-lbl">Ratings</span>
-                      <span className="naac-lb-stat-num">{totalRatings}</span>
-                    </div>
-                    <div className="naac-lb-stat">
-                      <span className="naac-lb-stat-lbl">Completed</span>
-                      <span className="naac-lb-stat-num">{dept.totalTasksCompleted}</span>
-                    </div>
-                    <div className="naac-lb-stat">
-                      <span className="naac-lb-stat-lbl">Progress</span>
-                      <span className="naac-lb-stat-num">{dept.completionRate}%</span>
-                    </div>
-                  </div>
-
-                  <button className="naac-lb-view-btn">
-                    View Staff & Ratings <ChevronRight size={14} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
+          <button 
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'breakdown'}
+            className={`naac-tab-btn ${activeTab === 'breakdown' ? 'active' : ''}`}
+            onClick={() => handleTabChange('breakdown')}
+          >
+            <ClipboardList size={18} className="naac-tab-icon list" />
+            <span className="naac-tab-title">3. Departmental Breakdown & Metrics</span>
+            <span className="naac-tab-badge">{data.length}</span>
+          </button>
         </div>
 
-        {/* Chart Section - Shifted from X-Axis to Y-Axis (Horizontal Bar Chart) */}
-        <div className="naac-section-card" ref={chartSectionRef} id="naac-chart-section">
+        {/* Section 1: Top Rated Departments Leaderboard */}
+        {activeTab === 'leaderboard' && (
+          <div className="naac-section-card naac-tab-pane">
+            <div className="section-header-flex naac-section-header-wrap">
+              <div>
+                <h3 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Trophy size={20} color="#f59e0b" /> Top Rated Departments Leaderboard
+                </h3>
+                <p className="section-subtitle">Ranked by average star rating across all staff and department admins. Click any card to inspect staff ratings.</p>
+              </div>
+
+              {/* Leaderboard Search & Filter Toolbar */}
+              <div className="naac-tab-toolbar">
+                <div className="naac-tab-search-wrapper">
+                  <Search size={15} className="naac-tab-search-icon" />
+                  <input 
+                    type="text" 
+                    placeholder="Search department or code..." 
+                    className="naac-tab-search-input"
+                    value={lbSearch}
+                    onChange={(e) => setLbSearch(e.target.value)}
+                  />
+                  {lbSearch && (
+                    <button className="naac-tab-search-clear" onClick={() => setLbSearch('')} title="Clear search">
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+
+                <div className="naac-tab-pills">
+                  <button 
+                    type="button"
+                    className={`naac-tab-pill ${lbFilter === 'all' ? 'active' : ''}`}
+                    onClick={() => setLbFilter('all')}
+                  >
+                    All ({data.length})
+                  </button>
+                  <button 
+                    type="button"
+                    className={`naac-tab-pill ${lbFilter === 'top3' ? 'active' : ''}`}
+                    onClick={() => setLbFilter('top3')}
+                  >
+                    🥇 Top 3 Podium
+                  </button>
+                  <button 
+                    type="button"
+                    className={`naac-tab-pill ${lbFilter === 'top10' ? 'active' : ''}`}
+                    onClick={() => setLbFilter('top10')}
+                  >
+                    Top 10
+                  </button>
+                  <button 
+                    type="button"
+                    className={`naac-tab-pill ${lbFilter === 'active' ? 'active' : ''}`}
+                    onClick={() => setLbFilter('active')}
+                  >
+                    Active Only ({activeDeptsCount})
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {filteredLeaderboardData.length === 0 ? (
+              <div className="naac-empty-search">
+                <Building2 size={36} color="#94a3b8" />
+                <p>No departments match your current filter or search criteria.</p>
+                <button 
+                  type="button"
+                  className="naac-tab-reset-btn" 
+                  onClick={() => { setLbSearch(''); setLbFilter('all'); }}
+                >
+                  Reset Filters
+                </button>
+              </div>
+            ) : (
+              <div className="naac-lb-grid">
+                {filteredLeaderboardData.map((dept, index) => {
+                  const rank = dept.rank || (index + 1);
+                  const admin = dept.users.find(u => u.role === 'department_admin');
+                  const avgRating = dept.averageRating || 0;
+                  const totalRatings = dept.totalRatings || 0;
+
+                  return (
+                    <div 
+                      key={dept.department} 
+                      className={`naac-lb-card ${rank === 1 ? 'gold-card' : rank === 2 ? 'silver-card' : rank === 3 ? 'bronze-card' : ''}`}
+                      onClick={() => setSelectedDeptModal(dept)}
+                    >
+                      <div className="naac-lb-card-header">
+                        <span className={`naac-rank-badge rank-${rank <= 3 ? rank : 'default'}`}>
+                          {rank === 1 ? '🥇 Rank #1' : rank === 2 ? '🥈 Rank #2' : rank === 3 ? '🥉 Rank #3' : `Rank #${rank}`}
+                        </span>
+                        <div className="naac-score-pill">
+                          <Star size={14} fill={avgRating > 0 ? '#eab308' : 'none'} color="#eab308" />
+                          <strong>{avgRating > 0 ? avgRating.toFixed(1) : '—'}</strong>
+                          <span>/ 5.0</span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap', marginBottom: '0.25rem' }}>
+                        <h4 className="naac-lb-dept-name" style={{ margin: 0 }}>{dept.department}</h4>
+                        {dept.code && (
+                          <span className="dept-code-badge" title={`Department Short Code: ${dept.code}`}>
+                            {dept.code}
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="naac-lb-admin-line">
+                        <Shield size={13} />
+                        <span>Admin: <strong>{admin ? admin.name : 'No Admin Assigned'}</strong></span>
+                      </div>
+
+                      <div className="naac-lb-stats-row">
+                        <div className="naac-lb-stat">
+                          <span className="naac-lb-stat-lbl">Staff</span>
+                          <span className="naac-lb-stat-num">{dept.users.length}</span>
+                        </div>
+                        <div className="naac-lb-stat">
+                          <span className="naac-lb-stat-lbl">Ratings</span>
+                          <span className="naac-lb-stat-num">{totalRatings}</span>
+                        </div>
+                        <div className="naac-lb-stat">
+                          <span className="naac-lb-stat-lbl">Completed</span>
+                          <span className="naac-lb-stat-num">{dept.totalTasksCompleted}</span>
+                        </div>
+                        <div className="naac-lb-stat">
+                          <span className="naac-lb-stat-lbl">Progress</span>
+                          <span className="naac-lb-stat-num">{dept.completionRate}%</span>
+                        </div>
+                      </div>
+
+                      <button className="naac-lb-view-btn">
+                        View Staff & Ratings <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Section 2: Task Progression & Completion Rate (Horizontal Bar Chart) */}
+        {activeTab === 'progression' && (
+          <div className="naac-section-card naac-tab-pane" ref={chartSectionRef} id="naac-chart-section">
           <div className="section-header-flex" style={{ flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
             <div>
               <h3 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -520,31 +685,65 @@ const NaacDashboardPage: React.FC = () => {
             );
           })()}
         </div>
+        )}
 
-        {/* Departmental Breakdown List */}
-        <div className="naac-section-card">
-          <div className="section-header-flex">
-            <div>
-              <h3 className="section-title">Departmental Breakdown & Task Metrics</h3>
-              <p className="section-subtitle">Detailed task status and staff distributions per department.</p>
+        {/* Section 3: Departmental Breakdown List & Metrics */}
+        {activeTab === 'breakdown' && (
+          <div className="naac-section-card naac-tab-pane">
+            <div className="section-header-flex naac-section-header-wrap">
+              <div>
+                <h3 className="section-title">Departmental Breakdown & Task Metrics</h3>
+                <p className="section-subtitle">Detailed task status and staff distributions per department. Click rows to inspect individual staff performance.</p>
+              </div>
+
+              {/* Breakdown search bar */}
+              <div className="naac-tab-toolbar">
+                <div className="naac-tab-search-wrapper">
+                  <Search size={15} className="naac-tab-search-icon" />
+                  <input 
+                    type="text" 
+                    placeholder="Search department, code or staff..." 
+                    className="naac-tab-search-input"
+                    value={breakdownSearch}
+                    onChange={(e) => setBreakdownSearch(e.target.value)}
+                  />
+                  {breakdownSearch && (
+                    <button className="naac-tab-search-clear" onClick={() => setBreakdownSearch('')} title="Clear search">
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
 
-          <div className="breakdown-table-container">
-            <div className="breakdown-table-desktop">
-              <table className="breakdown-table">
-              <thead>
-                <tr>
-                  <th>RANK & DEPARTMENT</th>
-                  <th className="text-center">AVG RATING</th>
-                  <th className="text-center">TOTAL TASKS</th>
-                  <th>STATUS DISTRIBUTION</th>
-                  <th className="text-center">OVERALL PROGRESS</th>
-                  <th className="text-center">DETAILS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((dept, index) => {
+            {filteredBreakdownData.length === 0 ? (
+              <div className="naac-empty-search">
+                <Building2 size={36} color="#94a3b8" />
+                <p>No departments or staff match your search "{breakdownSearch}".</p>
+                <button 
+                  type="button"
+                  className="naac-tab-reset-btn" 
+                  onClick={() => setBreakdownSearch('')}
+                >
+                  Clear Search
+                </button>
+              </div>
+            ) : (
+              <div className="breakdown-table-container">
+                <div className="breakdown-table-desktop">
+                  <table className="breakdown-table">
+                  <thead>
+                    <tr>
+                      <th>RANK & DEPARTMENT</th>
+                      <th className="text-center">AVG RATING</th>
+                      <th className="text-center">TOTAL TASKS</th>
+                      <th>STATUS DISTRIBUTION</th>
+                      <th className="text-center">OVERALL PROGRESS</th>
+                      <th className="text-center">DETAILS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredBreakdownData.map((dept, index) => {
                   const rank = dept.rank || (index + 1);
                   const admin = dept.users.find(u => u.role === 'department_admin');
                   const adminName = admin ? admin.name : 'No Admin Assigned';
@@ -700,7 +899,7 @@ const NaacDashboardPage: React.FC = () => {
 
             {/* Mobile Department Cards View */}
             <div className="breakdown-cards-mobile">
-              {data.map((dept, index) => {
+              {filteredBreakdownData.map((dept, index) => {
                 const rank = dept.rank || (index + 1);
                 const admin = dept.users.find(u => u.role === 'department_admin');
                 const adminName = admin ? admin.name : 'No Admin Assigned';
@@ -847,8 +1046,10 @@ const NaacDashboardPage: React.FC = () => {
               })}
             </div>
           </div>
-        </div>
+        )}
       </div>
+    )}
+  </div>
 
       {/* Modal: Department Staff Ratings & Performance List */}
       {selectedDeptModal && (
