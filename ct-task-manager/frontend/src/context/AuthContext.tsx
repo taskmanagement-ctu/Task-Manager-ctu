@@ -6,7 +6,7 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   loading: boolean;
-  login: (credentials: any) => Promise<void>;
+  login: (credentials: any) => Promise<User | undefined>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -51,6 +51,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       tokenStorage.setToken(newToken);
       setToken(newToken);
       setCurrentUser(response.data.user);
+      return response.data.user;
     }
   };
 

@@ -772,7 +772,8 @@ export const sendTaskAssignedEmail = async (
   assignedByRole: string,
   deadline: Date | string,
   description?: string,
-  assignedByEmail?: string
+  assignedByEmail?: string,
+  taskMongoId?: string
 ) => {
   if (!toEmail) return;
 
@@ -806,7 +807,10 @@ export const sendTaskAssignedEmail = async (
 
   const subject = `New Task Assigned by ${senderDisplayName}: [Task #${taskId || ''}] ${taskTitle} - CT University TaskDesk`;
   const appUrl = process.env.FRONTEND_URL || 'https://taskdesk.ctuniversity.in';
-  const taskUrl = `${appUrl}/tasks`;
+  const targetId = taskMongoId || taskId || '';
+  const taskUrl = targetId 
+    ? `${appUrl}/tasks?openTask=${encodeURIComponent(targetId)}` 
+    : `${appUrl}/tasks`;
 
   const descSnippet = description
     ? description.length > 250

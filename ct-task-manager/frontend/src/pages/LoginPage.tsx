@@ -10,7 +10,7 @@ import './LoginPage.css';
 const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { login, isAuthenticated, currentUser, loading: authLoading } = useAuth();
   const { systemName } = useSettings();
 
   const [formData, setFormData] = useState({
@@ -38,7 +38,37 @@ const LoginPage = () => {
   const [forgotError, setForgotError] = useState<string | null>(null);
   const [forgotCountdown, setForgotCountdown] = useState(0);
 
-  const from = location.state?.from?.pathname || '/';
+  // Helper to determine destination path for a given user role
+  const getDestinationPath = (role?: string) => {
+    const fromLocation = location.state?.from;
+    const rawPath = typeof fromLocation === 'string'
+      ? fromLocation
+      : fromLocation
+        ? `${fromLocation.pathname || ''}${fromLocation.search || ''}${fromLocation.hash || ''}`
+        : '';
+
+    if (!rawPath || rawPath === '/' || rawPath === '/login') {
+      if (role === 'super_admin') return '/super-admin';
+      if (role === 'department_admin') return '/admin';
+      return '/staff';
+    }
+
+    if (rawPath.startsWith('/tasks')) {
+      const query = rawPath.includes('?') ? rawPath.substring(rawPath.indexOf('?')) : '';
+      if (role === 'super_admin') return `/super-admin/tasks${query}`;
+      if (role === 'department_admin') return `/admin/tasks${query}`;
+      return `/staff/tasks${query}`;
+    }
+
+    return rawPath;
+  };
+
+  // If already logged in, redirect directly to dashboard or destination
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && currentUser) {
+      navigate(getDestinationPath(currentUser.role), { replace: true });
+    }
+  }, [authLoading, isAuthenticated, currentUser]);
 
   // Countdown timer for Forgot Password OTP
   useEffect(() => {
@@ -70,8 +100,8 @@ const LoginPage = () => {
 
     try {
       setLoading(true);
-      await login(formData);
-      navigate(from === '/' ? '/staff' : from, { replace: true });
+      const user = await login(formData);
+      navigate(getDestinationPath(user?.role || currentUser?.role), { replace: true });
     } catch (err: any) {
       setError(err.message || 'Invalid University ID or password.');
     } finally {

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
 import LoginPage from '../pages/LoginPage';
 import RegisterPage from '../pages/RegisterPage';
@@ -15,13 +15,37 @@ import DeptAdminStaffPage from '../pages/DeptAdminStaffPage';
 import TasksPage from '../pages/TasksPage';
 import NaacDashboardPage from '../pages/NaacDashboardPage';
 import ProfilePage from '../pages/ProfilePage';
-import { AuthProvider } from '../context/AuthContext';
+import { AuthProvider, useAuth } from '../context/AuthContext';
 import { SettingsProvider } from '../context/SettingsContext';
 import ProtectedRoute from '../components/ProtectedRoute';
 import SuperAdminLayout from '../components/SuperAdminLayout';
 import DeptAdminLayout from '../components/DeptAdminLayout';
 import StaffLayout from '../components/StaffLayout';
 import SystemSettingsModal from '../components/SystemSettingsModal';
+
+/** Smart dispatcher for generic /tasks links (e.g. from notification emails) */
+const TaskRedirectHandler = () => {
+  const { isAuthenticated, loading, currentUser } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return <div className="page-container"><div className="vu-loading">Loading...</div></div>;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  const search = location.search || '';
+  let targetPath = '/staff/tasks';
+  if (currentUser?.role === 'super_admin') {
+    targetPath = '/super-admin/tasks';
+  } else if (currentUser?.role === 'department_admin') {
+    targetPath = '/admin/tasks';
+  }
+
+  return <Navigate to={`${targetPath}${search}`} replace />;
+};
 
 const AppRouter = () => {
   return (
@@ -33,6 +57,8 @@ const AppRouter = () => {
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/tasks" element={<TaskRedirectHandler />} />
+            <Route path="/tasks/*" element={<TaskRedirectHandler />} />
           
             {/* Super Admin Routes */}
             <Route path="/super-admin" element={
@@ -87,6 +113,9 @@ const AppRouter = () => {
               <Route path="profile" element={<ProfilePage />} />
               <Route path="notifications" element={<Navigate to="/staff/tasks" replace />} />
             </Route>
+
+            {/* Global fallback route */}
+            <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         </BrowserRouter>
       </SettingsProvider>
