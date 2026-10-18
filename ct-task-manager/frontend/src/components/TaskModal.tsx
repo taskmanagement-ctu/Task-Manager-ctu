@@ -86,6 +86,7 @@ interface AttachmentListProps {
   canDelete?: boolean;
   onDelete?: (fileId: string) => void;
   deletingFileId?: string | null;
+  uploaderLabel?: string;
 }
 
 const getFileInfo = (filename: string) => {
@@ -138,7 +139,8 @@ const AttachmentList: React.FC<AttachmentListProps> = ({
   hideCardWrap = false,
   canDelete = false,
   onDelete,
-  deletingFileId
+  deletingFileId,
+  uploaderLabel
 }) => {
   const [files, setFiles] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -213,6 +215,16 @@ const AttachmentList: React.FC<AttachmentListProps> = ({
                     <span className="tm-file-size">
                       {formatFileSize(file.length)}
                     </span>
+                    {uploaderLabel && (
+                      <span className="tm-file-uploader-tag">
+                        • {uploaderLabel}
+                      </span>
+                    )}
+                    {file.uploadDate && (
+                      <span className="tm-file-upload-date">
+                        • {formatDateTimeDDMMYYYY(file.uploadDate)}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -740,6 +752,12 @@ const TaskModal: React.FC<TaskModalProps> = ({
   const canDelete = isSuperAdmin || isCreator;
   // Only the assigned performer can upload, add or delete deliverables, and only while task is in-progress/pending/rejected
   const canManageDeliverables = canPerformStaffActions && ['pending', 'in_progress', 'rejected'].includes(task.status);
+  
+  const currentPerformer = task.delegatedTo || task.assignedTo;
+  const performerName = resolveUserName(currentPerformer) || currentPerformer?.name || '';
+  const deliverablesSectionTitle = canPerformStaffActions 
+    ? 'YOUR DELIVERABLES & WORK FILES' 
+    : 'ASSIGNEE SUBMISSIONS & WORK PROOFS';
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
 
   const handleDeleteTaskModal = () => {
@@ -1262,16 +1280,18 @@ const TaskModal: React.FC<TaskModalProps> = ({
                     <FolderUp size={14} />
                   </div>
                   <span className="tm-deliv-title">
-                    DELIVERABLES &amp; WORK FILES
+                    {deliverablesSectionTitle}
                   </span>
                   {task.completionAttachments && task.completionAttachments.length > 0 && (
                     <span className="tm-deliv-count-badge">
                       {task.completionAttachments.length} {task.completionAttachments.length === 1 ? 'file' : 'files'}
                     </span>
                   )}
-                  <span className="tm-deliv-spec-inline">
-                    Max 5 MB • Any format
-                  </span>
+                  {canPerformStaffActions && (
+                    <span className="tm-deliv-spec-inline">
+                      Max 5 MB • Any format
+                    </span>
+                  )}
                 </div>
 
                 {/* Upload File button */}
@@ -1336,6 +1356,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                     canDelete={canManageDeliverables}
                     onDelete={handleDeleteWorkFile}
                     deletingFileId={deletingWorkFileId}
+                    uploaderLabel={!canPerformStaffActions && performerName ? `Uploaded by ${performerName}` : ''}
                   />
                   
                   {canManageDeliverables && (
@@ -1379,7 +1400,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                 ) : (
                   <div className="tm-deliv-empty-readonly">
                     <Paperclip size={14} className="tm-empty-ro-icon" />
-                    <span>No deliverables or work files uploaded yet.</span>
+                    <span>Assignee has not uploaded any deliverables or work proofs yet.</span>
                   </div>
                 )
               )}
@@ -1392,7 +1413,9 @@ const TaskModal: React.FC<TaskModalProps> = ({
                 <div className="tm-comments-header">
                   <div className="tm-comments-title-wrap">
                     <MessageSquare size={13} className="tm-comments-title-icon" />
-                    <span className="tm-comments-title">Assignee Comments &amp; Work Notes</span>
+                    <span className="tm-comments-title">
+                      {canPerformStaffActions ? 'Assignee Comments & Work Notes' : 'Task Discussion & Notes'}
+                    </span>
                     {taskComments && taskComments.length > 0 && (
                       <span className="tm-comments-count-pill">{taskComments.length}</span>
                     )}
@@ -1438,7 +1461,9 @@ const TaskModal: React.FC<TaskModalProps> = ({
                   </div>
                 ) : (
                   <div className="tm-comments-empty-notice">
-                    No comments yet. Assignee can add work notes, queries, or remarks below.
+                    {canPerformStaffActions 
+                      ? 'No comments yet. Assignee can add work notes, queries, or remarks below.' 
+                      : 'No notes or discussion yet. You can add feedback or remarks for the assignee below.'}
                   </div>
                 )}
 
@@ -1448,7 +1473,9 @@ const TaskModal: React.FC<TaskModalProps> = ({
                     <textarea
                       className="tm-comment-textarea"
                       rows={1}
-                      placeholder="Add a comment or work update (e.g. script draft ready, please review)..."
+                      placeholder={canPerformStaffActions 
+                        ? 'Add a comment or work update (e.g. script draft ready, please review)...' 
+                        : 'Add a remark, query, or feedback for the assignee...'}
                       value={newCommentText}
                       onChange={(e) => setNewCommentText(e.target.value)}
                       onKeyDown={(e) => {

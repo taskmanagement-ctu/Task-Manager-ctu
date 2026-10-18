@@ -1129,6 +1129,17 @@
   font-weight: 500;
 }
 
+.tm-file-uploader-tag {
+  color: #0284c7;
+  font-weight: 600;
+  font-size: 0.72rem;
+}
+
+.tm-file-upload-date {
+  color: #94a3b8;
+  font-size: 0.72rem;
+}
+
 .tm-file-actions-row {
   display: flex;
   align-items: center;
