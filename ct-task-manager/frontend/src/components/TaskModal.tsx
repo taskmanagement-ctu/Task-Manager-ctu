@@ -717,7 +717,10 @@ const TaskModal: React.FC<TaskModalProps> = ({
   const isPerformerAdmin = currentUser.role === 'department_admin' && !task.delegatedTo && Boolean(
     task.assignedTo && (task.assignedTo._id === currentUserId || task.assignedTo.id === currentUserId || task.assignedTo === currentUserId)
   );
-  const canPerformStaffActions = isAssignedStaff || isPerformerAdmin;
+  const isPerformerSuperAdmin = currentUser.role === 'super_admin' && !task.delegatedTo && Boolean(
+    task.assignedTo && (task.assignedTo._id === currentUserId || task.assignedTo.id === currentUserId || task.assignedTo === currentUserId)
+  );
+  const canPerformStaffActions = isAssignedStaff || isPerformerAdmin || isPerformerSuperAdmin;
 
   const isCreator = Boolean(
     (task.createdBy?._id && (task.createdBy._id === currentUser.id || task.createdBy._id === currentUser._id)) ||
@@ -735,9 +738,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
     task.status !== 'submitted_for_review' && task.status !== 'approved';
   
   const canDelete = isSuperAdmin || isCreator;
-  const canDeleteDeliverables = 
-    (canPerformStaffActions || isSuperAdmin || isCreator || currentUser?.role === 'department_admin') &&
-    ['pending', 'in_progress', 'rejected'].includes(task.status);
+  // Only the assigned performer can upload, add or delete deliverables, and only while task is in-progress/pending/rejected
+  const canManageDeliverables = canPerformStaffActions && ['pending', 'in_progress', 'rejected'].includes(task.status);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
 
   const handleDeleteTaskModal = () => {
@@ -1273,7 +1275,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                 </div>
 
                 {/* Upload File button */}
-                {(canPerformStaffActions || isSuperAdmin || isCreator || currentUser?.role === 'department_admin') && (
+                {canManageDeliverables && (
                   <div className="tm-deliv-header-actions">
                     <input 
                       type="file" 
@@ -1331,12 +1333,12 @@ const TaskModal: React.FC<TaskModalProps> = ({
                   <AttachmentList 
                     fileIds={task.completionAttachments} 
                     hideCardWrap={true} 
-                    canDelete={canDeleteDeliverables}
+                    canDelete={canManageDeliverables}
                     onDelete={handleDeleteWorkFile}
                     deletingFileId={deletingWorkFileId}
                   />
                   
-                  {(canPerformStaffActions || isSuperAdmin || isCreator || currentUser?.role === 'department_admin') && (
+                  {canManageDeliverables && (
                     <div className="tm-deliv-add-more-row">
                       <button
                         type="button"
@@ -1351,7 +1353,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                   )}
                 </div>
               ) : (
-                (canPerformStaffActions || isSuperAdmin || isCreator || currentUser?.role === 'department_admin') ? (
+                canManageDeliverables ? (
                   <div 
                     className="tm-deliv-compact-dropzone"
                     onClick={() => workFileInputRef.current?.click()}

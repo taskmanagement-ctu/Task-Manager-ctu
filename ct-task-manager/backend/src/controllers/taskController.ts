@@ -1911,6 +1911,29 @@ export const uploadTaskAttachments = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: 'Task not found.' });
     }
 
+    // Only allow uploading deliverables if task is in_progress, pending, or rejected
+    if (!['pending', 'in_progress', 'rejected'].includes(task.status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Deliverable files can only be uploaded while the task is In Progress or Pending.'
+      });
+    }
+
+    // Permission check: Performer of the task or admin
+    const userIdStr = user._id.toString();
+    const isSuperAdmin = user.role === 'super_admin';
+    const isDeptAdmin = user.role === 'department_admin';
+    const isAssigned = task.assignedTo && task.assignedTo.toString() === userIdStr;
+    const isDelegated = task.delegatedTo && task.delegatedTo.toString() === userIdStr;
+    const isPerformer = Boolean(isDelegated || (!task.delegatedTo && isAssigned));
+
+    if (!isPerformer && !isSuperAdmin && !isDeptAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only the assigned staff member can upload deliverables for this task.'
+      });
+    }
+
     const files = (req.files as Express.Multer.File[]) || [];
     if (files.length === 0) {
       return res.status(400).json({ success: false, message: 'Please select at least one file to upload.' });
@@ -2004,18 +2027,18 @@ export const deleteTaskAttachment = async (req: Request, res: Response) => {
       });
     }
 
-    // Permission check: Assigned user, delegated user, creator, or super_admin / dept_admin
+    // Permission check: Performer of the task or admin
     const userIdStr = user._id.toString();
     const isSuperAdmin = user.role === 'super_admin';
     const isDeptAdmin = user.role === 'department_admin';
-    const isCreator = task.createdBy && task.createdBy.toString() === userIdStr;
     const isAssigned = task.assignedTo && task.assignedTo.toString() === userIdStr;
     const isDelegated = task.delegatedTo && task.delegatedTo.toString() === userIdStr;
+    const isPerformer = Boolean(isDelegated || (!task.delegatedTo && isAssigned));
 
-    if (!isSuperAdmin && !isDeptAdmin && !isCreator && !isAssigned && !isDelegated) {
+    if (!isPerformer && !isSuperAdmin && !isDeptAdmin) {
       return res.status(403).json({
         success: false,
-        message: 'You do not have permission to delete files from this task.'
+        message: 'Only the assigned staff member can delete deliverables from this task.'
       });
     }
 
