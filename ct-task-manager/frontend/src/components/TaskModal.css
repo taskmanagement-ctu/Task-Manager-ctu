@@ -1174,6 +1174,25 @@
   border-color: #94a3b8;
 }
 
+.tm-file-delete-btn {
+  background: #ffffff;
+  color: #ef4444;
+  border: 1px solid #fecaca;
+  padding: 0.35rem 0.5rem;
+  cursor: pointer;
+}
+
+.tm-file-delete-btn:hover:not(:disabled) {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+
+.tm-file-delete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .tm-deliv-add-more-row {
   display: flex;
   justify-content: flex-end;

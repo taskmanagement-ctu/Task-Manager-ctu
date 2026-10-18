@@ -1974,3 +1974,98 @@ export const uploadTaskAttachments = async (req: Request, res: Response) => {
     });
   }
 };
+
+// DELETE /api/tasks/:id/attachments/:fileId
+// Allows assignee/staff/creator/admin to remove a previously uploaded deliverable/work file
+// Allowed ONLY when task is 'in_progress', 'pending', or 'rejected'
+export const deleteTaskAttachment = async (req: Request, res: Response) => {
+  try {
+    const { id, fileId } = req.params;
+    const user = req.user;
+
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id) || !mongoose.Types.ObjectId.isValid(fileId)) {
+      return res.status(400).json({ success: false, message: 'Invalid task or file ID format.' });
+    }
+
+    const task = await Task.findById(id);
+    if (!task) {
+      return res.status(404).json({ success: false, message: 'Task not found.' });
+    }
+
+    // Check status: Only allow deletion when task is in_progress, pending, or rejected
+    if (!['pending', 'in_progress', 'rejected'].includes(task.status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Deliverable files can only be removed while the task is In Progress or Pending.'
+      });
+    }
+
+    // Permission check: Assigned user, delegated user, creator, or super_admin / dept_admin
+    const userIdStr = user._id.toString();
+    const isSuperAdmin = user.role === 'super_admin';
+    const isDeptAdmin = user.role === 'department_admin';
+    const isCreator = task.createdBy && task.createdBy.toString() === userIdStr;
+    const isAssigned = task.assignedTo && task.assignedTo.toString() === userIdStr;
+    const isDelegated = task.delegatedTo && task.delegatedTo.toString() === userIdStr;
+
+    if (!isSuperAdmin && !isDeptAdmin && !isCreator && !isAssigned && !isDelegated) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to delete files from this task.'
+      });
+    }
+
+    // Check if file is in completionAttachments
+    const fileObjectIdStr = fileId.toString();
+    const hasFile = (task.completionAttachments || []).some(att => att.toString() === fileObjectIdStr);
+    if (!hasFile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Deliverable file not found on this task.'
+      });
+    }
+
+    // Delete file from GridFS to free storage
+    const db = mongoose.connection.db;
+    if (db) {
+      try {
+        const bucket = new mongoose.mongo.GridFSBucket(db, {
+          bucketName: 'attachments'
+        });
+        await bucket.delete(new mongoose.Types.ObjectId(fileId));
+      } catch (gridFsErr: any) {
+        console.warn('GridFS delete warning (file might already be deleted):', gridFsErr.message);
+      }
+    }
+
+    // Remove from task completionAttachments
+    task.completionAttachments = (task.completionAttachments || []).filter(
+      att => att.toString() !== fileObjectIdStr
+    );
+    await task.save();
+
+    const populatedTask = await Task.findById(task._id)
+      .populate('createdBy', 'name email role universityId department')
+      .populate('assignedTo', 'name email role universityId department')
+      .populate('delegatedTo', 'name email role universityId department')
+      .populate('comments.sender', 'name role department universityId employeeId email');
+
+    return res.status(200).json({
+      success: true,
+      message: 'Deliverable file deleted successfully.',
+      data: { task: populatedTask }
+    });
+  } catch (error: any) {
+    console.error('Error deleting task attachment:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to delete attachment.',
+      error: error.message
+    });
+  }
+};
+

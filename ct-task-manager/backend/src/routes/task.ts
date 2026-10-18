@@ -16,7 +16,8 @@ import {
   getTaskComments,
   markCommentsAsRead,
   deleteTask,
-  uploadTaskAttachments
+  uploadTaskAttachments,
+  deleteTaskAttachment
 } from '../controllers/taskController';
 import { authenticate, authorizeRoles } from '../middleware/auth';
 import { uploadAny } from '../middleware/upload';
@@ -68,7 +69,12 @@ router.patch('/:id/submit-review', uploadAny.array('attachments'), submitReview)
 // @route   POST /api/tasks/:id/attachments
 // @desc    Upload deliverables/files for a task (any format, < 5MB)
 // @access  Assignee, staff, creator, admins
-router.post('/:id/attachments', uploadAny.array('attachments'), uploadTaskAttachments);
+router.post('/:id/attachments', uploadAny.array('attachments'), uploadTaskAttachments);
+
+// @route   DELETE /api/tasks/:id/attachments/:fileId
+// @desc    Delete a deliverable/work file from a task (only while in progress/pending/rejected)
+// @access  Assignee, staff, creator, admins
+router.delete('/:id/attachments/:fileId', deleteTaskAttachment);
 
 // @route   PATCH /api/tasks/:id/review
 // @desc    Approve or reject a task

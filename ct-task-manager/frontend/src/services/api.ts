@@ -883,6 +883,12 @@ export const api = {
       method: 'POST',
       body: formData,
     });
+  },
+
+  deleteTaskAttachment: async (id: string, fileId: string): Promise<{ success: boolean; message: string; data?: any }> => {
+    return fetchWithAuth(`/api/tasks/${id}/attachments/${fileId}`, {
+      method: 'DELETE',
+    });
   },
 
   getNaacReport: async (): Promise<{ success: boolean; data: any }> => {

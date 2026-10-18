@@ -83,6 +83,9 @@ interface AttachmentListProps {
   fileIds: string[];
   title?: string;
   hideCardWrap?: boolean;
+  canDelete?: boolean;
+  onDelete?: (fileId: string) => void;
+  deletingFileId?: string | null;
 }
 
 const getFileInfo = (filename: string) => {
@@ -129,7 +132,14 @@ const formatFileSize = (bytes?: number) => {
   return `${(bytes / (k * 1024)).toFixed(1)} MB`;
 };
 
-const AttachmentList: React.FC<AttachmentListProps> = ({ fileIds, title, hideCardWrap = false }) => {
+const AttachmentList: React.FC<AttachmentListProps> = ({ 
+  fileIds, 
+  title, 
+  hideCardWrap = false,
+  canDelete = false,
+  onDelete,
+  deletingFileId
+}) => {
   const [files, setFiles] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const fileIdsKey = Array.isArray(fileIds) ? fileIds.join(',') : '';
@@ -228,6 +238,22 @@ const AttachmentList: React.FC<AttachmentListProps> = ({ fileIds, title, hideCar
                 >
                   <ExternalLink size={13} />
                 </a>
+                {canDelete && onDelete && (
+                  <button
+                    type="button"
+                    className="tm-file-action-btn tm-file-delete-btn"
+                    onClick={() => onDelete(file._id)}
+                    disabled={deletingFileId === file._id}
+                    title="Remove this work file"
+                    aria-label={`Remove ${file.filename}`}
+                  >
+                    {deletingFileId === file._id ? (
+                      <Loader2 size={13} className="tm-spin" />
+                    ) : (
+                      <Trash2 size={13} />
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -328,6 +354,37 @@ const TaskModal: React.FC<TaskModalProps> = ({
     } finally {
       setIsUploadingWorkFile(false);
       if (workFileInputRef.current) workFileInputRef.current.value = '';
+    }
+  };
+
+  const [deletingWorkFileId, setDeletingWorkFileId] = useState<string | null>(null);
+
+  const handleDeleteWorkFile = async (fileId: string) => {
+    if (!window.confirm('Are you sure you want to delete this deliverable file?')) {
+      return;
+    }
+    setWorkFileError('');
+    setWorkFileSuccess('');
+    setDeletingWorkFileId(fileId);
+    try {
+      const res = await api.deleteTaskAttachment(task._id, fileId);
+      if (res.success) {
+        setWorkFileSuccess('File removed successfully.');
+        setTask((prev: any) => ({
+          ...prev,
+          completionAttachments: (prev.completionAttachments || []).filter(
+            (id: any) => (id?._id || id?.id || id)?.toString() !== fileId
+          )
+        }));
+        refreshTaskData();
+        setTimeout(() => setWorkFileSuccess(''), 3000);
+      } else {
+        setWorkFileError(res.message || 'Failed to delete file.');
+      }
+    } catch (err: any) {
+      setWorkFileError(err.message || 'Failed to delete file.');
+    } finally {
+      setDeletingWorkFileId(null);
     }
   };
 
@@ -678,6 +735,9 @@ const TaskModal: React.FC<TaskModalProps> = ({
     task.status !== 'submitted_for_review' && task.status !== 'approved';
   
   const canDelete = isSuperAdmin || isCreator;
+  const canDeleteDeliverables = 
+    (canPerformStaffActions || isSuperAdmin || isCreator || currentUser?.role === 'department_admin') &&
+    ['pending', 'in_progress', 'rejected'].includes(task.status);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
 
   const handleDeleteTaskModal = () => {
@@ -1268,7 +1328,13 @@ const TaskModal: React.FC<TaskModalProps> = ({
               {/* Uploaded Files List OR Compact Drop Area */}
               {task.completionAttachments && task.completionAttachments.length > 0 ? (
                 <div className="tm-deliv-content-loaded">
-                  <AttachmentList fileIds={task.completionAttachments} hideCardWrap={true} />
+                  <AttachmentList 
+                    fileIds={task.completionAttachments} 
+                    hideCardWrap={true} 
+                    canDelete={canDeleteDeliverables}
+                    onDelete={handleDeleteWorkFile}
+                    deletingFileId={deletingWorkFileId}
+                  />
                   
                   {(canPerformStaffActions || isSuperAdmin || isCreator || currentUser?.role === 'department_admin') && (
                     <div className="tm-deliv-add-more-row">
