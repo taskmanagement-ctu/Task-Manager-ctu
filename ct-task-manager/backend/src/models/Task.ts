@@ -29,6 +29,29 @@ export interface ITask extends Document {
   ratedBy?: mongoose.Types.ObjectId | null;
   ratedAt?: Date | null;
   ratedUser?: mongoose.Types.ObjectId | null;
+  extensionRequest?: {
+    requestedBy: mongoose.Types.ObjectId;
+    currentDeadline: Date;
+    requestedDeadline: Date;
+    reason: string;
+    stage: 'department_admin' | 'super_admin' | 'none';
+    status: 'pending' | 'endorsed' | 'approved' | 'rejected';
+    deptAdminRemarks?: string | null;
+    deptAdminActionBy?: mongoose.Types.ObjectId | null;
+    deptAdminActionAt?: Date | null;
+    decidedBy?: mongoose.Types.ObjectId | null;
+    decidedAt?: Date | null;
+    decisionReason?: string | null;
+    createdAt?: Date;
+  } | null;
+  deadlineHistory?: Array<{
+    oldDeadline: Date;
+    newDeadline: Date;
+    changedBy: mongoose.Types.ObjectId;
+    changedAt: Date;
+    reason?: string | null;
+    type: 'direct_admin' | 'requested';
+  }>;
   comments?: Array<{
     _id?: mongoose.Types.ObjectId;
     sender: mongoose.Types.ObjectId;
@@ -181,6 +204,101 @@ const taskSchema = new Schema<ITask>(
       default: null,
       index: true
     },
+    extensionRequest: {
+      requestedBy: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
+      },
+      currentDeadline: {
+        type: Date,
+        default: null
+      },
+      requestedDeadline: {
+        type: Date,
+        default: null
+      },
+      reason: {
+        type: String,
+        trim: true,
+        maxlength: 1000,
+        default: null
+      },
+      stage: {
+        type: String,
+        enum: ['department_admin', 'super_admin', 'none'],
+        default: 'none'
+      },
+      status: {
+        type: String,
+        enum: ['pending', 'endorsed', 'approved', 'rejected'],
+        default: 'pending'
+      },
+      deptAdminRemarks: {
+        type: String,
+        trim: true,
+        maxlength: 1000,
+        default: null
+      },
+      deptAdminActionBy: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
+      },
+      deptAdminActionAt: {
+        type: Date,
+        default: null
+      },
+      decidedBy: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
+      },
+      decidedAt: {
+        type: Date,
+        default: null
+      },
+      decisionReason: {
+        type: String,
+        trim: true,
+        maxlength: 1000,
+        default: null
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now
+      }
+    },
+    deadlineHistory: [
+      {
+        oldDeadline: {
+          type: Date,
+          required: true
+        },
+        newDeadline: {
+          type: Date,
+          required: true
+        },
+        changedBy: {
+          type: Schema.Types.ObjectId,
+          ref: 'User',
+          required: true
+        },
+        changedAt: {
+          type: Date,
+          default: Date.now
+        },
+        reason: {
+          type: String,
+          default: null
+        },
+        type: {
+          type: String,
+          enum: ['direct_admin', 'requested'],
+          default: 'direct_admin'
+        }
+      }
+    ],
     comments: [
       {
         sender: {

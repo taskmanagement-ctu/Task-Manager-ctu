@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ChevronDown, ChevronUp, Paperclip, FileText, Star, Building2, MessageSquare, Video, Plus, Check, X, Layers, ArrowLeft, ExternalLink, Trash2, User, Users, Clock, AlignLeft, FileSpreadsheet, Image as ImageIcon, File as FileIcon, Download, Loader2, CheckCircle2, FolderUp, AlertCircle, Send } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, Paperclip, FileText, Star, Building2, MessageSquare, Video, Plus, Check, X, Layers, ArrowLeft, ExternalLink, Trash2, User, Users, Clock, AlignLeft, FileSpreadsheet, Image as ImageIcon, File as FileIcon, Download, Loader2, CheckCircle2, FolderUp, AlertCircle, Send, Calendar, CalendarPlus, Edit3, CheckCheck, XCircle } from 'lucide-react';
 import { api } from '../services/api';
 import { calculateUrgency, getUrgencyColor, getUrgencyLabel } from '../utils/taskUrgency';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
@@ -600,6 +600,193 @@ const TaskModal: React.FC<TaskModalProps> = ({
   const [modalSubtaskSuccess, setModalSubtaskSuccess] = useState('');
   const [deletingSubtaskId, setDeletingSubtaskId] = useState<string | null>(null);
 
+  // ─── Deadline Extension States & Handlers ──────────────────
+  const [isDirectExtendOpen, setIsDirectExtendOpen] = useState(false);
+  const [directExtendDeadline, setDirectExtendDeadline] = useState('');
+  const [directExtendReason, setDirectExtendReason] = useState('');
+  const [directExtendLoading, setDirectExtendLoading] = useState(false);
+  const [directExtendError, setDirectExtendError] = useState('');
+
+  const [isRequestExtensionOpen, setIsRequestExtensionOpen] = useState(false);
+  const [reqExtDeadline, setReqExtDeadline] = useState('');
+  const [reqExtReason, setReqExtReason] = useState('');
+  const [reqExtLoading, setReqExtLoading] = useState(false);
+  const [reqExtError, setReqExtError] = useState('');
+
+  const [isReviewExtensionOpen, setIsReviewExtensionOpen] = useState(false);
+  const [reviewAction, setReviewAction] = useState<'endorse' | 'approve' | 'reject' | null>(null);
+  const [reviewRemarks, setReviewRemarks] = useState('');
+  const [reviewCustomDeadline, setReviewCustomDeadline] = useState('');
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewError, setReviewError] = useState('');
+
+  const [extensionNotice, setExtensionNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const addDaysToDeadline = (baseDate: Date | string, days: number) => {
+    const d = new Date(baseDate);
+    if (isNaN(d.getTime())) return '';
+    d.setDate(d.getDate() + days);
+    return formatToLocalDateTimeInput(d);
+  };
+
+  const handleOpenDirectExtend = () => {
+    setDirectExtendDeadline(addDaysToDeadline(task.deadline, 3));
+    setDirectExtendReason('');
+    setDirectExtendError('');
+    setIsDirectExtendOpen(true);
+  };
+
+  const handleSubmitDirectExtend = async () => {
+    if (!directExtendDeadline) {
+      setDirectExtendError('Please select a new deadline.');
+      return;
+    }
+    const newD = new Date(directExtendDeadline);
+    if (isNaN(newD.getTime())) {
+      setDirectExtendError('Invalid deadline date.');
+      return;
+    }
+    try {
+      setDirectExtendLoading(true);
+      setDirectExtendError('');
+      const res = await api.directExtendDeadline(task._id, {
+        newDeadline: directExtendDeadline,
+        reason: directExtendReason.trim()
+      });
+      if (res.success) {
+        setIsDirectExtendOpen(false);
+        setExtensionNotice({ type: 'success', message: 'Task deadline updated successfully!' });
+        setTimeout(() => setExtensionNotice(null), 4000);
+        refreshTaskData();
+      } else {
+        setDirectExtendError(res.message || 'Failed to update deadline.');
+      }
+    } catch (err: any) {
+      setDirectExtendError(err.message || 'Failed to update deadline.');
+    } finally {
+      setDirectExtendLoading(false);
+    }
+  };
+
+  const handleOpenRequestExtension = () => {
+    setReqExtDeadline(addDaysToDeadline(task.deadline, 3));
+    setReqExtReason('');
+    setReqExtError('');
+    setIsRequestExtensionOpen(true);
+  };
+
+  const handleSubmitRequestExtension = async () => {
+    if (!reqExtDeadline) {
+      setReqExtError('Please choose a requested deadline date.');
+      return;
+    }
+    if (!reqExtReason.trim()) {
+      setReqExtError('Please provide a reason or justification for the extension.');
+      return;
+    }
+    const newD = new Date(reqExtDeadline);
+    if (isNaN(newD.getTime())) {
+      setReqExtError('Invalid requested deadline date.');
+      return;
+    }
+    if (newD.getTime() <= new Date(task.deadline).getTime()) {
+      setReqExtError('Requested deadline must be after the current deadline.');
+      return;
+    }
+    try {
+      setReqExtLoading(true);
+      setReqExtError('');
+      const res = await api.requestDeadlineExtension(task._id, {
+        requestedDeadline: reqExtDeadline,
+        reason: reqExtReason.trim()
+      });
+      if (res.success) {
+        setIsRequestExtensionOpen(false);
+        setExtensionNotice({ type: 'success', message: 'Deadline extension requested successfully!' });
+        setTimeout(() => setExtensionNotice(null), 4000);
+        refreshTaskData();
+      } else {
+        setReqExtError(res.message || 'Failed to request extension.');
+      }
+    } catch (err: any) {
+      setReqExtError(err.message || 'Failed to request extension.');
+    } finally {
+      setReqExtLoading(false);
+    }
+  };
+
+  const handleOpenReviewModal = (action: 'endorse' | 'approve' | 'reject') => {
+    setReviewAction(action);
+    setReviewRemarks('');
+    setReviewCustomDeadline(
+      task.extensionRequest?.requestedDeadline
+        ? formatToLocalDateTimeInput(task.extensionRequest.requestedDeadline)
+        : ''
+    );
+    setReviewError('');
+    setIsReviewExtensionOpen(true);
+  };
+
+  const handleQuickApproveExtension = async () => {
+    if (!window.confirm(`Approve deadline extension to ${formatDateTimeDDMMYYYY(task.extensionRequest?.requestedDeadline)}?`)) {
+      return;
+    }
+    try {
+      setReviewLoading(true);
+      const res = await api.reviewDeadlineExtension(task._id, {
+        action: 'approve'
+      });
+      if (res.success) {
+        setExtensionNotice({ type: 'success', message: 'Deadline extension approved!' });
+        setTimeout(() => setExtensionNotice(null), 4000);
+        refreshTaskData();
+      } else {
+        alert(res.message || 'Failed to approve extension.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to approve extension.');
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  const handleSubmitReviewAction = async () => {
+    if (!reviewAction) return;
+    if (reviewAction === 'reject' && !reviewRemarks.trim()) {
+      setReviewError('Please specify a rejection reason.');
+      return;
+    }
+    try {
+      setReviewLoading(true);
+      setReviewError('');
+      const res = await api.reviewDeadlineExtension(task._id, {
+        action: reviewAction,
+        remarks: reviewRemarks.trim(),
+        approvedDeadline: reviewAction === 'approve' && reviewCustomDeadline ? reviewCustomDeadline : undefined
+      });
+      if (res.success) {
+        setIsReviewExtensionOpen(false);
+        setExtensionNotice({
+          type: 'success',
+          message:
+            reviewAction === 'reject'
+              ? 'Extension request rejected.'
+              : reviewAction === 'endorse'
+              ? 'Extension request endorsed and forwarded to Super Admin!'
+              : 'Deadline extension approved!'
+        });
+        setTimeout(() => setExtensionNotice(null), 4000);
+        refreshTaskData();
+      } else {
+        setReviewError(res.message || 'Failed to process extension review.');
+      }
+    } catch (err: any) {
+      setReviewError(err.message || 'Failed to process extension review.');
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
   const refreshTaskData = async () => {
     try {
       const res = await api.getTaskById(task._id);
@@ -789,6 +976,17 @@ const TaskModal: React.FC<TaskModalProps> = ({
   const deliverablesSectionTitle = canPerformStaffActions 
     ? 'YOUR DELIVERABLES & WORK FILES' 
     : 'ASSIGNEE SUBMISSIONS & WORK PROOFS';
+
+  // Deadline extension permissions
+  const canDirectExtend = isSuperAdmin || isCreator;
+  const hasPendingExtension = Boolean(
+    task.extensionRequest && (task.extensionRequest.status === 'pending' || task.extensionRequest.status === 'endorsed')
+  );
+  const canRequestExtension = canPerformStaffActions && !hasPendingExtension && task.status !== 'completed' && task.status !== 'approved';
+  const isCreatorSuperAdmin = Boolean(
+    task.createdBy?.role === 'super_admin' || task.createdBy?.universityId === '10001'
+  );
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
 
   const handleDeleteTaskModal = () => {
@@ -1136,6 +1334,139 @@ const TaskModal: React.FC<TaskModalProps> = ({
               </div>
             )}
 
+            {/* Feedback / Alert Notice for Extension Actions */}
+            {extensionNotice && (
+              <div className={`tm-ext-feedback-notice ${extensionNotice.type}`}>
+                <CheckCircle2 size={16} />
+                <span>{extensionNotice.message}</span>
+              </div>
+            )}
+
+            {/* Deadline Extension Review Banner (Visible when an extension is pending) */}
+            {hasPendingExtension && task.extensionRequest && (
+              <div className="tm-ext-banner">
+                <div className="tm-ext-banner-header">
+                  <div className="tm-ext-banner-title">
+                    <Clock size={16} className="tm-ext-banner-icon" />
+                    <span>Deadline Extension Request</span>
+                    <span className={`tm-ext-status-badge ${task.extensionRequest.status}`}>
+                      {task.extensionRequest.status === 'endorsed' ? 'Endorsed by HOD' : 'Pending Review'}
+                    </span>
+                  </div>
+                  <div className="tm-ext-banner-stage">
+                    Awaiting: <strong>{task.extensionRequest.stage === 'super_admin' ? 'Super Admin Approval' : 'Department Admin Review'}</strong>
+                  </div>
+                </div>
+
+                <div className="tm-ext-banner-body">
+                  <div className="tm-ext-banner-grid">
+                    <div>
+                      <span className="tm-ext-label">Requested By:</span>
+                      <span className="tm-ext-val">{formatName(task.extensionRequest.requestedBy)}</span>
+                    </div>
+                    <div>
+                      <span className="tm-ext-label">Current Deadline:</span>
+                      <span className="tm-ext-val">{formatDateTimeDDMMYYYY(task.deadline)}</span>
+                    </div>
+                    <div>
+                      <span className="tm-ext-label">Proposed New Deadline:</span>
+                      <span className="tm-ext-val tm-ext-val-highlight">
+                        {formatDateTimeDDMMYYYY(task.extensionRequest.requestedDeadline)}
+                      </span>
+                    </div>
+                    {task.extensionRequest.createdAt && (
+                      <div>
+                        <span className="tm-ext-label">Requested On:</span>
+                        <span className="tm-ext-val">{formatDateTimeDDMMYYYY(task.extensionRequest.createdAt)}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="tm-ext-reason-box">
+                    <strong>Assignee Justification:</strong> "{task.extensionRequest.reason}"
+                  </div>
+
+                  {task.extensionRequest.deptAdminRemarks && (
+                    <div className="tm-ext-endorsement-box">
+                      <strong>Dept Admin Endorsement ({formatName(task.extensionRequest.deptAdminActionBy)}):</strong> "{task.extensionRequest.deptAdminRemarks}"
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions for Dept Admin */}
+                {currentUser?.role === 'department_admin' && task.extensionRequest.stage === 'department_admin' && (
+                  <div className="tm-ext-banner-actions">
+                    {isCreatorSuperAdmin ? (
+                      <button 
+                        type="button" 
+                        className="tm-ext-btn tm-ext-btn-endorse"
+                        onClick={() => handleOpenReviewModal('endorse')}
+                        disabled={reviewLoading}
+                      >
+                        <CheckCheck size={14} /> Endorse & Forward to Super Admin
+                      </button>
+                    ) : (
+                      <button 
+                        type="button" 
+                        className="tm-ext-btn tm-ext-btn-approve"
+                        onClick={() => handleOpenReviewModal('approve')}
+                        disabled={reviewLoading}
+                      >
+                        <Check size={14} /> Approve Extension
+                      </button>
+                    )}
+                    <button 
+                      type="button" 
+                      className="tm-ext-btn tm-ext-btn-reject"
+                      onClick={() => handleOpenReviewModal('reject')}
+                      disabled={reviewLoading}
+                    >
+                      <X size={14} /> Reject Request
+                    </button>
+                  </div>
+                )}
+
+                {/* Actions for Super Admin */}
+                {currentUser?.role === 'super_admin' && (
+                  <div className="tm-ext-banner-actions">
+                    <button 
+                      type="button" 
+                      className="tm-ext-btn tm-ext-btn-approve"
+                      onClick={handleQuickApproveExtension}
+                      disabled={reviewLoading}
+                      title="Approve requested deadline"
+                    >
+                      <Check size={14} /> Approve ({formatDateTimeDDMMYYYY(task.extensionRequest.requestedDeadline)})
+                    </button>
+                    <button 
+                      type="button" 
+                      className="tm-ext-btn tm-ext-btn-custom"
+                      onClick={() => handleOpenReviewModal('approve')}
+                      disabled={reviewLoading}
+                      title="Approve with a different custom date"
+                    >
+                      <Edit3 size={14} /> Approve Custom Date
+                    </button>
+                    <button 
+                      type="button" 
+                      className="tm-ext-btn tm-ext-btn-reject"
+                      onClick={() => handleOpenReviewModal('reject')}
+                      disabled={reviewLoading}
+                    >
+                      <X size={14} /> Reject Request
+                    </button>
+                  </div>
+                )}
+
+                {/* Info for Assignee */}
+                {canPerformStaffActions && !['super_admin', 'department_admin'].includes(currentUser?.role) && (
+                  <div className="tm-ext-waiting-note">
+                    <Clock size={13} /> Your deadline extension request is currently under review by {task.extensionRequest.stage === 'super_admin' ? 'Super Admin' : 'Department Admin'}.
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Compact Metadata Summary Bar (Assigned By, Deadline + Details toggle) */}
             <div className="tm-compact-summary-bar">
               <div className="tm-summary-primary-row">
@@ -1149,14 +1480,43 @@ const TaskModal: React.FC<TaskModalProps> = ({
                 </div>
 
                 {/* Deadline */}
-                <div className="tm-summary-item">
+                <div 
+                  className={`tm-summary-item ${canDirectExtend ? 'tm-summary-item-clickable' : ''}`}
+                  onClick={canDirectExtend ? handleOpenDirectExtend : undefined}
+                  title={canDirectExtend ? "Click to extend deadline" : undefined}
+                  role={canDirectExtend ? "button" : undefined}
+                  tabIndex={canDirectExtend ? 0 : undefined}
+                >
                   <div className="tm-summary-label">
                     <Clock size={13} className="tm-summary-icon" />
                     <span>DEADLINE</span>
+                    {canDirectExtend && (
+                      <span className="tm-summary-edit-pill">
+                        <Edit3 size={10} /> Extend
+                      </span>
+                    )}
                   </div>
                   <div className="tm-summary-val deadline-val">
                     {formatDateTimeDDMMYYYY(task.deadline)}
                   </div>
+                  {/* Extension requested status or request extension button */}
+                  {hasPendingExtension ? (
+                    <div className="tm-deadline-sub-badge pending">
+                      <Clock size={11} /> Extension Requested
+                    </div>
+                  ) : canRequestExtension ? (
+                    <button
+                      type="button"
+                      className="tm-request-ext-trigger-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenRequestExtension();
+                      }}
+                      title="Request a deadline extension"
+                    >
+                      <CalendarPlus size={11} /> Request Extension
+                    </button>
+                  ) : null}
                 </div>
 
                 {/* Details Button */}
@@ -2403,6 +2763,303 @@ const TaskModal: React.FC<TaskModalProps> = ({
           </div>
         )}
       </div>
+
+      {/* ─── Modal 1: Super Admin Direct Extend Deadline Modal ─── */}
+      {isDirectExtendOpen && (
+        <div className="tm-subtask-modal-overlay" onClick={() => !directExtendLoading && setIsDirectExtendOpen(false)}>
+          <div className="tm-dialog-card" onClick={e => e.stopPropagation()}>
+            <div className="tm-dialog-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <div className="tm-dialog-icon-wrap" style={{ background: '#eff6ff', color: '#2563eb' }}>
+                  <Calendar size={18} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#0f172a' }}>Extend Task Deadline</h3>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>Task #{task.taskId || ''} • {task.title}</p>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                className="tm-dialog-close" 
+                onClick={() => !directExtendLoading && setIsDirectExtendOpen(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="tm-dialog-body">
+              <div className="tm-dialog-current-deadline-box">
+                <span className="tm-dialog-meta-label">Current Deadline:</span>
+                <span className="tm-dialog-meta-val">{formatDateTimeDDMMYYYY(task.deadline)}</span>
+              </div>
+
+              <div>
+                <label className="tm-dialog-field-label">Quick Presets</label>
+                <div className="tm-preset-chips-row">
+                  {[
+                    { label: '+1 Day', days: 1 },
+                    { label: '+3 Days', days: 3 },
+                    { label: '+1 Week', days: 7 },
+                    { label: '+2 Weeks', days: 14 }
+                  ].map(preset => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      className="tm-preset-chip"
+                      onClick={() => setDirectExtendDeadline(addDaysToDeadline(task.deadline, preset.days))}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="tm-dialog-field-label">New Deadline *</label>
+                <input
+                  type="datetime-local"
+                  className="tm-dialog-input"
+                  value={directExtendDeadline}
+                  onChange={(e) => setDirectExtendDeadline(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="tm-dialog-field-label">Reason / Remarks (Optional)</label>
+                <textarea
+                  className="tm-dialog-input"
+                  rows={2}
+                  value={directExtendReason}
+                  onChange={(e) => setDirectExtendReason(e.target.value)}
+                  placeholder="e.g., Extension granted for university NAAC audit preparation"
+                />
+              </div>
+
+              {directExtendError && (
+                <div className="tm-dialog-error">
+                  <AlertCircle size={14} /> {directExtendError}
+                </div>
+              )}
+            </div>
+
+            <div className="tm-dialog-footer">
+              <button
+                type="button"
+                className="tm-btn-cancel"
+                onClick={() => setIsDirectExtendOpen(false)}
+                disabled={directExtendLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="tm-btn-primary tm-btn-update-deadline"
+                onClick={handleSubmitDirectExtend}
+                disabled={directExtendLoading || !directExtendDeadline}
+              >
+                {directExtendLoading ? <Loader2 size={14} className="tm-spin" /> : <Check size={14} />}
+                Update Deadline
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Modal 2: Assignee Request Extension Modal ─── */}
+      {isRequestExtensionOpen && (
+        <div className="tm-subtask-modal-overlay" onClick={() => !reqExtLoading && setIsRequestExtensionOpen(false)}>
+          <div className="tm-dialog-card" onClick={e => e.stopPropagation()}>
+            <div className="tm-dialog-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <div className="tm-dialog-icon-wrap" style={{ background: '#fef3c7', color: '#d97706' }}>
+                  <CalendarPlus size={18} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#0f172a' }}>Request Deadline Extension</h3>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>Task #{task.taskId || ''} • {task.title}</p>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                className="tm-dialog-close" 
+                onClick={() => !reqExtLoading && setIsRequestExtensionOpen(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="tm-dialog-body">
+              <div className="tm-dialog-info-box">
+                ℹ️ Your request will be reviewed by your Department Admin and forwarded to Super Admin for final approval.
+              </div>
+
+              <div className="tm-dialog-current-deadline-box">
+                <span className="tm-dialog-meta-label">Current Deadline:</span>
+                <span className="tm-dialog-meta-val">{formatDateTimeDDMMYYYY(task.deadline)}</span>
+              </div>
+
+              <div>
+                <label className="tm-dialog-field-label">Quick Presets</label>
+                <div className="tm-preset-chips-row">
+                  {[
+                    { label: '+1 Day', days: 1 },
+                    { label: '+3 Days', days: 3 },
+                    { label: '+1 Week', days: 7 }
+                  ].map(preset => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      className="tm-preset-chip"
+                      onClick={() => setReqExtDeadline(addDaysToDeadline(task.deadline, preset.days))}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="tm-dialog-field-label">Proposed New Deadline *</label>
+                <input
+                  type="datetime-local"
+                  className="tm-dialog-input"
+                  value={reqExtDeadline}
+                  min={formatToLocalDateTimeInput(task.deadline)}
+                  onChange={(e) => setReqExtDeadline(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="tm-dialog-field-label">Reason / Justification *</label>
+                <textarea
+                  className="tm-dialog-input"
+                  rows={3}
+                  value={reqExtReason}
+                  onChange={(e) => setReqExtReason(e.target.value)}
+                  placeholder="Explain why you need an extension (e.g., waiting for external vendor API, additional data collection required...)"
+                />
+              </div>
+
+              {reqExtError && (
+                <div className="tm-dialog-error">
+                  <AlertCircle size={14} /> {reqExtError}
+                </div>
+              )}
+            </div>
+
+            <div className="tm-dialog-footer">
+              <button
+                type="button"
+                className="tm-btn-cancel"
+                onClick={() => setIsRequestExtensionOpen(false)}
+                disabled={reqExtLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="tm-btn-primary tm-btn-submit-req"
+                onClick={handleSubmitRequestExtension}
+                disabled={reqExtLoading || !reqExtDeadline || !reqExtReason.trim()}
+              >
+                {reqExtLoading ? <Loader2 size={14} className="tm-spin" /> : <Send size={14} />}
+                Submit Request
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Modal 3: Review / Endorse / Custom Date Modal ─── */}
+      {isReviewExtensionOpen && (
+        <div className="tm-subtask-modal-overlay" onClick={() => !reviewLoading && setIsReviewExtensionOpen(false)}>
+          <div className="tm-dialog-card" onClick={e => e.stopPropagation()}>
+            <div className="tm-dialog-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <div className="tm-dialog-icon-wrap" style={{
+                  background: reviewAction === 'reject' ? '#fee2e2' : reviewAction === 'endorse' ? '#eff6ff' : '#ecfdf5',
+                  color: reviewAction === 'reject' ? '#dc2626' : reviewAction === 'endorse' ? '#2563eb' : '#059669'
+                }}>
+                  {reviewAction === 'reject' ? <XCircle size={18} /> : reviewAction === 'endorse' ? <CheckCheck size={18} /> : <CheckCircle2 size={18} />}
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#0f172a' }}>
+                    {reviewAction === 'reject' ? 'Reject Extension Request' : reviewAction === 'endorse' ? 'Endorse & Forward to Super Admin' : 'Approve Deadline Extension'}
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>Task #{task.taskId || ''} • {task.title}</p>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                className="tm-dialog-close" 
+                onClick={() => !reviewLoading && setIsReviewExtensionOpen(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="tm-dialog-body">
+              {reviewAction === 'approve' && (
+                <div>
+                  <label className="tm-dialog-field-label">Approved Deadline *</label>
+                  <input
+                    type="datetime-local"
+                    className="tm-dialog-input"
+                    value={reviewCustomDeadline}
+                    onChange={(e) => setReviewCustomDeadline(e.target.value)}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block', marginTop: '0.25rem' }}>
+                    Assignee requested: {formatDateTimeDDMMYYYY(task.extensionRequest?.requestedDeadline)}
+                  </span>
+                </div>
+              )}
+
+              <div>
+                <label className="tm-dialog-field-label">
+                  {reviewAction === 'reject' ? 'Rejection Reason *' : 'Remarks / Recommendation Note (Optional)'}
+                </label>
+                <textarea
+                  className="tm-dialog-input"
+                  rows={3}
+                  value={reviewRemarks}
+                  onChange={(e) => setReviewRemarks(e.target.value)}
+                  placeholder={
+                    reviewAction === 'reject'
+                      ? 'Specify why this extension request cannot be approved...'
+                      : 'Add any recommendation notes or context for the Super Admin...'
+                  }
+                />
+              </div>
+
+              {reviewError && (
+                <div className="tm-dialog-error">
+                  <AlertCircle size={14} /> {reviewError}
+                </div>
+              )}
+            </div>
+
+            <div className="tm-dialog-footer">
+              <button
+                type="button"
+                className="tm-btn-cancel"
+                onClick={() => setIsReviewExtensionOpen(false)}
+                disabled={reviewLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={`tm-btn-primary ${reviewAction === 'reject' ? 'tm-btn-danger' : reviewAction === 'endorse' ? 'tm-btn-endorse' : 'tm-btn-approve'}`}
+                onClick={handleSubmitReviewAction}
+                disabled={reviewLoading || (reviewAction === 'reject' && !reviewRemarks.trim())}
+              >
+                {reviewLoading ? <Loader2 size={14} className="tm-spin" /> : <Check size={14} />}
+                {reviewAction === 'reject' ? 'Confirm Rejection' : reviewAction === 'endorse' ? 'Forward to Super Admin' : 'Confirm Approval'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* In-App Verification Modal to Delete Task */}
       <ConfirmDeleteModal 

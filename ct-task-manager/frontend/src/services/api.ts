@@ -857,6 +857,30 @@ export const api = {
     });
   },
 
+  directExtendDeadline: async (id: string, data: { newDeadline: string; reason?: string }): Promise<{ success: boolean; message: string; data?: any }> => {
+    return fetchWithAuth(`/api/tasks/${id}/extend-deadline`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+
+  requestDeadlineExtension: async (id: string, data: { requestedDeadline: string; reason: string }): Promise<{ success: boolean; message: string; data?: any }> => {
+    return fetchWithAuth(`/api/tasks/${id}/request-extension`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+
+  reviewDeadlineExtension: async (id: string, data: { action: 'endorse' | 'approve' | 'reject'; remarks?: string; approvedDeadline?: string }): Promise<{ success: boolean; message: string; data?: any }> => {
+    return fetchWithAuth(`/api/tasks/${id}/review-extension`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+
   assignTask: async (id: string, assignedTo: string | string[] | null, assignmentMode?: 'individual' | 'shared'): Promise<{ success: boolean; message: string; data: any }> => {
     return fetchWithAuth(`/api/tasks/${id}/assign`, {
       method: 'PATCH',

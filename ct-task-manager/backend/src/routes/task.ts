@@ -17,7 +17,10 @@ import {
   markCommentsAsRead,
   deleteTask,
   uploadTaskAttachments,
-  deleteTaskAttachment
+  deleteTaskAttachment,
+  requestDeadlineExtension,
+  reviewDeadlineExtension,
+  directExtendDeadline
 } from '../controllers/taskController';
 import { authenticate, authorizeRoles } from '../middleware/auth';
 import { uploadAny } from '../middleware/upload';
@@ -49,7 +52,22 @@ router.get('/:id', getTaskById);
 // @route   PATCH /api/tasks/:id
 // @desc    Update task details (title, description, deadline)
 // @access  Super Admin, Department Admin (own only)
-router.patch('/:id', authorizeRoles('super_admin', 'department_admin'), updateTask);
+router.patch('/:id', authorizeRoles('super_admin', 'department_admin'), updateTask);
+
+// @route   PATCH /api/tasks/:id/extend-deadline
+// @desc    Super Admin or Creator directly extends task deadline
+// @access  Super Admin, Department Admin (creator)
+router.patch('/:id/extend-deadline', authorizeRoles('super_admin', 'department_admin'), directExtendDeadline);
+
+// @route   POST /api/tasks/:id/request-extension
+// @desc    Assignee requests deadline extension
+// @access  Task Assignees
+router.post('/:id/request-extension', requestDeadlineExtension);
+
+// @route   PATCH /api/tasks/:id/review-extension
+// @desc    Review (endorse, approve, reject) a deadline extension request
+// @access  Super Admin, Department Admin
+router.patch('/:id/review-extension', authorizeRoles('super_admin', 'department_admin'), reviewDeadlineExtension);
 
 // @route   PATCH /api/tasks/:id/assign
 // @desc    Assign or unassign a task

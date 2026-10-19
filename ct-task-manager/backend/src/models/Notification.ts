@@ -31,7 +31,12 @@ const notificationSchema = new Schema<INotification>(
         'task_approved',
         'task_rejected',
         'task_rated',
-        'new_chat_message'
+        'new_chat_message',
+        'deadline_extension_requested',
+        'deadline_extension_endorsed',
+        'deadline_extension_approved',
+        'deadline_extension_rejected',
+        'deadline_extended'
       ]
     },
     title: {

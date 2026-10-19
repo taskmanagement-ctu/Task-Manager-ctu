@@ -544,6 +544,9 @@ export const getTasks = async (req: Request, res: Response) => {
       .populate('ratedBy', 'name role universityId')
       .populate('ratedUser', 'name role department universityId')
       .populate('parentTaskId', 'taskId title')
+      .populate('extensionRequest.requestedBy', 'name role department universityId email')
+      .populate('extensionRequest.deptAdminActionBy', 'name role department universityId email')
+      .populate('extensionRequest.decidedBy', 'name role department universityId email')
       .sort(sortObj)
       .skip((page - 1) * limit)
       .limit(limit);
@@ -605,6 +608,10 @@ export const getTaskById = async (req: Request, res: Response) => {
       .populate('ratedBy', 'name role universityId')
       .populate('ratedUser', 'name role department universityId')
       .populate('parentTaskId', 'taskId title')
+      .populate('extensionRequest.requestedBy', 'name role department universityId email')
+      .populate('extensionRequest.deptAdminActionBy', 'name role department universityId email')
+      .populate('extensionRequest.decidedBy', 'name role department universityId email')
+      .populate('deadlineHistory.changedBy', 'name role department universityId email')
       .populate('comments.sender', 'name role department universityId employeeId email');
       
     if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
@@ -2302,4 +2309,552 @@ export const deleteTaskAttachment = async (req: Request, res: Response) => {
     });
   }
 };
+
+// POST /api/tasks/:id/request-extension
+export const requestDeadlineExtension = async (req: Request, res: Response) => {
+  try {
+    const user = req.user;
+    const { requestedDeadline, reason } = req.body;
+
+    if (!requestedDeadline || !reason || !reason.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Requested deadline date and a valid reason are required.'
+      });
+    }
+
+    const task = await Task.findById(req.params.id);
+    if (!task) {
+      return res.status(404).json({ success: false, message: 'Task not found' });
+    }
+
+    // Assignee check
+    const isPerformer =
+      (task.assignedTo && task.assignedTo.toString() === user._id.toString()) ||
+      (task.delegatedTo && task.delegatedTo.toString() === user._id.toString()) ||
+      (Array.isArray(task.coAssignees) && task.coAssignees.some((ca: any) => (ca._id?.toString() || ca.toString()) === user._id.toString()));
+
+    if (!isPerformer) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden. Only assigned members can request a deadline extension.'
+      });
+    }
+
+    if (task.status === 'completed' || task.status === 'approved') {
+      return res.status(400).json({
+        success: false,
+        message: 'Deadline extension cannot be requested for a completed or approved task.'
+      });
+    }
+
+    const newDate = new Date(requestedDeadline);
+    if (isNaN(newDate.getTime())) {
+      return res.status(400).json({ success: false, message: 'Invalid requested deadline date.' });
+    }
+
+    const currentDeadlineTime = new Date(task.deadline).getTime();
+    if (newDate.getTime() <= currentDeadlineTime) {
+      return res.status(400).json({
+        success: false,
+        message: 'The requested deadline must be strictly after the current deadline.'
+      });
+    }
+
+    // Check if there is already a pending or endorsed extension request
+    if (task.extensionRequest && (task.extensionRequest.status === 'pending' || task.extensionRequest.status === 'endorsed')) {
+      return res.status(400).json({
+        success: false,
+        message: 'There is already an active deadline extension request pending review.'
+      });
+    }
+
+    // Determine initial stage
+    const creator = await User.findById(task.createdBy);
+    const isCreatorSuperAdmin = Boolean(creator && creator.role === 'super_admin');
+
+    let stage: 'department_admin' | 'super_admin' = 'department_admin';
+    let targetReviewerId: mongoose.Types.ObjectId | null = null;
+
+    if (isCreatorSuperAdmin) {
+      // If user requesting is Dept Admin, it goes directly to Super Admin
+      if (user.role === 'department_admin') {
+        stage = 'super_admin';
+        targetReviewerId = task.createdBy;
+      } else {
+        // Staff requesting on a Super Admin task
+        if (task.delegatedTo && task.delegatedTo.toString() === user._id.toString() && task.assignedTo) {
+          stage = 'department_admin';
+          targetReviewerId = task.assignedTo;
+        } else {
+          // Check if staff has a Dept Admin in their department
+          const staffUser = await User.findById(user._id);
+          const deptAdmin = staffUser?.department
+            ? await User.findOne({
+                department: { $regex: new RegExp(`^${staffUser.department.trim()}$`, 'i') },
+                role: 'department_admin',
+                isActive: true
+              })
+            : null;
+
+          if (deptAdmin) {
+            stage = 'department_admin';
+            targetReviewerId = deptAdmin._id as mongoose.Types.ObjectId;
+          } else {
+            // No Dept Admin in department -> escalate straight to Super Admin
+            stage = 'super_admin';
+            targetReviewerId = task.createdBy;
+          }
+        }
+      }
+    } else {
+      // Task created by Department Admin (internal dept task)
+      stage = 'department_admin';
+      targetReviewerId = task.createdBy;
+    }
+
+    task.extensionRequest = {
+      requestedBy: user._id,
+      currentDeadline: task.deadline,
+      requestedDeadline: newDate,
+      reason: reason.trim(),
+      stage,
+      status: 'pending',
+      deptAdminRemarks: null,
+      deptAdminActionBy: null,
+      deptAdminActionAt: null,
+      decidedBy: null,
+      decidedAt: null,
+      decisionReason: null,
+      createdAt: new Date()
+    };
+
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const fmtDate = `${pad(newDate.getDate())}/${pad(newDate.getMonth() + 1)}/${newDate.getFullYear()}, ${pad(newDate.getHours())}:${pad(newDate.getMinutes())}`;
+
+    task.comments = task.comments || [];
+    task.comments.push({
+      sender: user._id,
+      message: `⏱️ [Deadline Extension Requested] Requested new deadline: ${fmtDate}. Reason: "${reason.trim()}"`,
+      channel: 'general',
+      attachments: [],
+      readBy: [user._id],
+      readAt: null,
+      createdAt: new Date()
+    });
+
+    await task.save();
+
+    // Send notification to target reviewer
+    if (targetReviewerId && targetReviewerId.toString() !== user._id.toString()) {
+      createNotification(
+        targetReviewerId,
+        'deadline_extension_requested',
+        'Deadline Extension Requested',
+        `${user.name} requested a deadline extension to ${fmtDate} for Task #${task.taskId || ''} "${task.title}".`,
+        task._id,
+        user._id
+      );
+    }
+
+    const populatedTask = await Task.findById(task._id)
+      .populate('createdBy', 'name email role universityId department')
+      .populate('assignedTo', 'name email role universityId department')
+      .populate('delegatedTo', 'name email role universityId department')
+      .populate('coAssignees', 'name email role universityId department')
+      .populate('extensionRequest.requestedBy', 'name email role universityId department')
+      .populate('extensionRequest.deptAdminActionBy', 'name email role universityId department')
+      .populate('extensionRequest.decidedBy', 'name email role universityId department')
+      .populate('deadlineHistory.changedBy', 'name role department universityId email')
+      .populate('comments.sender', 'name role department universityId employeeId email');
+
+    return res.status(200).json({
+      success: true,
+      message: 'Deadline extension requested successfully.',
+      data: { task: populatedTask }
+    });
+  } catch (error: any) {
+    console.error('Error requesting deadline extension:', error);
+    return res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+  }
+};
+
+// PATCH /api/tasks/:id/review-extension
+export const reviewDeadlineExtension = async (req: Request, res: Response) => {
+  try {
+    const user = req.user;
+    const { action, remarks, approvedDeadline } = req.body;
+
+    if (!['endorse', 'approve', 'reject'].includes(action)) {
+      return res.status(400).json({ success: false, message: 'Invalid action. Must be endorse, approve, or reject.' });
+    }
+
+    const task = await Task.findById(req.params.id);
+    if (!task) {
+      return res.status(404).json({ success: false, message: 'Task not found' });
+    }
+
+    if (!task.extensionRequest || (task.extensionRequest.status !== 'pending' && task.extensionRequest.status !== 'endorsed')) {
+      return res.status(400).json({ success: false, message: 'No active extension request found on this task.' });
+    }
+
+    const creator = await User.findById(task.createdBy);
+    const isCreatorSuperAdmin = Boolean(creator && creator.role === 'super_admin');
+
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const formatDt = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+    task.comments = task.comments || [];
+    task.deadlineHistory = task.deadlineHistory || [];
+
+    // Review by Department Admin
+    if (user.role === 'department_admin') {
+      if (task.extensionRequest.stage !== 'department_admin' && !isCreatorSuperAdmin) {
+        return res.status(403).json({ success: false, message: 'This extension request is not awaiting Department Admin review.' });
+      }
+
+      if (action === 'reject') {
+        if (!remarks || !remarks.trim()) {
+          return res.status(400).json({ success: false, message: 'Remarks / Reason is required when rejecting an extension request.' });
+        }
+        task.extensionRequest.status = 'rejected';
+        task.extensionRequest.decisionReason = remarks.trim();
+        task.extensionRequest.decidedBy = user._id;
+        task.extensionRequest.decidedAt = new Date();
+        task.extensionRequest.stage = 'none';
+
+        task.comments.push({
+          sender: user._id,
+          message: `❌ [Extension Rejected] Department Admin (${user.name}) rejected the deadline extension request. Reason: "${remarks.trim()}"`,
+          channel: 'general',
+          attachments: [],
+          readBy: [user._id],
+          readAt: null,
+          createdAt: new Date()
+        });
+
+        await task.save();
+
+        if (task.extensionRequest.requestedBy) {
+          createNotification(
+            task.extensionRequest.requestedBy,
+            'deadline_extension_rejected',
+            'Deadline Extension Rejected',
+            `Your deadline extension request for Task #${task.taskId || ''} was rejected by Department Admin: "${remarks.trim()}".`,
+            task._id,
+            user._id
+          );
+        }
+
+      } else {
+        // action === 'endorse' OR 'approve'
+        if (isCreatorSuperAdmin) {
+          // Tasks originating from Super Admin: Dept Admin endorses & forwards to Super Admin
+          task.extensionRequest.stage = 'super_admin';
+          task.extensionRequest.status = 'endorsed';
+          task.extensionRequest.deptAdminRemarks = remarks ? remarks.trim() : 'Endorsed by Department Admin';
+          task.extensionRequest.deptAdminActionBy = user._id;
+          task.extensionRequest.deptAdminActionAt = new Date();
+
+          task.comments.push({
+            sender: user._id,
+            message: `✅ [Extension Endorsed by Dept Admin] Forwarded to Super Admin. Remarks: "${remarks ? remarks.trim() : 'Endorsed and recommended for extension.'}"`,
+            channel: 'general',
+            attachments: [],
+            readBy: [user._id],
+            readAt: null,
+            createdAt: new Date()
+          });
+
+          await task.save();
+
+          // Notify Super Admin
+          createNotification(
+            task.createdBy,
+            'deadline_extension_endorsed',
+            'Extension Request Endorsed',
+            `${user.name} endorsed the deadline extension request for Task #${task.taskId || ''} "${task.title}".`,
+            task._id,
+            user._id
+          );
+        } else {
+          // Task created by Department Admin -> Dept Admin has final authority to approve!
+          const newDeadline = approvedDeadline ? new Date(approvedDeadline) : new Date(task.extensionRequest.requestedDeadline);
+          if (isNaN(newDeadline.getTime())) {
+            return res.status(400).json({ success: false, message: 'Invalid approved deadline date.' });
+          }
+
+          const oldDeadline = task.deadline;
+          task.deadlineHistory.push({
+            oldDeadline,
+            newDeadline,
+            changedBy: user._id,
+            changedAt: new Date(),
+            reason: task.extensionRequest.reason || 'Approved extension request',
+            type: 'requested'
+          });
+
+          task.deadline = newDeadline;
+          task.extensionRequest.status = 'approved';
+          task.extensionRequest.decidedBy = user._id;
+          task.extensionRequest.decidedAt = new Date();
+          task.extensionRequest.stage = 'none';
+
+          task.comments.push({
+            sender: user._id,
+            message: `🎉 [Deadline Extended] Department Admin (${user.name}) approved deadline extension to ${formatDt(newDeadline)}.${remarks ? ` Note: "${remarks.trim()}"` : ''}`,
+            channel: 'general',
+            attachments: [],
+            readBy: [user._id],
+            readAt: null,
+            createdAt: new Date()
+          });
+
+          await task.save();
+
+          // Notify requester
+          if (task.extensionRequest.requestedBy) {
+            createNotification(
+              task.extensionRequest.requestedBy,
+              'deadline_extension_approved',
+              'Deadline Extension Approved',
+              `Your deadline extension for Task #${task.taskId || ''} was approved by Department Admin. New deadline: ${formatDt(newDeadline)}.`,
+              task._id,
+              user._id
+            );
+          }
+        }
+      }
+    } 
+    // Review by Super Admin
+    else if (user.role === 'super_admin') {
+      if (action === 'reject') {
+        if (!remarks || !remarks.trim()) {
+          return res.status(400).json({ success: false, message: 'Remarks / Reason is required when rejecting an extension request.' });
+        }
+        task.extensionRequest.status = 'rejected';
+        task.extensionRequest.decisionReason = remarks.trim();
+        task.extensionRequest.decidedBy = user._id;
+        task.extensionRequest.decidedAt = new Date();
+        task.extensionRequest.stage = 'none';
+
+        task.comments.push({
+          sender: user._id,
+          message: `❌ [Extension Rejected] Super Admin rejected the deadline extension request. Reason: "${remarks.trim()}"`,
+          channel: 'general',
+          attachments: [],
+          readBy: [user._id],
+          readAt: null,
+          createdAt: new Date()
+        });
+
+        await task.save();
+
+        // Notify requester and dept admin
+        const notifyTargets = new Set<string>();
+        if (task.extensionRequest.requestedBy) notifyTargets.add(task.extensionRequest.requestedBy.toString());
+        if (task.extensionRequest.deptAdminActionBy) notifyTargets.add(task.extensionRequest.deptAdminActionBy.toString());
+        notifyTargets.delete(user._id.toString());
+
+        for (const targetId of notifyTargets) {
+          createNotification(
+            targetId,
+            'deadline_extension_rejected',
+            'Deadline Extension Rejected',
+            `The deadline extension request for Task #${task.taskId || ''} was rejected by Super Admin: "${remarks.trim()}".`,
+            task._id,
+            user._id
+          );
+        }
+      } else {
+        // Super Admin approve (can be requested date or a custom approved date)
+        const newDeadline = approvedDeadline ? new Date(approvedDeadline) : new Date(task.extensionRequest.requestedDeadline);
+        if (isNaN(newDeadline.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid approved deadline date.' });
+        }
+
+        const oldDeadline = task.deadline;
+        task.deadlineHistory.push({
+          oldDeadline,
+          newDeadline,
+          changedBy: user._id,
+          changedAt: new Date(),
+          reason: task.extensionRequest.reason || 'Approved extension request',
+          type: 'requested'
+        });
+
+        task.deadline = newDeadline;
+        task.extensionRequest.status = 'approved';
+        task.extensionRequest.decidedBy = user._id;
+        task.extensionRequest.decidedAt = new Date();
+        task.extensionRequest.stage = 'none';
+
+        task.comments.push({
+          sender: user._id,
+          message: `🎉 [Deadline Extended] Super Admin approved deadline extension to ${formatDt(newDeadline)}.${remarks ? ` Note: "${remarks.trim()}"` : ''}`,
+          channel: 'general',
+          attachments: [],
+          readBy: [user._id],
+          readAt: null,
+          createdAt: new Date()
+        });
+
+        await task.save();
+
+        const notifyTargets = new Set<string>();
+        if (task.extensionRequest.requestedBy) notifyTargets.add(task.extensionRequest.requestedBy.toString());
+        if (task.extensionRequest.deptAdminActionBy) notifyTargets.add(task.extensionRequest.deptAdminActionBy.toString());
+        if (task.assignedTo) notifyTargets.add(task.assignedTo.toString());
+        notifyTargets.delete(user._id.toString());
+
+        for (const targetId of notifyTargets) {
+          createNotification(
+            targetId,
+            'deadline_extension_approved',
+            'Deadline Extension Approved',
+            `The deadline extension for Task #${task.taskId || ''} was approved by Super Admin. New deadline: ${formatDt(newDeadline)}.`,
+            task._id,
+            user._id
+          );
+        }
+      }
+    } else {
+      return res.status(403).json({ success: false, message: 'Forbidden. Only administrators can review extension requests.' });
+    }
+
+    const populatedTask = await Task.findById(task._id)
+      .populate('createdBy', 'name email role universityId department')
+      .populate('assignedTo', 'name email role universityId department')
+      .populate('delegatedTo', 'name email role universityId department')
+      .populate('coAssignees', 'name email role universityId department')
+      .populate('extensionRequest.requestedBy', 'name email role universityId department')
+      .populate('extensionRequest.deptAdminActionBy', 'name email role universityId department')
+      .populate('extensionRequest.decidedBy', 'name email role universityId department')
+      .populate('deadlineHistory.changedBy', 'name role department universityId email')
+      .populate('comments.sender', 'name role department universityId employeeId email');
+
+    return res.status(200).json({
+      success: true,
+      message: 'Extension review recorded successfully.',
+      data: { task: populatedTask }
+    });
+  } catch (error: any) {
+    console.error('Error reviewing deadline extension:', error);
+    return res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+  }
+};
+
+// PATCH /api/tasks/:id/extend-deadline
+export const directExtendDeadline = async (req: Request, res: Response) => {
+  try {
+    const user = req.user;
+    const { newDeadline, reason } = req.body;
+
+    if (!newDeadline) {
+      return res.status(400).json({ success: false, message: 'New deadline date is required.' });
+    }
+
+    const parsedDeadline = new Date(newDeadline);
+    if (isNaN(parsedDeadline.getTime())) {
+      return res.status(400).json({ success: false, message: 'Invalid deadline date.' });
+    }
+
+    const task = await Task.findById(req.params.id);
+    if (!task) {
+      return res.status(404).json({ success: false, message: 'Task not found' });
+    }
+
+    // Only Super Admin or the task's creator (Dept Admin) can directly extend deadline
+    const isSuperAdmin = user.role === 'super_admin';
+    const isCreator = task.createdBy.toString() === user._id.toString();
+
+    if (!isSuperAdmin && !isCreator) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden. Only Super Admin or the Task Creator can directly extend the deadline.'
+      });
+    }
+
+    const oldDeadline = task.deadline;
+    task.deadlineHistory = task.deadlineHistory || [];
+    task.deadlineHistory.push({
+      oldDeadline,
+      newDeadline: parsedDeadline,
+      changedBy: user._id,
+      changedAt: new Date(),
+      reason: reason?.trim() || 'Direct administrative update',
+      type: 'direct_admin'
+    });
+
+    task.deadline = parsedDeadline;
+
+    // If there was an active pending extension request, mark it resolved
+    if (task.extensionRequest && (task.extensionRequest.status === 'pending' || task.extensionRequest.status === 'endorsed')) {
+      task.extensionRequest.status = 'approved';
+      task.extensionRequest.decidedBy = user._id;
+      task.extensionRequest.decidedAt = new Date();
+      task.extensionRequest.stage = 'none';
+      if (reason && !task.extensionRequest.decisionReason) {
+        task.extensionRequest.decisionReason = reason.trim();
+      }
+    }
+
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const formatDt = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+    task.comments = task.comments || [];
+    task.comments.push({
+      sender: user._id,
+      message: `⏱️ [Deadline Extended] ${user.role === 'super_admin' ? 'Super Admin' : 'Admin'} (${user.name}) directly updated deadline from ${formatDt(oldDeadline)} to ${formatDt(parsedDeadline)}.${reason?.trim() ? ` Note: "${reason.trim()}"` : ''}`,
+      channel: 'general',
+      attachments: [],
+      readBy: [user._id],
+      readAt: null,
+      createdAt: new Date()
+    });
+
+    await task.save();
+
+    // Notify assignees
+    const notifyIds = new Set<string>();
+    if (task.assignedTo) notifyIds.add(task.assignedTo.toString());
+    if (task.delegatedTo) notifyIds.add(task.delegatedTo.toString());
+    if (Array.isArray(task.coAssignees)) {
+      task.coAssignees.forEach((ca: any) => notifyIds.add((ca._id || ca).toString()));
+    }
+    notifyIds.delete(user._id.toString());
+
+    for (const recId of notifyIds) {
+      createNotification(
+        recId,
+        'deadline_extended',
+        'Task Deadline Extended',
+        `The deadline for Task #${task.taskId || ''} "${task.title}" has been updated to ${formatDt(parsedDeadline)} by ${user.name}.`,
+        task._id,
+        user._id
+      );
+    }
+
+    const populatedTask = await Task.findById(task._id)
+      .populate('createdBy', 'name email role universityId department')
+      .populate('assignedTo', 'name email role universityId department')
+      .populate('delegatedTo', 'name email role universityId department')
+      .populate('coAssignees', 'name email role universityId department')
+      .populate('extensionRequest.requestedBy', 'name email role universityId department')
+      .populate('extensionRequest.deptAdminActionBy', 'name email role universityId department')
+      .populate('extensionRequest.decidedBy', 'name email role universityId department')
+      .populate('deadlineHistory.changedBy', 'name role department universityId email')
+      .populate('comments.sender', 'name role department universityId employeeId email');
+
+    return res.status(200).json({
+      success: true,
+      message: 'Task deadline updated successfully.',
+      data: { task: populatedTask }
+    });
+  } catch (error: any) {
+    console.error('Error extending deadline directly:', error);
+    return res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+  }
+};
+
 
