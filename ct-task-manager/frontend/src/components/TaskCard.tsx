@@ -384,6 +384,22 @@ const TaskCard: React.FC<TaskCardProps> = ({
                     <Layers size={11} /> DECK ({subtaskCount})
                   </span>
                 )}
+                {(task.assignmentMode === 'shared' || (task.coAssignees && task.coAssignees.length > 1)) && (
+                  <span style={{
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    padding: '0.15rem 0.45rem',
+                    borderRadius: '4px',
+                    backgroundColor: '#eff6ff',
+                    color: '#1d4ed8',
+                    border: '1px solid #bfdbfe',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.2rem'
+                  }} title={`Collaborative Team Task: ${task.coAssignees?.map((u: any) => u.name || u.universityId).join(', ') || 'Shared'}`}>
+                    👥 TEAM ({task.coAssignees?.length || 2})
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -652,9 +668,15 @@ const TaskCard: React.FC<TaskCardProps> = ({
                             </span>
                           </div>
                           <div className="tc-subtask-item-meta">
-                            <span className="tc-subtask-item-assignee" title={stAssignee ? `${stAssignee.name || ''} (${stAssignee.universityId || 'No ID'})` : 'Unassigned'}>
-                              👤 {stAssignee ? `${stAssignee.name || ''} ${stAssignee.universityId ? `(${stAssignee.universityId})` : ''}`.trim() || 'Unassigned' : 'Unassigned'}
-                            </span>
+                            {st.coAssignees && st.coAssignees.length > 0 ? (
+                              <span className="tc-subtask-item-assignee" title={`Team: ${st.coAssignees.map((ca: any) => ca.name || ca.universityId).join(', ')}`}>
+                                👥 Team ({st.coAssignees.length})
+                              </span>
+                            ) : (
+                              <span className="tc-subtask-item-assignee" title={stAssignee ? `${stAssignee.name || ''} (${stAssignee.universityId || 'No ID'})` : 'Unassigned'}>
+                                👤 {stAssignee ? `${stAssignee.name || ''} ${stAssignee.universityId ? `(${stAssignee.universityId})` : ''}`.trim() || 'Unassigned' : 'Unassigned'}
+                              </span>
+                            )}
                             {st.createdAt && (
                               <span className="tc-subtask-item-date" title={`Created: ${new Date(st.createdAt).toLocaleString()}`}>
                                 🕒 {formatDateDDMMYYYY(st.createdAt)}
@@ -697,30 +719,49 @@ const TaskCard: React.FC<TaskCardProps> = ({
       <div className="tc-footer">
         <div className="tc-footer-left">
           {/* Assignee (Name & ID) */}
-          <div 
-            className="tc-assignee" 
-            title={displayAssignee ? `${displayAssignee.name || 'User'} (${displayAssignee.universityId || 'No ID'})` : 'Unassigned'}
-          >
-            <div className="tc-avatar">
-              {displayAssignee?.name ? (
-                <img 
-                  src={`https://ui-avatars.com/api/?name=${encodeURIComponent(displayAssignee.name)}&background=e2e8f0&color=0f172a`} 
-                  alt="avatar" 
-                  title={`Assigned to ${displayAssignee.name}`} 
-                />
-              ) : '?'}
-            </div>
-            <div className="tc-assignee-info">
-              <span className="tc-assignee-name">
-                {(displayAssignee?.universityId === '24051' || displayAssignee?.email === 'vc@ctuniversity.in' || displayAssignee?.name?.toLowerCase().includes('nitin')) ? "Vice Chancellor's Office" : (displayAssignee?.name || 'Unassigned')}
-              </span>
-              {displayAssignee?.universityId && (
-                <span className="tc-assignee-id">
-                  ({displayAssignee.universityId})
+          {task.assignmentMode === 'shared' || (task.coAssignees && task.coAssignees.length > 1) ? (
+            <div 
+              className="tc-assignee" 
+              title={`Team: ${task.coAssignees?.map((ca: any) => ca.name || ca.universityId).join(', ') || 'Shared'}`}
+            >
+              <div className="tc-avatar" style={{ backgroundColor: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                👥
+              </div>
+              <div className="tc-assignee-info">
+                <span className="tc-assignee-name" style={{ color: '#1d4ed8', fontWeight: 600 }}>
+                  Team Task ({task.coAssignees?.length || 2} Staff)
                 </span>
-              )}
+                <span className="tc-assignee-id" style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {task.coAssignees?.map((ca: any) => ca.name?.split(' ')[0] || ca.universityId).join(', ')}
+                </span>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div 
+              className="tc-assignee" 
+              title={displayAssignee ? `${displayAssignee.name || 'User'} (${displayAssignee.universityId || 'No ID'})` : 'Unassigned'}
+            >
+              <div className="tc-avatar">
+                {displayAssignee?.name ? (
+                  <img 
+                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(displayAssignee.name)}&background=e2e8f0&color=0f172a`} 
+                    alt="avatar" 
+                    title={`Assigned to ${displayAssignee.name}`} 
+                  />
+                ) : '?'}
+              </div>
+              <div className="tc-assignee-info">
+                <span className="tc-assignee-name">
+                  {(displayAssignee?.universityId === '24051' || displayAssignee?.email === 'vc@ctuniversity.in' || displayAssignee?.name?.toLowerCase().includes('nitin')) ? "Vice Chancellor's Office" : (displayAssignee?.name || 'Unassigned')}
+                </span>
+                {displayAssignee?.universityId && (
+                  <span className="tc-assignee-id">
+                    ({displayAssignee.universityId})
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Task Created Date */}
           {task.createdAt && (

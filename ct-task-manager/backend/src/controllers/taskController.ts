@@ -195,16 +195,22 @@ export const createTask = async (req: Request, res: Response) => {
       }
     }
 
+    const requestedMode = req.body.assignmentMode === 'shared' ? 'shared' : 'individual';
     const createdTasks = [];
 
-    for (const info of validatedAssignees) {
+    if (requestedMode === 'shared' && uniqueAssigneeIds.length > 0) {
+      const primaryAssignee = validatedAssignees[0]?.assigneeId || null;
+      const wfType = validatedAssignees[0]?.workflowType;
+
       const task = new Task({
         title,
         description,
         deadline: parsedDeadline,
         createdBy: user._id,
-        assignedTo: info.assigneeId,
-        workflowType: info.workflowType,
+        assignedTo: primaryAssignee,
+        coAssignees: uniqueAssigneeIds,
+        assignmentMode: 'shared',
+        workflowType: wfType,
         attachments: attachmentIds,
         requiredCompletionExtensions: parsedExtensions,
         isSubtask: parsedIsSubtask,
@@ -216,47 +222,116 @@ export const createTask = async (req: Request, res: Response) => {
       const populatedTask = await Task.findById(task._id)
         .populate('createdBy', 'name role universityId email department')
         .populate('assignedTo', 'name role department universityId email')
+        .populate('coAssignees', 'name role department universityId email')
         .populate('parentTaskId', 'taskId title');
 
-      // Notify assignee about new task
-      if (info.assigneeId && info.assigneeId.toString() !== user._id.toString()) {
-        createNotification(
-          info.assigneeId,
-          'task_assigned',
-          'New Task Assigned',
-          `Task #${populatedTask?.taskId || ''} "${title}" has been assigned to you.`,
-          task._id,
-          user._id
-        );
+      const creatorUser = (populatedTask?.createdBy as any) || user;
+      const isVc = (
+        creatorUser?.universityId === '24051' || 
+        creatorUser?.email?.toLowerCase() === 'vc@ctuniversity.in' || 
+        creatorUser?.name?.toLowerCase().includes('nitin') ||
+        creatorUser?.name?.toLowerCase().includes('vice chancellor')
+      );
+      const creatorName = isVc ? "Vice Chancellor's Office" : creatorUser.name;
+      const creatorEmail = isVc ? 'vc@ctuniversity.in' : (creatorUser.email || user.email);
 
-        const targetAssignee = populatedTask?.assignedTo as any;
-        if (targetAssignee?.email) {
-          const creatorUser = (populatedTask?.createdBy as any) || user;
-          const isVc = (
-            creatorUser?.universityId === '24051' || 
-            creatorUser?.email?.toLowerCase() === 'vc@ctuniversity.in' || 
-            creatorUser?.name?.toLowerCase().includes('nitin') ||
-            creatorUser?.name?.toLowerCase().includes('vice chancellor')
+      for (const targetId of uniqueAssigneeIds) {
+        if (targetId.toString() !== user._id.toString()) {
+          createNotification(
+            targetId,
+            'task_assigned',
+            'New Team Task Assigned',
+            `Team Task #${populatedTask?.taskId || ''} "${title}" has been assigned to you collaboratively.`,
+            task._id,
+            user._id
           );
-          const creatorName = isVc ? "Vice Chancellor's Office" : creatorUser.name;
-          const creatorEmail = isVc ? 'vc@ctuniversity.in' : (creatorUser.email || user.email);
 
-          sendTaskAssignedEmail(
-            targetAssignee.email,
-            targetAssignee.name,
-            title,
-            populatedTask?.taskId || '',
-            creatorName,
-            creatorUser.role || user.role,
-            parsedDeadline,
-            description,
-            creatorEmail,
-            populatedTask?._id?.toString()
-          ).catch((err) => console.error('Error sending task assigned email:', err));
+          const targetMember = (populatedTask?.coAssignees as any[])?.find(
+            (m: any) => m._id.toString() === targetId.toString()
+          );
+          if (targetMember?.email) {
+            sendTaskAssignedEmail(
+              targetMember.email,
+              targetMember.name,
+              title,
+              populatedTask?.taskId || '',
+              creatorName,
+              creatorUser.role || user.role,
+              parsedDeadline,
+              description,
+              creatorEmail,
+              populatedTask?._id?.toString()
+            ).catch((err) => console.error('Error sending task assigned email:', err));
+          }
         }
       }
 
       createdTasks.push(populatedTask);
+    } else {
+      for (const info of validatedAssignees) {
+        const task = new Task({
+          title,
+          description,
+          deadline: parsedDeadline,
+          createdBy: user._id,
+          assignedTo: info.assigneeId,
+          coAssignees: info.assigneeId ? [info.assigneeId] : [],
+          assignmentMode: 'individual',
+          workflowType: info.workflowType,
+          attachments: attachmentIds,
+          requiredCompletionExtensions: parsedExtensions,
+          isSubtask: parsedIsSubtask,
+          parentTaskId: parsedIsSubtask ? parentTaskId : null
+        });
+
+        await task.save();
+
+        const populatedTask = await Task.findById(task._id)
+          .populate('createdBy', 'name role universityId email department')
+          .populate('assignedTo', 'name role department universityId email')
+          .populate('coAssignees', 'name role department universityId email')
+          .populate('parentTaskId', 'taskId title');
+
+        // Notify assignee about new task
+        if (info.assigneeId && info.assigneeId.toString() !== user._id.toString()) {
+          createNotification(
+            info.assigneeId,
+            'task_assigned',
+            'New Task Assigned',
+            `Task #${populatedTask?.taskId || ''} "${title}" has been assigned to you.`,
+            task._id,
+            user._id
+          );
+
+          const targetAssignee = populatedTask?.assignedTo as any;
+          if (targetAssignee?.email) {
+            const creatorUser = (populatedTask?.createdBy as any) || user;
+            const isVc = (
+              creatorUser?.universityId === '24051' || 
+              creatorUser?.email?.toLowerCase() === 'vc@ctuniversity.in' || 
+              creatorUser?.name?.toLowerCase().includes('nitin') ||
+              creatorUser?.name?.toLowerCase().includes('vice chancellor')
+            );
+            const creatorName = isVc ? "Vice Chancellor's Office" : creatorUser.name;
+            const creatorEmail = isVc ? 'vc@ctuniversity.in' : (creatorUser.email || user.email);
+
+            sendTaskAssignedEmail(
+              targetAssignee.email,
+              targetAssignee.name,
+              title,
+              populatedTask?.taskId || '',
+              creatorName,
+              creatorUser.role || user.role,
+              parsedDeadline,
+              description,
+              creatorEmail,
+              populatedTask?._id?.toString()
+            ).catch((err) => console.error('Error sending task assigned email:', err));
+          }
+        }
+
+        createdTasks.push(populatedTask);
+      }
     }
 
     return res.status(201).json({
@@ -292,10 +367,11 @@ export const getTasks = async (req: Request, res: Response) => {
 
     // Build visibility query based on role
     if (user.role === 'staff') {
-      // Staff can only see tasks assigned to them or delegated to them
+      // Staff can see tasks assigned to them, delegated to them, or where they are in coAssignees
       query.$or = [
         { assignedTo: user._id },
-        { delegatedTo: user._id }
+        { delegatedTo: user._id },
+        { coAssignees: user._id }
       ];
     } else if (user.role === 'department_admin') {
       // Department admin sees tasks they created, assigned/delegated to them, or assigned/delegated to their staff
@@ -306,8 +382,10 @@ export const getTasks = async (req: Request, res: Response) => {
         { createdBy: user._id },
         { assignedTo: user._id },
         { delegatedTo: user._id },
+        { coAssignees: user._id },
         { assignedTo: { $in: myStaffIds } },
-        { delegatedTo: { $in: myStaffIds } }
+        { delegatedTo: { $in: myStaffIds } },
+        { coAssignees: { $in: myStaffIds } }
       ];
     } else if (user.role === 'super_admin') {
       const myStaffAssignments = await StaffAssignment.find({ adminId: user._id, isActive: true });
@@ -329,6 +407,7 @@ export const getTasks = async (req: Request, res: Response) => {
         query.$or = [
           { assignedTo: { $in: myStaffIds } },
           { delegatedTo: { $in: myStaffIds } },
+          { coAssignees: { $in: myStaffIds } },
           { createdBy: user._id, assignedTo: { $in: myStaffIds } }
         ];
       } else if (isPrimarySuperAdmin) {
@@ -338,8 +417,10 @@ export const getTasks = async (req: Request, res: Response) => {
           { createdBy: { $in: otherSuperAdminIds } },
           { assignedTo: user._id },
           { delegatedTo: user._id },
+          { coAssignees: user._id },
           { assignedTo: { $in: myStaffIds } },
           { delegatedTo: { $in: myStaffIds } },
+          { coAssignees: { $in: myStaffIds } },
           { reviewStage: 'super_admin' },
           { currentReviewer: user._id }
         ];
@@ -349,8 +430,10 @@ export const getTasks = async (req: Request, res: Response) => {
           { createdBy: user._id },
           { assignedTo: user._id },
           { delegatedTo: user._id },
+          { coAssignees: user._id },
           { assignedTo: { $in: myStaffIds } },
           { delegatedTo: { $in: myStaffIds } },
+          { coAssignees: { $in: myStaffIds } },
           { reviewStage: 'super_admin' },
           { currentReviewer: user._id }
         ];
@@ -457,6 +540,7 @@ export const getTasks = async (req: Request, res: Response) => {
       .populate('createdBy', 'name role universityId email department')
       .populate('assignedTo', 'name role department universityId email')
       .populate('delegatedTo', 'name role department universityId email')
+      .populate('coAssignees', 'name role department universityId email')
       .populate('ratedBy', 'name role universityId')
       .populate('ratedUser', 'name role department universityId')
       .populate('parentTaskId', 'taskId title')
@@ -470,6 +554,7 @@ export const getTasks = async (req: Request, res: Response) => {
       .populate('createdBy', 'name role universityId email department')
       .populate('assignedTo', 'name role department universityId email')
       .populate('delegatedTo', 'name role department universityId email')
+      .populate('coAssignees', 'name role department universityId email')
       .sort({ createdAt: 1 });
 
     const subtaskMap: { [key: string]: any[] } = {};
@@ -516,6 +601,7 @@ export const getTaskById = async (req: Request, res: Response) => {
       .populate('createdBy', 'name role universityId email department')
       .populate('assignedTo', 'name role department universityId email')
       .populate('delegatedTo', 'name role department universityId email')
+      .populate('coAssignees', 'name role department universityId email')
       .populate('ratedBy', 'name role universityId')
       .populate('ratedUser', 'name role department universityId')
       .populate('parentTaskId', 'taskId title')
@@ -533,20 +619,29 @@ export const getTaskById = async (req: Request, res: Response) => {
         task.createdBy._id.toString() === user._id.toString() ||
         (task.assignedTo && task.assignedTo._id.toString() === user._id.toString()) ||
         (task.delegatedTo && task.delegatedTo._id.toString() === user._id.toString()) ||
+        (Array.isArray(task.coAssignees) && task.coAssignees.some((ca: any) => (ca._id?.toString() || ca.toString()) === user._id.toString())) ||
         task.reviewStage === 'super_admin' ||
         (task.currentReviewer && task.currentReviewer.toString() === user._id.toString())
       ) {
         allowed = true;
       }
     } else if (user.role === 'staff') {
+      const inCoAssignees = Array.isArray(task.coAssignees) && task.coAssignees.some(
+        (ca: any) => (ca._id?.toString() || ca.toString()) === user._id.toString()
+      );
       allowed = Boolean(
         (task.assignedTo && (task.assignedTo._id?.toString() === user._id.toString() || task.assignedTo.toString() === user._id.toString())) ||
-        (task.delegatedTo && (task.delegatedTo._id?.toString() === user._id.toString() || task.delegatedTo.toString() === user._id.toString()))
+        (task.delegatedTo && (task.delegatedTo._id?.toString() === user._id.toString() || task.delegatedTo.toString() === user._id.toString())) ||
+        inCoAssignees
       );
     } else if (user.role === 'department_admin') {
+      const inCoAssignees = Array.isArray(task.coAssignees) && task.coAssignees.some(
+        (ca: any) => (ca._id?.toString() || ca.toString()) === user._id.toString()
+      );
       if (task.createdBy._id?.toString() === user._id.toString() || task.createdBy.toString() === user._id.toString()) allowed = true;
       else if (task.assignedTo && (task.assignedTo._id?.toString() === user._id.toString() || task.assignedTo.toString() === user._id.toString())) allowed = true;
       else if (task.delegatedTo && (task.delegatedTo._id?.toString() === user._id.toString() || task.delegatedTo.toString() === user._id.toString())) allowed = true;
+      else if (inCoAssignees) allowed = true;
       else if (task.assignedTo) {
         const staffId = task.assignedTo._id ? task.assignedTo._id.toString() : task.assignedTo.toString();
         const hasPerm = await checkAdminStaffPermission(user._id.toString(), staffId);
@@ -556,6 +651,16 @@ export const getTaskById = async (req: Request, res: Response) => {
         const staffId = task.delegatedTo._id ? task.delegatedTo._id.toString() : task.delegatedTo.toString();
         const hasPerm = await checkAdminStaffPermission(user._id.toString(), staffId);
         if (hasPerm) allowed = true;
+      }
+      if (!allowed && Array.isArray(task.coAssignees)) {
+        for (const ca of task.coAssignees) {
+          const caId = (ca._id || ca).toString();
+          const hasPerm = await checkAdminStaffPermission(user._id.toString(), caId);
+          if (hasPerm) {
+            allowed = true;
+            break;
+          }
+        }
       }
     }
 
@@ -567,6 +672,7 @@ export const getTaskById = async (req: Request, res: Response) => {
       .populate('createdBy', 'name role universityId email department')
       .populate('assignedTo', 'name role department universityId email')
       .populate('delegatedTo', 'name role department universityId email')
+      .populate('coAssignees', 'name role department universityId email')
       .sort({ createdAt: 1 });
 
     const taskObj: any = task.toObject ? task.toObject() : task;
@@ -718,6 +824,7 @@ export const assignTask = async (req: Request, res: Response) => {
       .populate('createdBy', 'name role universityId email department')
       .populate('assignedTo', 'name role department universityId email')
       .populate('delegatedTo', 'name role department universityId email')
+      .populate('coAssignees', 'name role department universityId email')
       .populate('ratedBy', 'name role universityId')
       .populate('ratedUser', 'name role department universityId')
       .populate('parentTaskId', 'taskId title');
@@ -787,15 +894,18 @@ export const updateTaskStatus = async (req: Request, res: Response) => {
     if (user.role === 'staff') {
       const isAssigned = 
         (task.assignedTo && task.assignedTo.toString() === user._id.toString()) ||
-        (task.delegatedTo && task.delegatedTo.toString() === user._id.toString());
+        (task.delegatedTo && task.delegatedTo.toString() === user._id.toString()) ||
+        (Array.isArray(task.coAssignees) && task.coAssignees.some((ca: any) => (ca._id?.toString() || ca.toString()) === user._id.toString()));
       if (!isAssigned) {
         return res.status(403).json({ success: false, message: 'Forbidden. Can only change status of your assigned tasks.' });
       }
     } else if (user.role === 'department_admin') {
+      const isCoAssignee = Array.isArray(task.coAssignees) && task.coAssignees.some((ca: any) => (ca._id?.toString() || ca.toString()) === user._id.toString());
       const canChange = 
         task.createdBy.toString() === user._id.toString() ||
         (task.assignedTo && task.assignedTo.toString() === user._id.toString()) ||
         (task.delegatedTo && task.delegatedTo.toString() === user._id.toString()) ||
+        isCoAssignee ||
         (task.assignedTo && await checkAdminStaffPermission(user._id.toString(), task.assignedTo.toString())) ||
         (task.delegatedTo && await checkAdminStaffPermission(user._id.toString(), task.delegatedTo.toString()));
         
@@ -822,7 +932,7 @@ export const updateTaskStatus = async (req: Request, res: Response) => {
     }
     await task.save();
 
-    // Notify creator/admin about status change
+    // Notify creator/admin and co-assignees about status change
     if (status === 'in_progress' || status === 'completed') {
       const notifyUsers: string[] = [];
       if (task.createdBy && task.createdBy.toString() !== user._id.toString()) {
@@ -830,6 +940,14 @@ export const updateTaskStatus = async (req: Request, res: Response) => {
       }
       if (task.assignedTo && task.assignedTo.toString() !== user._id.toString() && !notifyUsers.includes(task.assignedTo.toString())) {
         notifyUsers.push(task.assignedTo.toString());
+      }
+      if (Array.isArray(task.coAssignees)) {
+        task.coAssignees.forEach((ca: any) => {
+          const caId = (ca._id || ca).toString();
+          if (caId !== user._id.toString() && !notifyUsers.includes(caId)) {
+            notifyUsers.push(caId);
+          }
+        });
       }
       for (const uid of notifyUsers) {
         createNotification(
@@ -860,7 +978,8 @@ export const submitReview = async (req: Request, res: Response) => {
     
     const isPerformer = 
       (task.assignedTo && task.assignedTo.toString() === user._id.toString()) ||
-      (task.delegatedTo && task.delegatedTo.toString() === user._id.toString());
+      (task.delegatedTo && task.delegatedTo.toString() === user._id.toString()) ||
+      (Array.isArray(task.coAssignees) && task.coAssignees.some((ca: any) => (ca._id?.toString() || ca.toString()) === user._id.toString()));
     if (!isPerformer) {
       return res.status(403).json({ success: false, message: 'Forbidden. Only the assignee can submit a task for review.' });
     }
@@ -1272,16 +1391,22 @@ export const createSubtask = async (req: Request, res: Response) => {
       });
     }
 
+    const requestedMode = req.body.assignmentMode === 'shared' ? 'shared' : 'individual';
     const createdSubtasks = [];
 
-    for (const info of validatedAssignees) {
+    if (requestedMode === 'shared' && uniqueAssigneeIds.length > 0) {
+      const primaryAssignee = validatedAssignees[0]?.assigneeId || null;
+      const wfType = validatedAssignees[0]?.workflowType;
+
       const subtask = new Task({
         title,
         description,
         deadline: parsedDeadline,
         createdBy: user._id,
-        assignedTo: info.assigneeId,
-        workflowType: info.workflowType,
+        assignedTo: primaryAssignee,
+        coAssignees: uniqueAssigneeIds,
+        assignmentMode: 'shared',
+        workflowType: wfType,
         isSubtask: true,
         parentTaskId: parentTask._id
       });
@@ -1291,46 +1416,113 @@ export const createSubtask = async (req: Request, res: Response) => {
       const populatedSubtask = await Task.findById(subtask._id)
         .populate('createdBy', 'name role universityId email department')
         .populate('assignedTo', 'name role department universityId email')
+        .populate('coAssignees', 'name role department universityId email')
         .populate('parentTaskId', 'taskId title');
 
-      if (info.assigneeId && info.assigneeId.toString() !== user._id.toString()) {
-        createNotification(
-          info.assigneeId,
-          'task_assigned',
-          'New Subtask Assigned',
-          `Subtask #${populatedSubtask?.taskId || ''} "${title}" has been assigned to you.`,
-          subtask._id,
-          user._id
-        );
+      const creatorUser = user;
+      const isVc = (
+        creatorUser?.universityId === '24051' || 
+        creatorUser?.email?.toLowerCase() === 'vc@ctuniversity.in' || 
+        creatorUser?.name?.toLowerCase().includes('nitin') ||
+        creatorUser?.name?.toLowerCase().includes('vice chancellor')
+      );
+      const creatorName = isVc ? "Vice Chancellor's Office" : creatorUser.name;
+      const creatorEmail = isVc ? 'vc@ctuniversity.in' : creatorUser.email;
 
-        const targetAssignee = populatedSubtask?.assignedTo as any;
-        if (targetAssignee?.email) {
-          const creatorUser = user;
-          const isVc = (
-            creatorUser?.universityId === '24051' || 
-            creatorUser?.email?.toLowerCase() === 'vc@ctuniversity.in' || 
-            creatorUser?.name?.toLowerCase().includes('nitin') ||
-            creatorUser?.name?.toLowerCase().includes('vice chancellor')
+      for (const targetId of uniqueAssigneeIds) {
+        if (targetId.toString() !== user._id.toString()) {
+          createNotification(
+            targetId,
+            'task_assigned',
+            'New Team Subtask Assigned',
+            `Team Subtask #${populatedSubtask?.taskId || ''} "${title}" has been assigned to you collaboratively.`,
+            subtask._id,
+            user._id
           );
-          const creatorName = isVc ? "Vice Chancellor's Office" : creatorUser.name;
-          const creatorEmail = isVc ? 'vc@ctuniversity.in' : creatorUser.email;
 
-          sendTaskAssignedEmail(
-            targetAssignee.email,
-            targetAssignee.name,
-            title,
-            populatedSubtask?.taskId || '',
-            creatorName,
-            creatorUser.role,
-            parsedDeadline,
-            description,
-            creatorEmail,
-            populatedSubtask?._id?.toString()
-          ).catch((err) => console.error('Error sending subtask assigned email:', err));
+          const targetMember = (populatedSubtask?.coAssignees as any[])?.find(
+            (m: any) => m._id.toString() === targetId.toString()
+          );
+          if (targetMember?.email) {
+            sendTaskAssignedEmail(
+              targetMember.email,
+              targetMember.name,
+              title,
+              populatedSubtask?.taskId || '',
+              creatorName,
+              creatorUser.role,
+              parsedDeadline,
+              description,
+              creatorEmail,
+              populatedSubtask?._id?.toString()
+            ).catch((err) => console.error('Error sending subtask assigned email:', err));
+          }
         }
       }
 
       createdSubtasks.push(populatedSubtask);
+    } else {
+      for (const info of validatedAssignees) {
+        const subtask = new Task({
+          title,
+          description,
+          deadline: parsedDeadline,
+          createdBy: user._id,
+          assignedTo: info.assigneeId,
+          coAssignees: info.assigneeId ? [info.assigneeId] : [],
+          assignmentMode: 'individual',
+          workflowType: info.workflowType,
+          isSubtask: true,
+          parentTaskId: parentTask._id
+        });
+
+        await subtask.save();
+
+        const populatedSubtask = await Task.findById(subtask._id)
+          .populate('createdBy', 'name role universityId email department')
+          .populate('assignedTo', 'name role department universityId email')
+          .populate('coAssignees', 'name role department universityId email')
+          .populate('parentTaskId', 'taskId title');
+
+        if (info.assigneeId && info.assigneeId.toString() !== user._id.toString()) {
+          createNotification(
+            info.assigneeId,
+            'task_assigned',
+            'New Subtask Assigned',
+            `Subtask #${populatedSubtask?.taskId || ''} "${title}" has been assigned to you.`,
+            subtask._id,
+            user._id
+          );
+
+          const targetAssignee = populatedSubtask?.assignedTo as any;
+          if (targetAssignee?.email) {
+            const creatorUser = user;
+            const isVc = (
+              creatorUser?.universityId === '24051' || 
+              creatorUser?.email?.toLowerCase() === 'vc@ctuniversity.in' || 
+              creatorUser?.name?.toLowerCase().includes('nitin') ||
+              creatorUser?.name?.toLowerCase().includes('vice chancellor')
+            );
+            const creatorName = isVc ? "Vice Chancellor's Office" : creatorUser.name;
+            const creatorEmail = isVc ? 'vc@ctuniversity.in' : creatorUser.email;
+
+            sendTaskAssignedEmail(
+              targetAssignee.email,
+              targetAssignee.name,
+              title,
+              populatedSubtask?.taskId || '',
+              creatorName,
+              creatorUser.role,
+              parsedDeadline,
+              description,
+              creatorEmail,
+              populatedSubtask?._id?.toString()
+            ).catch((err) => console.error('Error sending subtask assigned email:', err));
+          }
+        }
+
+        createdSubtasks.push(populatedSubtask);
+      }
     }
 
     return res.status(201).json({
@@ -1355,19 +1547,23 @@ export const getSubtasks = async (req: Request, res: Response) => {
     const query: any = { parentTaskId, isSubtask: true };
 
     if (user.role === 'staff') {
-      query.assignedTo = user._id;
+      query.$or = [
+        { assignedTo: user._id },
+        { delegatedTo: user._id },
+        { coAssignees: user._id }
+      ];
     } else if (user.role === 'department_admin') {
-      // To see subtasks, Dept Admin can see subtasks on parents they manage.
-      // But instead of complex parent query, it's easier to say: Dept Admin sees subtasks they created or assigned to them or their staff.
-      // The requirement says "Only subtasks within their permitted task hierarchy". 
-      // Subtasks they manage fall under: created by them, assigned to them, or assigned to their staff.
       const myStaffAssignments = await StaffAssignment.find({ adminId: user._id, isActive: true });
       const myStaffIds = myStaffAssignments.map(a => a.staffId);
       
       query.$or = [
         { createdBy: user._id },
         { assignedTo: user._id },
-        { assignedTo: { $in: myStaffIds } }
+        { delegatedTo: user._id },
+        { coAssignees: user._id },
+        { assignedTo: { $in: myStaffIds } },
+        { delegatedTo: { $in: myStaffIds } },
+        { coAssignees: { $in: myStaffIds } }
       ];
     }
     // Super Admin sees all
@@ -1375,6 +1571,8 @@ export const getSubtasks = async (req: Request, res: Response) => {
     const subtasks = await Task.find(query)
       .populate('createdBy', 'name role universityId')
       .populate('assignedTo', 'name role department universityId')
+      .populate('delegatedTo', 'name role department universityId')
+      .populate('coAssignees', 'name role department universityId email')
       .populate('parentTaskId', 'taskId title')
       .sort({ createdAt: -1 });
 
@@ -1627,8 +1825,11 @@ export const addTaskComment = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: 'Task not found.' });
     }
 
-    // Permission check: Super Admin, Creator, Assignee, Delegated, or Department Admin
+    // Permission check: Super Admin, Creator, Assignee, Delegated, CoAssignees, or Department Admin
     let hasAccess = false;
+    const isCoAssignee = Array.isArray(task.coAssignees) && task.coAssignees.some(
+      (ca: any) => (ca._id?.toString() || ca.toString()) === user._id.toString()
+    );
     if (user.role === 'super_admin') {
       hasAccess = true;
     } else if (task.createdBy.toString() === user._id.toString()) {
@@ -1636,6 +1837,8 @@ export const addTaskComment = async (req: Request, res: Response) => {
     } else if (task.assignedTo && task.assignedTo.toString() === user._id.toString()) {
       hasAccess = true;
     } else if (task.delegatedTo && task.delegatedTo.toString() === user._id.toString()) {
+      hasAccess = true;
+    } else if (isCoAssignee) {
       hasAccess = true;
     } else if (user.role === 'department_admin') {
       // Check if task is within admin's department
@@ -1655,10 +1858,11 @@ export const addTaskComment = async (req: Request, res: Response) => {
 
     // Determine chat channel for 3-tier hierarchy:
     // A 3-tier task has a distinct assignedTo (Dept Admin) and delegatedTo (Staff)
+    // OR a shared task with coAssignees where assignedTo is Dept Admin
+    const hasCoAssignees = Array.isArray(task.coAssignees) && task.coAssignees.length > 0;
     const isThreeTier = Boolean(
-      task.delegatedTo && 
-      task.assignedTo && 
-      task.delegatedTo.toString() !== task.assignedTo.toString()
+      (task.delegatedTo && task.assignedTo && task.delegatedTo.toString() !== task.assignedTo.toString()) ||
+      (task.createdBy && task.assignedTo && task.createdBy.toString() !== task.assignedTo.toString() && hasCoAssignees)
     );
 
     let commentChannel: 'super_admin' | 'staff' | 'general' = 'general';
@@ -1705,14 +1909,20 @@ export const addTaskComment = async (req: Request, res: Response) => {
         if (user.role === 'super_admin' && task.assignedTo) chatNotifyTargets.add(task.assignedTo.toString());
         if (user.role === 'department_admin' && task.createdBy) chatNotifyTargets.add(task.createdBy.toString());
       } else if (commentChannel === 'staff') {
-        if (user.role === 'staff' && task.assignedTo) chatNotifyTargets.add(task.assignedTo.toString());
-        if (user.role === 'department_admin' && task.delegatedTo) chatNotifyTargets.add(task.delegatedTo.toString());
+        if (task.assignedTo) chatNotifyTargets.add(task.assignedTo.toString());
+        if (task.delegatedTo) chatNotifyTargets.add(task.delegatedTo.toString());
+        if (Array.isArray(task.coAssignees)) {
+          task.coAssignees.forEach((ca: any) => chatNotifyTargets.add((ca._id || ca).toString()));
+        }
       }
     } else {
       // 2-tier: notify all other participants
       if (task.createdBy) chatNotifyTargets.add(task.createdBy.toString());
       if (task.assignedTo) chatNotifyTargets.add(task.assignedTo.toString());
       if (task.delegatedTo) chatNotifyTargets.add(task.delegatedTo.toString());
+      if (Array.isArray(task.coAssignees)) {
+        task.coAssignees.forEach((ca: any) => chatNotifyTargets.add((ca._id || ca).toString()));
+      }
     }
     chatNotifyTargets.delete(user._id.toString());
 
@@ -1925,7 +2135,8 @@ export const uploadTaskAttachments = async (req: Request, res: Response) => {
     const isDeptAdmin = user.role === 'department_admin';
     const isAssigned = task.assignedTo && task.assignedTo.toString() === userIdStr;
     const isDelegated = task.delegatedTo && task.delegatedTo.toString() === userIdStr;
-    const isPerformer = Boolean(isDelegated || (!task.delegatedTo && isAssigned));
+    const isCoAssignee = Array.isArray(task.coAssignees) && task.coAssignees.some((ca: any) => (ca._id?.toString() || ca.toString()) === userIdStr);
+    const isPerformer = Boolean(isDelegated || (!task.delegatedTo && isAssigned) || isCoAssignee);
 
     if (!isPerformer && !isSuperAdmin && !isDeptAdmin) {
       return res.status(403).json({

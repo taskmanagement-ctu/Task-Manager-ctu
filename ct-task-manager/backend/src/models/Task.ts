@@ -8,6 +8,8 @@ export interface ITask extends Document {
   createdBy: mongoose.Types.ObjectId;
   assignedTo: mongoose.Types.ObjectId | null;
   delegatedTo: mongoose.Types.ObjectId | null;
+  coAssignees?: mongoose.Types.ObjectId[];
+  assignmentMode?: 'individual' | 'shared';
   deadline: Date;
   status: 'pending' | 'in_progress' | 'completed' | 'submitted_for_review' | 'approved' | 'rejected';
   parentTaskId: mongoose.Types.ObjectId | null;
@@ -75,6 +77,18 @@ const taskSchema = new Schema<ITask>(
       type: Schema.Types.ObjectId,
       ref: 'User',
       default: null,
+      index: true,
+    },
+    coAssignees: [{
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: [],
+      index: true,
+    }],
+    assignmentMode: {
+      type: String,
+      enum: ['individual', 'shared'],
+      default: 'individual',
       index: true,
     },
     deadline: {

@@ -101,6 +101,7 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
     description: string;
     deadline: string;
     assignedTo: string[];
+    assignmentMode?: 'individual' | 'shared';
     files: File[];
     requiredExtensions: string[];
   }>>([
@@ -109,6 +110,7 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
       description: '',
       deadline: '',
       assignedTo: [],
+      assignmentMode: 'individual',
       files: [],
       requiredExtensions: []
     }
@@ -128,12 +130,14 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
     description: string;
     deadline: string;
     assignedTo: string[];
+    assignmentMode?: 'individual' | 'shared';
   }>>([
     {
       title: '',
       description: '',
       deadline: '',
-      assignedTo: []
+      assignedTo: [],
+      assignmentMode: 'individual'
     }
   ]);
   const [activeInlineSubtaskTab, setActiveInlineSubtaskTab] = useState(0);
@@ -155,7 +159,8 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
         title: '',
         description: '',
         deadline: parentDeadline,
-        assignedTo: []
+        assignedTo: [],
+        assignmentMode: 'individual'
       }
     ]);
     setActiveInlineSubtaskTab(inlineSubtasks.length);
@@ -284,6 +289,28 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
     });
   };
 
+  const setAssignmentMode = (mode: 'individual' | 'shared') => {
+    setTasksToCreate(prev => {
+      const copy = [...prev];
+      if (!copy[activeTab]) return prev;
+      const cur = { ...copy[activeTab] };
+      cur.assignmentMode = mode;
+      copy[activeTab] = cur;
+      return copy;
+    });
+  };
+
+  const setInlineAssignmentMode = (mode: 'individual' | 'shared') => {
+    setInlineSubtasks(prev => {
+      const copy = [...prev];
+      if (!copy[activeInlineSubtaskTab]) return prev;
+      const cur = { ...copy[activeInlineSubtaskTab] };
+      cur.assignmentMode = mode;
+      copy[activeInlineSubtaskTab] = cur;
+      return copy;
+    });
+  };
+
   // Multi-assignee selection helpers for Inline Subtasks (Screenshot 2 parity)
   const currentInlineAssignedIds: string[] = inlineSubtasks[activeInlineSubtaskTab]?.assignedTo || [];
 
@@ -378,6 +405,7 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
         if (isSubtaskMode && parentTaskId) {
           formData.append('parentTaskId', parentTaskId);
         }
+        formData.append('assignmentMode', task.assignmentMode || 'individual');
         const assignees = Array.isArray(task.assignedTo)
           ? task.assignedTo
           : (task.assignedTo ? [task.assignedTo] : []);
@@ -424,7 +452,8 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
                   title: st.title.trim(),
                   description: st.description.trim() || st.title.trim(),
                   deadline: st.deadline || mainDeadline,
-                  assignedTo: subAssignees.length > 0 ? subAssignees : ''
+                  assignedTo: subAssignees.length > 0 ? subAssignees : '',
+                  assignmentMode: st.assignmentMode || 'individual'
                 });
               } catch (stErr) {
                 console.error('Error creating inline subtask from CreateTaskView:', stErr);
@@ -585,7 +614,7 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
                   className="ct-add-tab-btn"
                   onClick={() => {
                     setTasksToCreate([...tasksToCreate, {
-                      title: '', description: '', deadline: '', assignedTo: [], files: [], requiredExtensions: []
+                      title: '', description: '', deadline: '', assignedTo: [], assignmentMode: 'individual', files: [], requiredExtensions: []
                     }]);
                     setActiveTab(tasksToCreate.length);
                   }}
@@ -930,6 +959,77 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
                       >
                         Done
                       </button>
+                    </div>
+                  </div>
+                )}
+                {currentAssignedIds.length > 1 && (
+                  <div style={{
+                    marginTop: '0.65rem',
+                    padding: '0.75rem 0.85rem',
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.45rem'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                        👥 Multiple Assignees Selected
+                      </span>
+                      <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Choose mode:</span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                      <label style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '0.5rem',
+                        padding: '0.55rem 0.65rem',
+                        border: `1.5px solid ${tasksToCreate[activeTab]?.assignmentMode !== 'shared' ? '#2563eb' : '#e2e8f0'}`,
+                        backgroundColor: tasksToCreate[activeTab]?.assignmentMode !== 'shared' ? '#eff6ff' : '#ffffff',
+                        borderRadius: '6px',
+                        cursor: 'pointer'
+                      }}>
+                        <input 
+                          type="radio"
+                          name={`assign-mode-${activeTab}`}
+                          checked={tasksToCreate[activeTab]?.assignmentMode !== 'shared'}
+                          onChange={() => setAssignmentMode('individual')}
+                          style={{ marginTop: '0.15rem' }}
+                        />
+                        <div>
+                          <strong style={{ display: 'block', fontSize: '0.78rem', color: '#1e293b' }}>Individual Tasks</strong>
+                          <span style={{ fontSize: '0.7rem', color: '#64748b', lineHeight: 1.25, display: 'block' }}>
+                            Separate task copy for each person
+                          </span>
+                        </div>
+                      </label>
+
+                      <label style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '0.5rem',
+                        padding: '0.55rem 0.65rem',
+                        border: `1.5px solid ${tasksToCreate[activeTab]?.assignmentMode === 'shared' ? '#2563eb' : '#e2e8f0'}`,
+                        backgroundColor: tasksToCreate[activeTab]?.assignmentMode === 'shared' ? '#eff6ff' : '#ffffff',
+                        borderRadius: '6px',
+                        cursor: 'pointer'
+                      }}>
+                        <input 
+                          type="radio"
+                          name={`assign-mode-${activeTab}`}
+                          checked={tasksToCreate[activeTab]?.assignmentMode === 'shared'}
+                          onChange={() => setAssignmentMode('shared')}
+                          style={{ marginTop: '0.15rem' }}
+                        />
+                        <div>
+                          <strong style={{ display: 'block', fontSize: '0.78rem', color: '#1e293b' }}>Shared Team Task</strong>
+                          <span style={{ fontSize: '0.7rem', color: '#64748b', lineHeight: 1.25, display: 'block' }}>
+                            1 joint task with team deliverables & group chat
+                          </span>
+                        </div>
+                      </label>
                     </div>
                   </div>
                 )}
@@ -1315,6 +1415,77 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
                           </div>
                         )}
                       </div>
+                      {currentInlineAssignedIds.length > 1 && (
+                        <div style={{
+                          marginTop: '0.65rem',
+                          padding: '0.75rem 0.85rem',
+                          backgroundColor: '#f8fafc',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '8px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.45rem'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                            <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                              👥 Multiple Assignees Selected
+                            </span>
+                            <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Choose mode:</span>
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                            <label style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: '0.5rem',
+                              padding: '0.55rem 0.65rem',
+                              border: `1.5px solid ${inlineSubtasks[activeInlineSubtaskTab]?.assignmentMode !== 'shared' ? '#2563eb' : '#e2e8f0'}`,
+                              backgroundColor: inlineSubtasks[activeInlineSubtaskTab]?.assignmentMode !== 'shared' ? '#eff6ff' : '#ffffff',
+                              borderRadius: '6px',
+                              cursor: 'pointer'
+                            }}>
+                              <input 
+                                type="radio"
+                                name={`inline-assign-mode-${activeInlineSubtaskTab}`}
+                                checked={inlineSubtasks[activeInlineSubtaskTab]?.assignmentMode !== 'shared'}
+                                onChange={() => setInlineAssignmentMode('individual')}
+                                style={{ marginTop: '0.15rem' }}
+                              />
+                              <div>
+                                <strong style={{ display: 'block', fontSize: '0.78rem', color: '#1e293b' }}>Individual Subtasks</strong>
+                                <span style={{ fontSize: '0.7rem', color: '#64748b', lineHeight: 1.25, display: 'block' }}>
+                                  Separate subtask for each person
+                                </span>
+                              </div>
+                            </label>
+
+                            <label style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: '0.5rem',
+                              padding: '0.55rem 0.65rem',
+                              border: `1.5px solid ${inlineSubtasks[activeInlineSubtaskTab]?.assignmentMode === 'shared' ? '#2563eb' : '#e2e8f0'}`,
+                              backgroundColor: inlineSubtasks[activeInlineSubtaskTab]?.assignmentMode === 'shared' ? '#eff6ff' : '#ffffff',
+                              borderRadius: '6px',
+                              cursor: 'pointer'
+                            }}>
+                              <input 
+                                type="radio"
+                                name={`inline-assign-mode-${activeInlineSubtaskTab}`}
+                                checked={inlineSubtasks[activeInlineSubtaskTab]?.assignmentMode === 'shared'}
+                                onChange={() => setInlineAssignmentMode('shared')}
+                                style={{ marginTop: '0.15rem' }}
+                              />
+                              <div>
+                                <strong style={{ display: 'block', fontSize: '0.78rem', color: '#1e293b' }}>Shared Team Subtask</strong>
+                                <span style={{ fontSize: '0.7rem', color: '#64748b', lineHeight: 1.25, display: 'block' }}>
+                                  1 joint subtask with team deliverables & group chat
+                                </span>
+                              </div>
+                            </label>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="ct-input-group">

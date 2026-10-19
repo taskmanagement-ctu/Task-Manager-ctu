@@ -593,10 +593,12 @@ const TaskModal: React.FC<TaskModalProps> = ({
   const [modalSubtaskTitle, setModalSubtaskTitle] = useState('');
   const [modalSubtaskDesc, setModalSubtaskDesc] = useState('');
   const [modalSubtaskDeadline, setModalSubtaskDeadline] = useState('');
-  const [modalSubtaskAssignee, setModalSubtaskAssignee] = useState('');
+  const [modalSubtaskAssignees, setModalSubtaskAssignees] = useState<string[]>([]);
+  const [modalSubtaskMode, setModalSubtaskMode] = useState<'individual' | 'shared'>('individual');
   const [modalSubtaskLoading, setModalSubtaskLoading] = useState(false);
   const [modalSubtaskError, setModalSubtaskError] = useState('');
   const [modalSubtaskSuccess, setModalSubtaskSuccess] = useState('');
+  const [deletingSubtaskId, setDeletingSubtaskId] = useState<string | null>(null);
 
   const refreshTaskData = async () => {
     try {
@@ -645,7 +647,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
     setModalSubtaskTitle('');
     setModalSubtaskDesc('');
     setModalSubtaskDeadline('');
-    setModalSubtaskAssignee('');
+    setModalSubtaskAssignees([]);
+    setModalSubtaskMode('individual');
     setModalSubtaskError('');
     setModalSubtaskSuccess('');
 
@@ -672,8 +675,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
       setModalSubtaskError('Subtask title is required.');
       return;
     }
-    if (!modalSubtaskAssignee) {
-      setModalSubtaskError('Please select an assignee.');
+    if (!modalSubtaskAssignees || modalSubtaskAssignees.length === 0) {
+      setModalSubtaskError('Please select at least one assignee.');
       return;
     }
     if (!modalSubtaskDeadline) {
@@ -697,15 +700,18 @@ const TaskModal: React.FC<TaskModalProps> = ({
         title: modalSubtaskTitle.trim(),
         description: modalSubtaskDesc.trim() || modalSubtaskTitle.trim(),
         deadline: new Date(modalSubtaskDeadline).toISOString(),
-        assignedTo: modalSubtaskAssignee
+        assignedTo: modalSubtaskAssignees,
+        assignmentMode: modalSubtaskMode
       });
 
       if (res.success) {
-        setModalSubtaskSuccess('Subtask created successfully!');
+        setModalSubtaskSuccess(modalSubtaskMode === 'shared' ? 'Shared team subtask created successfully!' : 'Subtask(s) created successfully!');
         await fetchSubtasks();
         refreshTaskData();
         setModalSubtaskTitle('');
         setModalSubtaskDesc('');
+        setModalSubtaskAssignees([]);
+        setModalSubtaskMode('individual');
         setTimeout(() => {
           setIsAddingSubtaskModal(false);
           setModalSubtaskSuccess('');
@@ -720,14 +726,39 @@ const TaskModal: React.FC<TaskModalProps> = ({
     }
   };
 
+  const handleDeleteSubtask = async (subtaskId: string, subtaskTitle: string) => {
+    if (!window.confirm(`Are you sure you want to delete subtask "${subtaskTitle}"?`)) {
+      return;
+    }
+    try {
+      setDeletingSubtaskId(subtaskId);
+      const res = await api.deleteTask(subtaskId);
+      if (res.success) {
+        await fetchSubtasks();
+        refreshTaskData();
+      } else {
+        alert(res.message || 'Failed to delete subtask.');
+      }
+    } catch (err: any) {
+      console.error('Failed to delete subtask:', err);
+      alert(err.message || 'Error deleting subtask.');
+    } finally {
+      setDeletingSubtaskId(null);
+    }
+  };
 
   const currentUserId = currentUser.id || currentUser._id;
+  const isCoAssignee = Boolean(
+    task.coAssignees && task.coAssignees.some((ca: any) => (ca?._id || ca?.id || ca) === currentUserId)
+  );
   const isAssignedStaff = currentUser.role === 'staff' && Boolean(
     (task.assignedTo && (task.assignedTo._id === currentUserId || task.assignedTo.id === currentUserId || task.assignedTo === currentUserId)) ||
-    (task.delegatedTo && (task.delegatedTo._id === currentUserId || task.delegatedTo.id === currentUserId || task.delegatedTo === currentUserId))
+    (task.delegatedTo && (task.delegatedTo._id === currentUserId || task.delegatedTo.id === currentUserId || task.delegatedTo === currentUserId)) ||
+    isCoAssignee
   );
   const isPerformerAdmin = currentUser.role === 'department_admin' && !task.delegatedTo && Boolean(
-    task.assignedTo && (task.assignedTo._id === currentUserId || task.assignedTo.id === currentUserId || task.assignedTo === currentUserId)
+    (task.assignedTo && (task.assignedTo._id === currentUserId || task.assignedTo.id === currentUserId || task.assignedTo === currentUserId)) ||
+    isCoAssignee
   );
   const isPerformerSuperAdmin = currentUser.role === 'super_admin' && !task.delegatedTo && Boolean(
     task.assignedTo && (task.assignedTo._id === currentUserId || task.assignedTo.id === currentUserId || task.assignedTo === currentUserId)
@@ -1003,6 +1034,11 @@ const TaskModal: React.FC<TaskModalProps> = ({
                   </span>
 
                   {task.isSubtask && <span style={{ fontSize: '0.72rem', backgroundColor: '#e2e8f0', color: '#475569', padding: '0.18rem 0.55rem', borderRadius: '6px', fontWeight: 600 }}>SUBTASK</span>}
+                  {(task.assignmentMode === 'shared' || (task.coAssignees && task.coAssignees.length > 1)) && (
+                    <span style={{ fontSize: '0.72rem', backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '0.18rem 0.55rem', borderRadius: '6px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                      👥 Team Task ({task.coAssignees?.length || 2} Members)
+                    </span>
+                  )}
                   {!task.isSubtask && subtasks.length > 0 && (
                     <span className="tm-deck-badge-pill" title={`Assembled Card Deck with ${subtasks.length} subtasks`}>
                       <Layers size={12} /> Card Deck ({subtasks.length} Subtasks)
@@ -1145,7 +1181,22 @@ const TaskModal: React.FC<TaskModalProps> = ({
                     <div className="tm-sub-val">{formatDateTimeDDMMYYYY(task.createdAt)}</div>
                   </div>
 
-                  {currentUser.role === 'super_admin' ? (
+                  {task.assignmentMode === 'shared' || (task.coAssignees && task.coAssignees.length > 0) ? (
+                    <div>
+                      <div className="tm-sub-label">Assigned Team (Shared Task)</div>
+                      <div className="tm-sub-val" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.2rem' }}>
+                        {task.coAssignees && task.coAssignees.length > 0 ? (
+                          task.coAssignees.map((ca: any) => (
+                            <span key={ca._id || ca.id || ca} style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.78rem', fontWeight: 600 }}>
+                              👥 {formatName(ca)}
+                            </span>
+                          ))
+                        ) : (
+                          formatName(task.assignedTo)
+                        )}
+                      </div>
+                    </div>
+                  ) : currentUser.role === 'super_admin' ? (
                     <div>
                       <div className="tm-sub-label">Assigned To</div>
                       <div className="tm-sub-val">{formatName(task.assignedTo)}</div>
@@ -1932,7 +1983,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
                           setModalSubtaskDesc('');
                           setModalSubtaskDeadline(formatToLocalDateTimeInput(task.deadline));
                           const defAssignee = task.assignedTo?._id || task.assignedTo?.id || (availableAssignees.length > 0 ? (availableAssignees[0]._id || availableAssignees[0].id) : '');
-                          setModalSubtaskAssignee(defAssignee);
+                          setModalSubtaskAssignees(defAssignee ? [defAssignee] : []);
+                          setModalSubtaskMode('individual');
                           setModalSubtaskError('');
                           setModalSubtaskSuccess('');
                         }
@@ -2006,20 +2058,46 @@ const TaskModal: React.FC<TaskModalProps> = ({
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
                       <div>
                         <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', marginBottom: '0.25rem' }}>
-                          Assign To *
+                          Assign To * ({modalSubtaskAssignees.length} selected)
                         </label>
+                        {modalSubtaskAssignees.length > 0 && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.45rem' }}>
+                            {modalSubtaskAssignees.map(uid => {
+                              const u = availableAssignees.find(a => (a._id || a.id) === uid);
+                              const uName = u ? (resolveUserName(u) || u.name) : 'User';
+                              return (
+                                <span key={uid} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '0.2rem 0.5rem', borderRadius: '16px', fontSize: '0.76rem', fontWeight: 600 }}>
+                                  👤 {uName}
+                                  <button
+                                    type="button"
+                                    onClick={() => setModalSubtaskAssignees(prev => prev.filter(id => id !== uid))}
+                                    style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center' }}
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
                         <select 
                           className="form-control"
-                          value={modalSubtaskAssignee}
-                          onChange={(e) => setModalSubtaskAssignee(e.target.value)}
+                          value=""
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val && !modalSubtaskAssignees.includes(val)) {
+                              setModalSubtaskAssignees(prev => [...prev, val]);
+                            }
+                          }}
                           style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
                         >
-                          <option value="">-- Choose Assignee --</option>
+                          <option value="">+ Add Assignee to Subtask...</option>
                           {availableAssignees.map(u => {
                             const uid = u._id || u.id;
+                            const isSelected = modalSubtaskAssignees.includes(uid);
                             return (
-                              <option key={uid} value={uid}>
-                                {u.name} {u.universityId ? `(${u.universityId})` : ''} - {u.role === 'department_admin' ? 'Admin' : 'Staff'}{u.department ? ` [${u.department}]` : ''}
+                              <option key={uid} value={uid} disabled={isSelected}>
+                                {isSelected ? '✓ ' : ''}{u.name} {u.universityId ? `(${u.universityId})` : ''} - {u.role === 'department_admin' ? 'Admin' : 'Staff'}{u.department ? ` [${u.department}]` : ''}
                               </option>
                             );
                           })}
@@ -2040,6 +2118,76 @@ const TaskModal: React.FC<TaskModalProps> = ({
                         />
                       </div>
                     </div>
+
+                    {modalSubtaskAssignees.length > 1 && (
+                      <div style={{
+                        marginTop: '0.45rem',
+                        padding: '0.75rem 0.85rem',
+                        backgroundColor: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '8px',
+                        marginBottom: '0.75rem'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.45rem' }}>
+                          <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                            👥 Multiple Assignees Selected
+                          </span>
+                          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Choose mode:</span>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                          <label style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '0.5rem',
+                            padding: '0.55rem 0.65rem',
+                            border: `1.5px solid ${modalSubtaskMode !== 'shared' ? '#2563eb' : '#e2e8f0'}`,
+                            backgroundColor: modalSubtaskMode !== 'shared' ? '#eff6ff' : '#ffffff',
+                            borderRadius: '6px',
+                            cursor: 'pointer'
+                          }}>
+                            <input 
+                              type="radio"
+                              name="modal-subtask-mode"
+                              checked={modalSubtaskMode !== 'shared'}
+                              onChange={() => setModalSubtaskMode('individual')}
+                              style={{ marginTop: '0.15rem' }}
+                            />
+                            <div>
+                              <strong style={{ display: 'block', fontSize: '0.78rem', color: '#1e293b' }}>Individual Subtasks</strong>
+                              <span style={{ fontSize: '0.7rem', color: '#64748b', lineHeight: 1.25, display: 'block' }}>
+                                Separate subtask copy for each staff
+                              </span>
+                            </div>
+                          </label>
+
+                          <label style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '0.5rem',
+                            padding: '0.55rem 0.65rem',
+                            border: `1.5px solid ${modalSubtaskMode === 'shared' ? '#2563eb' : '#e2e8f0'}`,
+                            backgroundColor: modalSubtaskMode === 'shared' ? '#eff6ff' : '#ffffff',
+                            borderRadius: '6px',
+                            cursor: 'pointer'
+                          }}>
+                            <input 
+                              type="radio"
+                              name="modal-subtask-mode"
+                              checked={modalSubtaskMode === 'shared'}
+                              onChange={() => setModalSubtaskMode('shared')}
+                              style={{ marginTop: '0.15rem' }}
+                            />
+                            <div>
+                              <strong style={{ display: 'block', fontSize: '0.78rem', color: '#1e293b' }}>Shared Team Subtask</strong>
+                              <span style={{ fontSize: '0.7rem', color: '#64748b', lineHeight: 1.25, display: 'block' }}>
+                                1 joint subtask with team deliverables & group chat
+                              </span>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+                    )}
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
                       <button 
@@ -2067,55 +2215,99 @@ const TaskModal: React.FC<TaskModalProps> = ({
                   <p style={{ color: '#888', fontStyle: 'italic' }}>No subtasks created yet.</p>
                 ) : (
                   <div style={{ display: 'grid', gap: '0.85rem' }}>
-                    {subtasks.map(st => (
-                      <div 
-                        key={st._id} 
-                        id={`subtask-card-${st._id}`}
-                        className="tm-subtask-deck-card"
-                        style={{ 
-                          padding: '1rem', 
-                          backgroundColor: '#ffffff', 
-                          borderRadius: '8px', 
-                          border: '1px solid #e2e8f0',
-                          borderLeft: `4px solid ${st.status === 'approved' ? '#10b981' : st.status === 'rejected' ? '#ef4444' : st.status === 'submitted_for_review' ? '#f59e0b' : '#3b82f6'}`,
-                          boxShadow: '0 2px 4px rgba(15, 23, 42, 0.04)',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '0.5rem'
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', flexWrap: 'wrap' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-                            <span style={{ fontWeight: 800, color: '#3b82f6', fontSize: '0.85rem' }}>#{st.taskId}</span>
-                            <strong style={{ fontSize: '0.98rem', color: '#0f172a' }}>{st.title}</strong>
+                    {subtasks.map(st => {
+                      const isSubtaskCreator = Boolean(
+                        (st.createdBy?._id && ((st.createdBy._id === currentUser.id || st.createdBy._id === currentUser._id))) ||
+                        (st.createdBy?.id && ((st.createdBy.id === currentUser.id || st.createdBy.id === currentUser._id))) ||
+                        (typeof st.createdBy === 'string' && (st.createdBy === currentUser.id || st.createdBy === currentUser._id)) ||
+                        (st.createdBy?.universityId && currentUser?.universityId && st.createdBy.universityId === currentUser.universityId)
+                      );
+                      const canDeleteSubtask = isSuperAdmin || isSubtaskCreator;
+
+                      return (
+                        <div 
+                          key={st._id} 
+                          id={`subtask-card-${st._id}`}
+                          className="tm-subtask-deck-card"
+                          style={{ 
+                            padding: '1rem', 
+                            backgroundColor: '#ffffff', 
+                            borderRadius: '8px', 
+                            border: '1px solid #e2e8f0',
+                            borderLeft: `4px solid ${st.status === 'approved' ? '#10b981' : st.status === 'rejected' ? '#ef4444' : st.status === 'submitted_for_review' ? '#f59e0b' : '#3b82f6'}`,
+                            boxShadow: '0 2px 4px rgba(15, 23, 42, 0.04)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.5rem'
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                              <span style={{ fontWeight: 800, color: '#3b82f6', fontSize: '0.85rem' }}>#{st.taskId}</span>
+                              <strong style={{ fontSize: '0.98rem', color: '#0f172a' }}>{st.title}</strong>
+                              {(st.assignmentMode === 'shared' || (st.coAssignees && st.coAssignees.length > 1)) && (
+                                <span style={{ fontSize: '0.7rem', backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '0.15rem 0.45rem', borderRadius: '4px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                  👥 Team Subtask
+                                </span>
+                              )}
+                            </div>
+                            <span className={`tm-status-pill status-${st.status}`} style={{ fontSize: '0.72rem', padding: '0.2rem 0.55rem', borderRadius: '12px', fontWeight: 600, textTransform: 'capitalize', backgroundColor: st.status === 'approved' ? '#dcfce7' : st.status === 'rejected' ? '#fee2e2' : '#e0e7ff', color: st.status === 'approved' ? '#166534' : st.status === 'rejected' ? '#991b1b' : '#3730a3' }}>
+                              {st.status?.replace(/_/g, ' ')}
+                            </span>
                           </div>
-                          <span className={`tm-status-pill status-${st.status}`} style={{ fontSize: '0.72rem', padding: '0.2rem 0.55rem', borderRadius: '12px', fontWeight: 600, textTransform: 'capitalize', backgroundColor: st.status === 'approved' ? '#dcfce7' : st.status === 'rejected' ? '#fee2e2' : '#e0e7ff', color: st.status === 'approved' ? '#166534' : st.status === 'rejected' ? '#991b1b' : '#3730a3' }}>
-                            {st.status?.replace(/_/g, ' ')}
-                          </span>
-                        </div>
 
-                        {st.description && st.description !== st.title && (
-                          <p style={{ margin: 0, fontSize: '0.84rem', color: '#64748b', lineHeight: 1.4 }}>
-                            {st.description}
-                          </p>
-                        )}
+                          {st.description && st.description !== st.title && (
+                            <p style={{ margin: 0, fontSize: '0.84rem', color: '#64748b', lineHeight: 1.4 }}>
+                              {st.description}
+                            </p>
+                          )}
 
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem', color: '#475569', flexWrap: 'wrap', gap: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem', marginTop: '0.25rem' }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                            👤 <strong>Assigned:</strong> {formatNameString(st.delegatedTo || st.assignedTo)}
-                          </span>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                            📅 <strong>Due:</strong> {formatDateTimeDDMMYYYY(st.deadline)}
-                          </span>
-                          <div style={{ display: 'flex', gap: '0.4rem' }}>
-                            {onOpenChat && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem', color: '#475569', flexWrap: 'wrap', gap: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem', marginTop: '0.25rem' }}>
+                            {st.coAssignees && st.coAssignees.length > 0 ? (
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                                👥 <strong>Team:</strong> {st.coAssignees.map((ca: any) => ca.name || ca.universityId || 'Staff').join(', ')}
+                              </span>
+                            ) : (
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                                👤 <strong>Assigned:</strong> {formatNameString(st.delegatedTo || st.assignedTo)}
+                              </span>
+                            )}
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                              📅 <strong>Due:</strong> {formatDateTimeDDMMYYYY(st.deadline)}
+                            </span>
+                            <div style={{ display: 'flex', gap: '0.4rem' }}>
+                              {onOpenChat && (
+                                <button
+                                  type="button"
+                                  onClick={() => onOpenChat(st)}
+                                  style={{
+                                    padding: '0.25rem 0.6rem',
+                                    backgroundColor: '#f1f5f9',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: '6px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.3rem'
+                                  }}
+                                  title="Chat regarding this subtask"
+                                >
+                                  <MessageSquare size={12} /> Chat
+                                </button>
+                              )}
                               <button
                                 type="button"
-                                onClick={() => onOpenChat(st)}
+                                onClick={() => {
+                                  setParentMainTask(task);
+                                  setTask(st);
+                                }}
                                 style={{
                                   padding: '0.25rem 0.6rem',
-                                  backgroundColor: '#f1f5f9',
-                                  border: '1px solid #cbd5e1',
+                                  backgroundColor: '#021c3b',
+                                  color: '#ffffff',
+                                  border: 'none',
                                   borderRadius: '6px',
                                   fontSize: '0.75rem',
                                   fontWeight: 600,
@@ -2124,38 +2316,38 @@ const TaskModal: React.FC<TaskModalProps> = ({
                                   alignItems: 'center',
                                   gap: '0.3rem'
                                 }}
-                                title="Chat regarding this subtask"
+                                title="View full details and manage this subtask"
                               >
-                                <MessageSquare size={12} /> Chat
+                                <ExternalLink size={12} /> View Details
                               </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setParentMainTask(task);
-                                setTask(st);
-                              }}
-                              style={{
-                                padding: '0.25rem 0.6rem',
-                                backgroundColor: '#021c3b',
-                                color: '#ffffff',
-                                border: 'none',
-                                borderRadius: '6px',
-                                fontSize: '0.75rem',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '0.3rem'
-                              }}
-                              title="View full details and manage this subtask"
-                            >
-                              <ExternalLink size={12} /> View Details
-                            </button>
+                              {canDeleteSubtask && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteSubtask(st._id, st.title)}
+                                  disabled={deletingSubtaskId === st._id}
+                                  style={{
+                                    padding: '0.25rem 0.6rem',
+                                    backgroundColor: '#fef2f2',
+                                    color: '#dc2626',
+                                    border: '1px solid #fecaca',
+                                    borderRadius: '6px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.3rem'
+                                  }}
+                                  title="Delete this subtask"
+                                >
+                                  <Trash2 size={12} /> {deletingSubtaskId === st._id ? '...' : 'Delete'}
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
