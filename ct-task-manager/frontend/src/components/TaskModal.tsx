@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ChevronDown, ChevronUp, Paperclip, FileText, Star, Building2, MessageSquare, Video, Plus, Check, X, Layers, ArrowLeft, ExternalLink, Trash2, User, Users, Clock, AlignLeft, FileSpreadsheet, Image as ImageIcon, File as FileIcon, Download, Loader2, CheckCircle2, FolderUp, AlertCircle, Send, Calendar, CalendarPlus, Edit3, CheckCheck, XCircle } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, Paperclip, FileText, Star, Building2, MessageSquare, Video, Plus, Check, X, Layers, ArrowLeft, ExternalLink, Trash2, User, Users, Clock, AlignLeft, FileSpreadsheet, Image as ImageIcon, File as FileIcon, Download, Loader2, CheckCircle2, FolderUp, AlertCircle, Send, Calendar, CalendarPlus, Edit3, CheckCheck, XCircle, Info } from 'lucide-react';
 import { api } from '../services/api';
 import { calculateUrgency, getUrgencyColor, getUrgencyLabel } from '../utils/taskUrgency';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
@@ -728,7 +728,10 @@ const TaskModal: React.FC<TaskModalProps> = ({
   };
 
   const handleQuickApproveExtension = async () => {
-    if (!window.confirm(`Approve deadline extension to ${formatDateTimeDDMMYYYY(task.extensionRequest?.requestedDeadline)}?`)) {
+    const targetDate = task.extensionRequest?.requestedDeadline
+      ? formatDateTimeDDMMYYYY(task.extensionRequest.requestedDeadline)
+      : 'the requested date';
+    if (!window.confirm(`Approve deadline extension to ${targetDate}?`)) {
       return;
     }
     try {
@@ -980,7 +983,10 @@ const TaskModal: React.FC<TaskModalProps> = ({
   // Deadline extension permissions
   const canDirectExtend = isSuperAdmin || isCreator;
   const hasPendingExtension = Boolean(
-    task.extensionRequest && (task.extensionRequest.status === 'pending' || task.extensionRequest.status === 'endorsed')
+    task.extensionRequest &&
+    task.extensionRequest.requestedDeadline &&
+    task.extensionRequest.requestedBy &&
+    (task.extensionRequest.status === 'pending' || task.extensionRequest.status === 'endorsed')
   );
   const canRequestExtension = canPerformStaffActions && !hasPendingExtension && task.status !== 'completed' && task.status !== 'approved';
   const isCreatorSuperAdmin = Boolean(
@@ -1347,48 +1353,56 @@ const TaskModal: React.FC<TaskModalProps> = ({
               <div className="tm-ext-banner">
                 <div className="tm-ext-banner-header">
                   <div className="tm-ext-banner-title">
-                    <Clock size={16} className="tm-ext-banner-icon" />
-                    <span>Deadline Extension Request</span>
+                    <div className="tm-ext-banner-icon-box">
+                      <Clock size={15} />
+                    </div>
+                    <span className="tm-ext-banner-title-text">Deadline Extension Request</span>
                     <span className={`tm-ext-status-badge ${task.extensionRequest.status}`}>
+                      <span className="tm-ext-dot"></span>
                       {task.extensionRequest.status === 'endorsed' ? 'Endorsed by HOD' : 'Pending Review'}
                     </span>
                   </div>
                   <div className="tm-ext-banner-stage">
-                    Awaiting: <strong>{task.extensionRequest.stage === 'super_admin' ? 'Super Admin Approval' : 'Department Admin Review'}</strong>
+                    <span className="tm-ext-stage-lbl">Review Stage:</span>{' '}
+                    <strong>{task.extensionRequest.stage === 'super_admin' ? 'Super Admin Approval' : 'Department Admin Review'}</strong>
                   </div>
                 </div>
 
                 <div className="tm-ext-banner-body">
                   <div className="tm-ext-banner-grid">
-                    <div>
-                      <span className="tm-ext-label">Requested By:</span>
-                      <span className="tm-ext-val">{formatName(task.extensionRequest.requestedBy)}</span>
+                    <div className="tm-ext-grid-item">
+                      <span className="tm-ext-label">Requested By</span>
+                      <span className="tm-ext-val">{formatName(task.extensionRequest.requestedBy) || 'Assignee'}</span>
                     </div>
-                    <div>
-                      <span className="tm-ext-label">Current Deadline:</span>
+                    <div className="tm-ext-grid-item">
+                      <span className="tm-ext-label">Current Deadline</span>
                       <span className="tm-ext-val">{formatDateTimeDDMMYYYY(task.deadline)}</span>
                     </div>
-                    <div>
-                      <span className="tm-ext-label">Proposed New Deadline:</span>
+                    <div className="tm-ext-grid-item">
+                      <span className="tm-ext-label">Proposed Deadline</span>
                       <span className="tm-ext-val tm-ext-val-highlight">
                         {formatDateTimeDDMMYYYY(task.extensionRequest.requestedDeadline)}
                       </span>
                     </div>
                     {task.extensionRequest.createdAt && (
-                      <div>
-                        <span className="tm-ext-label">Requested On:</span>
+                      <div className="tm-ext-grid-item">
+                        <span className="tm-ext-label">Requested On</span>
                         <span className="tm-ext-val">{formatDateTimeDDMMYYYY(task.extensionRequest.createdAt)}</span>
                       </div>
                     )}
                   </div>
 
                   <div className="tm-ext-reason-box">
-                    <strong>Assignee Justification:</strong> "{task.extensionRequest.reason}"
+                    <div className="tm-ext-reason-heading">Assignee Justification</div>
+                    <div className="tm-ext-reason-content">"{task.extensionRequest.reason}"</div>
                   </div>
 
                   {task.extensionRequest.deptAdminRemarks && (
                     <div className="tm-ext-endorsement-box">
-                      <strong>Dept Admin Endorsement ({formatName(task.extensionRequest.deptAdminActionBy)}):</strong> "{task.extensionRequest.deptAdminRemarks}"
+                      <div className="tm-ext-endorsement-heading">
+                        Dept Admin Endorsement ({formatName(task.extensionRequest.deptAdminActionBy)}):
+                      </div>
+                      <div className="tm-ext-endorsement-content">"{task.extensionRequest.deptAdminRemarks}"</div>
                     </div>
                   )}
                 </div>
@@ -1403,7 +1417,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                         onClick={() => handleOpenReviewModal('endorse')}
                         disabled={reviewLoading}
                       >
-                        <CheckCheck size={14} /> Endorse & Forward to Super Admin
+                        <CheckCheck size={14} /> Endorse to Super Admin
                       </button>
                     ) : (
                       <button 
@@ -1436,7 +1450,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                       disabled={reviewLoading}
                       title="Approve requested deadline"
                     >
-                      <Check size={14} /> Approve ({formatDateTimeDDMMYYYY(task.extensionRequest.requestedDeadline)})
+                      <Check size={14} /> {task.extensionRequest.requestedDeadline ? `Approve Proposed (${formatDateTimeDDMMYYYY(task.extensionRequest.requestedDeadline)})` : 'Approve Request'}
                     </button>
                     <button 
                       type="button" 
@@ -2871,7 +2885,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
           <div className="tm-dialog-card" onClick={e => e.stopPropagation()}>
             <div className="tm-dialog-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                <div className="tm-dialog-icon-wrap" style={{ background: '#fef3c7', color: '#d97706' }}>
+                <div className="tm-dialog-icon-wrap" style={{ background: '#eef2ff', color: '#4f46e5' }}>
                   <CalendarPlus size={18} />
                 </div>
                 <div>
@@ -2889,8 +2903,9 @@ const TaskModal: React.FC<TaskModalProps> = ({
             </div>
 
             <div className="tm-dialog-body">
-              <div className="tm-dialog-info-box">
-                ℹ️ Your request will be reviewed by your Department Admin and forwarded to Super Admin for final approval.
+              <div className="tm-dialog-info-box" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <Info size={16} style={{ flexShrink: 0, color: '#0284c7' }} />
+                <span>Your request will be reviewed by your Department Admin and forwarded to Super Admin for final approval.</span>
               </div>
 
               <div className="tm-dialog-current-deadline-box">

@@ -66,6 +66,75 @@ export interface ITask extends Document {
   updatedAt: Date;
 }
 
+const extensionRequestSchema = new Schema(
+  {
+    requestedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null
+    },
+    currentDeadline: {
+      type: Date,
+      default: null
+    },
+    requestedDeadline: {
+      type: Date,
+      default: null
+    },
+    reason: {
+      type: String,
+      trim: true,
+      maxlength: 1000,
+      default: null
+    },
+    stage: {
+      type: String,
+      enum: ['department_admin', 'super_admin', 'none'],
+      default: 'none'
+    },
+    status: {
+      type: String,
+      enum: ['pending', 'endorsed', 'approved', 'rejected'],
+      default: null
+    },
+    deptAdminRemarks: {
+      type: String,
+      trim: true,
+      maxlength: 1000,
+      default: null
+    },
+    deptAdminActionBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null
+    },
+    deptAdminActionAt: {
+      type: Date,
+      default: null
+    },
+    decidedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null
+    },
+    decidedAt: {
+      type: Date,
+      default: null
+    },
+    decisionReason: {
+      type: String,
+      trim: true,
+      maxlength: 1000,
+      default: null
+    },
+    createdAt: {
+      type: Date,
+      default: null
+    }
+  },
+  { _id: false }
+);
+
 const taskSchema = new Schema<ITask>(
   {
     taskId: {
@@ -205,69 +274,8 @@ const taskSchema = new Schema<ITask>(
       index: true
     },
     extensionRequest: {
-      requestedBy: {
-        type: Schema.Types.ObjectId,
-        ref: 'User',
-        default: null
-      },
-      currentDeadline: {
-        type: Date,
-        default: null
-      },
-      requestedDeadline: {
-        type: Date,
-        default: null
-      },
-      reason: {
-        type: String,
-        trim: true,
-        maxlength: 1000,
-        default: null
-      },
-      stage: {
-        type: String,
-        enum: ['department_admin', 'super_admin', 'none'],
-        default: 'none'
-      },
-      status: {
-        type: String,
-        enum: ['pending', 'endorsed', 'approved', 'rejected'],
-        default: 'pending'
-      },
-      deptAdminRemarks: {
-        type: String,
-        trim: true,
-        maxlength: 1000,
-        default: null
-      },
-      deptAdminActionBy: {
-        type: Schema.Types.ObjectId,
-        ref: 'User',
-        default: null
-      },
-      deptAdminActionAt: {
-        type: Date,
-        default: null
-      },
-      decidedBy: {
-        type: Schema.Types.ObjectId,
-        ref: 'User',
-        default: null
-      },
-      decidedAt: {
-        type: Date,
-        default: null
-      },
-      decisionReason: {
-        type: String,
-        trim: true,
-        maxlength: 1000,
-        default: null
-      },
-      createdAt: {
-        type: Date,
-        default: Date.now
-      }
+      type: extensionRequestSchema,
+      default: null
     },
     deadlineHistory: [
       {
