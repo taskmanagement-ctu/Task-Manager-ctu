@@ -7,6 +7,8 @@ import {
 import { api, Task } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { calculateUrgency, getUrgencyCardStyle, getUrgencyLabel, getUrgencyColor } from '../utils/taskUrgency';
+import TaskModal from '../components/TaskModal';
+import TaskChatDrawer from '../components/TaskChatDrawer';
 import './AdminPage.css';
 
 const AdminPage: React.FC = () => {
@@ -14,31 +16,34 @@ const AdminPage: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [team, setTeam] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [chatTask, setChatTask] = useState<any | null>(null);
+
+  const fetchData = async () => {
+    try {
+      if (!user) return;
+      const adminId = user.id || (user as any)._id || '';
+      const [tasksRes, teamRes] = await Promise.all([
+        api.getTasks({}),
+        adminId ? api.getAdminAssignments(adminId) : Promise.resolve({ success: true, data: { assignments: [] } })
+      ]);
+      
+      // Filter tasks that belong to the department
+      // For now, if the user is dept admin, they created them or assigned them.
+      // The backend might already filter them, but let's be safe if it doesn't.
+      setTasks(tasksRes.data.tasks || []);
+      
+      const assignments = teamRes.data?.assignments || [];
+      // Map assignments to staff users
+      setTeam(assignments.map(a => a.staffId).filter(Boolean));
+    } catch (err) {
+      console.error('Failed to fetch dashboard data', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        if (!user) return;
-        const adminId = user.id || (user as any)._id || '';
-        const [tasksRes, teamRes] = await Promise.all([
-          api.getTasks({}),
-          adminId ? api.getAdminAssignments(adminId) : Promise.resolve({ success: true, data: { assignments: [] } })
-        ]);
-        
-        // Filter tasks that belong to the department
-        // For now, if the user is dept admin, they created them or assigned them.
-        // The backend might already filter them, but let's be safe if it doesn't.
-        setTasks(tasksRes.data.tasks || []);
-        
-        const assignments = teamRes.data?.assignments || [];
-        // Map assignments to staff users
-        setTeam(assignments.map(a => a.staffId).filter(Boolean));
-      } catch (err) {
-        console.error('Failed to fetch dashboard data', err);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, [user]);
 
@@ -127,7 +132,12 @@ const AdminPage: React.FC = () => {
                 const urgencyColor = getUrgencyColor(urgency);
                 
                 return (
-                <div className="admin-task-item" key={task._id || task.id} style={{ backgroundColor: cardStyle.backgroundColor, borderLeft: cardStyle.borderLeft }}>
+                <div 
+                  className="admin-task-item" 
+                  key={task._id || task.id} 
+                  style={{ backgroundColor: cardStyle.backgroundColor, borderLeft: cardStyle.borderLeft, cursor: 'pointer' }}
+                  onClick={() => setSelectedTask(task)}
+                >
                   <div className="admin-task-indicator" style={{ background: urgencyColor }}></div>
                   <div className="admin-task-header">
                     <div className="admin-task-meta">
@@ -190,6 +200,33 @@ const AdminPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {selectedTask && (
+        <TaskModal 
+          task={selectedTask} 
+          currentUser={user}
+          onClose={() => setSelectedTask(null)}
+          onRefresh={() => {
+            fetchData();
+            api.getTaskById(selectedTask._id || selectedTask.id).then(res => setSelectedTask(res.data.task)).catch(() => setSelectedTask(null));
+          }}
+          onOpenChat={(t) => setChatTask(t)}
+        />
+      )}
+
+      {/* Task-Specific Chat Drawer */}
+      <TaskChatDrawer
+        task={chatTask}
+        currentUser={user}
+        isOpen={!!chatTask}
+        onClose={() => setChatTask(null)}
+        onMessageSent={() => {
+          fetchData();
+          if (selectedTask) {
+            api.getTaskById(selectedTask._id || selectedTask.id).then(res => setSelectedTask(res.data.task)).catch(() => setSelectedTask(null));
+          }
+        }}
+      />
     </div>
   );
 };

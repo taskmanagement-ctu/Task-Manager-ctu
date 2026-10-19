@@ -14,6 +14,7 @@ import { Link } from 'react-router-dom';
 import { calculateUrgency, getUrgencyCardStyle, getUrgencyLabel, getUrgencyColor } from '../utils/taskUrgency';
 import TaskModal from '../components/TaskModal';
 import TaskCalendarModal from '../components/TaskCalendarModal';
+import TaskChatDrawer from '../components/TaskChatDrawer';
 import './StaffPage.css';
 
 const StaffPage: React.FC = () => {
@@ -21,6 +22,7 @@ const StaffPage: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [chatTask, setChatTask] = useState<any | null>(null);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   const fetchTasks = async () => {
@@ -203,7 +205,12 @@ const StaffPage: React.FC = () => {
               <p style={{ color: '#64748b', fontSize: '0.875rem' }}>No upcoming deadlines.</p>
             ) : (
               upcomingDeadlines.map((task) => (
-                <div className="staff-deadline-item" key={task._id || task.id}>
+                <div 
+                  className="staff-deadline-item" 
+                  key={task._id || task.id}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setSelectedTask(task)}
+                >
                   <div className="deadline-date">
                     <div className="deadline-month">
                       {new Date(task.deadline!).toLocaleDateString('en-US', { month: 'short' })}
@@ -262,8 +269,23 @@ const StaffPage: React.FC = () => {
             fetchTasks();
             api.getTaskById(selectedTask._id || selectedTask.id).then(res => setSelectedTask(res.data.task)).catch(() => setSelectedTask(null));
           }}
+          onOpenChat={(t) => setChatTask(t)}
         />
       )}
+
+      {/* Task-Specific Chat Drawer */}
+      <TaskChatDrawer
+        task={chatTask}
+        currentUser={user}
+        isOpen={!!chatTask}
+        onClose={() => setChatTask(null)}
+        onMessageSent={() => {
+          fetchTasks();
+          if (selectedTask) {
+            api.getTaskById(selectedTask._id || selectedTask.id).then(res => setSelectedTask(res.data.task)).catch(() => setSelectedTask(null));
+          }
+        }}
+      />
 
       {/* Task & Deadline Calendar Modal */}
       <TaskCalendarModal 

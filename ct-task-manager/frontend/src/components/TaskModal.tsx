@@ -1037,9 +1037,9 @@ const TaskModal: React.FC<TaskModalProps> = ({
                   >
                     <MessageSquare size={14} />
                     <span>Chat / Discussion</span>
-                    {task.comments && task.comments.length > 0 && (
+                    {((taskComments && taskComments.length > 0) || (task.comments && task.comments.length > 0)) && (
                       <span style={{ backgroundColor: '#0284c7', padding: '0.05rem 0.4rem', borderRadius: '10px', fontSize: '0.7rem' }}>
-                        {task.comments.length}
+                        {taskComments && taskComments.length > 0 ? taskComments.length : task.comments.length}
                       </span>
                     )}
                   </button>
