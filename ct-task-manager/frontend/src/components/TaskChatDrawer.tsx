@@ -4,6 +4,7 @@ import {
   Send, 
   MessageSquare, 
   User as UserIcon, 
+  Users,
   Shield, 
   Building2, 
   CheckCheck,
@@ -38,10 +39,9 @@ const TaskChatDrawer: React.FC<TaskChatDrawerProps> = ({
   // 3-Tier Hierarchy tab state for Department Admin
   const isDeptAdmin = currentUser?.role === 'department_admin';
   const isThreeTier = Boolean(
-    (task?.delegatedTo && 
+    task?.delegatedTo && 
     task?.assignedTo && 
-    (task.delegatedTo._id || task.delegatedTo) !== (task.assignedTo._id || task.assignedTo)) ||
-    (task?.assignmentMode === 'shared' && task?.coAssignees && task.coAssignees.length > 0 && task?.createdBy && ((task.createdBy.role === 'super_admin') || (task.createdBy._id || task.createdBy.id) !== (currentUser?._id || currentUser?.id)))
+    (task.delegatedTo._id || task.delegatedTo) !== (task.assignedTo._id || task.assignedTo)
   );
   const showTabs = isThreeTier && isDeptAdmin;
   const isSharedTeam = task?.assignmentMode === 'shared' || Boolean(task?.coAssignees && task.coAssignees.length > 1);
@@ -134,7 +134,9 @@ const TaskChatDrawer: React.FC<TaskChatDrawerProps> = ({
 
     const channelToSend = showTabs 
       ? activeTab 
-      : (currentUser?.role === 'super_admin' ? 'super_admin' : currentUser?.role === 'staff' ? 'staff' : 'general');
+      : (isThreeTier
+          ? (currentUser?.role === 'super_admin' ? 'super_admin' : currentUser?.role === 'staff' ? 'staff' : 'general')
+          : 'general');
 
     try {
       const res = await api.addTaskComment(task._id, messageText, channelToSend);
@@ -279,6 +281,11 @@ const TaskChatDrawer: React.FC<TaskChatDrawerProps> = ({
     }
   } else if (currentUser?.role === 'super_admin') {
     counterpart = task.assignedTo;
+    if (isSharedTeam) {
+      counterpartLabel = 'Talking with Staff Team:';
+    } else {
+      counterpartLabel = 'Talking with Staff:';
+    }
   } else if (currentUser?.role === 'staff') {
     counterpart = task.assignedTo || creator;
     if (isSharedTeam) {
@@ -291,7 +298,14 @@ const TaskChatDrawer: React.FC<TaskChatDrawerProps> = ({
     }
   }
 
-  const counterpartName = isSharedTeam && (activeTab === 'staff' || currentUser?.role === 'staff' || currentUser?.role === 'department_admin')
+  const isTeamView = isSharedTeam && (
+    activeTab === 'staff' || 
+    currentUser?.role === 'staff' || 
+    currentUser?.role === 'department_admin' ||
+    currentUser?.role === 'super_admin'
+  );
+
+  const counterpartName = isTeamView
     ? (task.coAssignees && task.coAssignees.length > 0
         ? task.coAssignees.map((u: any) => u.name || u.universityId).join(', ')
         : (task.delegatedTo?.name || 'Staff Team'))
@@ -300,11 +314,13 @@ const TaskChatDrawer: React.FC<TaskChatDrawerProps> = ({
         : (counterpart?.name || (showTabs 
             ? (activeTab === 'super_admin' ? 'Super Admin' : (task.delegatedTo?.name || 'Staff Member'))
             : (isMeCreator ? (task.delegatedTo?.name || 'Department Admin') : 'Super Admin'))));
-  const counterpartId = (isSharedTeam && (activeTab === 'staff' || currentUser?.role === 'staff')) ? '' : (counterpart?.universityId || counterpart?.employeeId || '');
+  const counterpartId = isTeamView ? '' : (counterpart?.universityId || counterpart?.employeeId || '');
   const counterpartRole = counterpart?.role || (showTabs
     ? (activeTab === 'super_admin' ? 'super_admin' : 'staff')
     : (isMeCreator ? 'staff' : 'super_admin'));
-  const counterpartRoleBadge = getRoleBadge(counterpartRole);
+  const counterpartRoleBadge = isTeamView
+    ? { label: 'Staff Team', className: 'chat-role-staff', icon: <Users size={10} /> }
+    : getRoleBadge(counterpartRole);
 
   const quickSuggestions = showTabs
     ? (activeTab === 'super_admin'
@@ -398,7 +414,7 @@ const TaskChatDrawer: React.FC<TaskChatDrawerProps> = ({
                 setTimeout(() => scrollToBottom(false), 50);
               }}
             >
-              <UserIcon size={14} />
+              {isSharedTeam ? <Users size={14} /> : <UserIcon size={14} />}
               <span>
                 {isSharedTeam 
                   ? `Staff Team (${task.coAssignees?.length || 2})` 
@@ -421,8 +437,8 @@ const TaskChatDrawer: React.FC<TaskChatDrawerProps> = ({
                   : (isSharedTeam 
                       ? 'Collaborative group chat with Dept Admin and all co-assigned staff (Super Admin cannot see this).' 
                       : `Internal thread with ${task.delegatedTo?.name || 'Staff'} (Super Admin cannot see this).`))
-              : (isSharedTeam && currentUser?.role === 'staff'
-                  ? 'Collaborative team discussion. All co-assigned staff and Dept Admin can participate.'
+              : (isSharedTeam
+                  ? 'Collaborative team discussion. All co-assigned staff and admin can participate.'
                   : 'Task-specific direct discussion.')}
           </span>
         </div>

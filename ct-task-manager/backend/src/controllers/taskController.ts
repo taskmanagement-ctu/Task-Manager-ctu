@@ -1859,10 +1859,10 @@ export const addTaskComment = async (req: Request, res: Response) => {
     // Determine chat channel for 3-tier hierarchy:
     // A 3-tier task has a distinct assignedTo (Dept Admin) and delegatedTo (Staff)
     // OR a shared task with coAssignees where assignedTo is Dept Admin
-    const hasCoAssignees = Array.isArray(task.coAssignees) && task.coAssignees.length > 0;
     const isThreeTier = Boolean(
-      (task.delegatedTo && task.assignedTo && task.delegatedTo.toString() !== task.assignedTo.toString()) ||
-      (task.createdBy && task.assignedTo && task.createdBy.toString() !== task.assignedTo.toString() && hasCoAssignees)
+      task.delegatedTo && 
+      task.assignedTo && 
+      task.delegatedTo.toString() !== task.assignedTo.toString()
     );
 
     let commentChannel: 'super_admin' | 'staff' | 'general' = 'general';

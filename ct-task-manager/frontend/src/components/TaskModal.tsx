@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ChevronDown, ChevronUp, Paperclip, FileText, Star, Building2, MessageSquare, Video, Plus, Check, X, Layers, ArrowLeft, ExternalLink, Trash2, User, Clock, AlignLeft, FileSpreadsheet, Image as ImageIcon, File as FileIcon, Download, Loader2, CheckCircle2, FolderUp, AlertCircle, Send } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, Paperclip, FileText, Star, Building2, MessageSquare, Video, Plus, Check, X, Layers, ArrowLeft, ExternalLink, Trash2, User, Users, Clock, AlignLeft, FileSpreadsheet, Image as ImageIcon, File as FileIcon, Download, Loader2, CheckCircle2, FolderUp, AlertCircle, Send } from 'lucide-react';
 import { api } from '../services/api';
 import { calculateUrgency, getUrgencyColor, getUrgencyLabel } from '../utils/taskUrgency';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
@@ -1036,7 +1036,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                   {task.isSubtask && <span style={{ fontSize: '0.72rem', backgroundColor: '#e2e8f0', color: '#475569', padding: '0.18rem 0.55rem', borderRadius: '6px', fontWeight: 600 }}>SUBTASK</span>}
                   {(task.assignmentMode === 'shared' || (task.coAssignees && task.coAssignees.length > 1)) && (
                     <span style={{ fontSize: '0.72rem', backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '0.18rem 0.55rem', borderRadius: '6px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-                      👥 Team Task ({task.coAssignees?.length || 2} Members)
+                      <Users size={13} /> Team Task ({task.coAssignees?.length || 2} Members)
                     </span>
                   )}
                   {!task.isSubtask && subtasks.length > 0 && (
@@ -1187,8 +1187,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
                       <div className="tm-sub-val" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.2rem' }}>
                         {task.coAssignees && task.coAssignees.length > 0 ? (
                           task.coAssignees.map((ca: any) => (
-                            <span key={ca._id || ca.id || ca} style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.78rem', fontWeight: 600 }}>
-                              👥 {formatName(ca)}
+                            <span key={ca._id || ca.id || ca} style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.78rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                              <Users size={12} /> {formatName(ca)}
                             </span>
                           ))
                         ) : (
@@ -2129,8 +2129,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
                         marginBottom: '0.75rem'
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.45rem' }}>
-                          <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                            👥 Multiple Assignees Selected
+                          <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.03em', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <Users size={13} /> Multiple Assignees Selected
                           </span>
                           <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Choose mode:</span>
                         </div>
@@ -2247,7 +2247,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                               <strong style={{ fontSize: '0.98rem', color: '#0f172a' }}>{st.title}</strong>
                               {(st.assignmentMode === 'shared' || (st.coAssignees && st.coAssignees.length > 1)) && (
                                 <span style={{ fontSize: '0.7rem', backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '0.15rem 0.45rem', borderRadius: '4px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                                  👥 Team Subtask
+                                  <Users size={12} /> Team Subtask
                                 </span>
                               )}
                             </div>
@@ -2265,11 +2265,11 @@ const TaskModal: React.FC<TaskModalProps> = ({
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem', color: '#475569', flexWrap: 'wrap', gap: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem', marginTop: '0.25rem' }}>
                             {st.coAssignees && st.coAssignees.length > 0 ? (
                               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                                👥 <strong>Team:</strong> {st.coAssignees.map((ca: any) => ca.name || ca.universityId || 'Staff').join(', ')}
+                                <Users size={12} /> <strong>Team:</strong> {st.coAssignees.map((ca: any) => ca.name || ca.universityId || 'Staff').join(', ')}
                               </span>
                             ) : (
                               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                                👤 <strong>Assigned:</strong> {formatNameString(st.delegatedTo || st.assignedTo)}
+                                <User size={12} /> <strong>Assigned:</strong> {formatNameString(st.delegatedTo || st.assignedTo)}
                               </span>
                             )}
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { History, Clock, UploadCloud, Plus, ArrowRight, ChevronDown, ChevronUp, ArrowLeft, X, Search, Building2 } from 'lucide-react';
+import { History, Clock, UploadCloud, Plus, ArrowRight, ChevronDown, ChevronUp, ArrowLeft, X, Search, Building2, Users } from 'lucide-react';
 import { api } from '../services/api';
 import './CreateTaskView.css';
 
@@ -974,8 +974,8 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
                     gap: '0.45rem'
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
-                      <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                        👥 Multiple Assignees Selected
+                      <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.03em', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <Users size={13} /> Multiple Assignees Selected
                       </span>
                       <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Choose mode:</span>
                     </div>
@@ -1427,8 +1427,8 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
                           gap: '0.45rem'
                         }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
-                            <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                              👥 Multiple Assignees Selected
+                            <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.03em', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                              <Users size={13} /> Multiple Assignees Selected
                             </span>
                             <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Choose mode:</span>
                           </div>

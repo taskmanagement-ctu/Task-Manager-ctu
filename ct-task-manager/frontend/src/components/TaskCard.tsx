@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, CheckCircle2, CornerDownRight, MessageSquare, ChevronDown, ChevronUp, ExternalLink, Plus, X, Check, Loader2, ListTree, Layers, Trash2 } from 'lucide-react';
+import { Calendar, Clock, CheckCircle2, CornerDownRight, MessageSquare, ChevronDown, ChevronUp, ExternalLink, Plus, X, Check, Loader2, ListTree, Layers, Trash2, User, Users } from 'lucide-react';
 import { api } from '../services/api';
 import { calculateUrgency, getUrgencyCardStyle, getUrgencyLabel, getUrgencyColor } from '../utils/taskUrgency';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
@@ -395,9 +395,9 @@ const TaskCard: React.FC<TaskCardProps> = ({
                     border: '1px solid #bfdbfe',
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '0.2rem'
+                    gap: '0.25rem'
                   }} title={`Collaborative Team Task: ${task.coAssignees?.map((u: any) => u.name || u.universityId).join(', ') || 'Shared'}`}>
-                    👥 TEAM ({task.coAssignees?.length || 2})
+                    <Users size={11} /> TEAM ({task.coAssignees?.length || 2})
                   </span>
                 )}
               </div>
@@ -669,12 +669,12 @@ const TaskCard: React.FC<TaskCardProps> = ({
                           </div>
                           <div className="tc-subtask-item-meta">
                             {st.coAssignees && st.coAssignees.length > 0 ? (
-                              <span className="tc-subtask-item-assignee" title={`Team: ${st.coAssignees.map((ca: any) => ca.name || ca.universityId).join(', ')}`}>
-                                👥 Team ({st.coAssignees.length})
+                              <span className="tc-subtask-item-assignee" title={`Team: ${st.coAssignees.map((ca: any) => ca.name || ca.universityId).join(', ')}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                <Users size={11} /> Team ({st.coAssignees.length})
                               </span>
                             ) : (
-                              <span className="tc-subtask-item-assignee" title={stAssignee ? `${stAssignee.name || ''} (${stAssignee.universityId || 'No ID'})` : 'Unassigned'}>
-                                👤 {stAssignee ? `${stAssignee.name || ''} ${stAssignee.universityId ? `(${stAssignee.universityId})` : ''}`.trim() || 'Unassigned' : 'Unassigned'}
+                              <span className="tc-subtask-item-assignee" title={stAssignee ? `${stAssignee.name || ''} (${stAssignee.universityId || 'No ID'})` : 'Unassigned'} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                <User size={11} /> {stAssignee ? `${stAssignee.name || ''} ${stAssignee.universityId ? `(${stAssignee.universityId})` : ''}`.trim() || 'Unassigned' : 'Unassigned'}
                               </span>
                             )}
                             {st.createdAt && (
@@ -725,7 +725,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
               title={`Team: ${task.coAssignees?.map((ca: any) => ca.name || ca.universityId).join(', ') || 'Shared'}`}
             >
               <div className="tc-avatar" style={{ backgroundColor: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                👥
+                <Users size={14} />
               </div>
               <div className="tc-assignee-info">
                 <span className="tc-assignee-name" style={{ color: '#1d4ed8', fontWeight: 600 }}>
