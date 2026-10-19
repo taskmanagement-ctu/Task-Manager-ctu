@@ -259,22 +259,29 @@ const TaskCard: React.FC<TaskCardProps> = ({
 
   const isOverdue = !isCompleted && !isSubmitted && urgency === 'OVERDUE';
 
-  // Status pill styling
+  // Status pill styling: Always display actual lifecycle status (Pending, In Progress, In Review, Approved, Completed, Rejected)
+  // The urgency badge on the left already indicates ● OVERDUE or priority level, so this pill reflects the actual task state without duplicate "Overdue" text.
   let pillClass = 'tc-pill-gray';
   let statusText = 'Pending';
 
   if (isCompleted) {
     pillClass = 'tc-pill-green';
     statusText = task.status === 'approved' ? 'Approved' : 'Completed';
-  } else if (isOverdue) {
-    pillClass = 'tc-pill-red';
-    statusText = 'Overdue';
-  } else if (task.status === 'in_progress' || task.status === 'submitted_for_review') {
+  } else if (task.status === 'submitted_for_review') {
     pillClass = 'tc-pill-blue';
-    statusText = task.status === 'submitted_for_review' ? 'In Review' : 'In Progress';
+    statusText = 'In Review';
+  } else if (task.status === 'in_progress') {
+    pillClass = 'tc-pill-blue';
+    statusText = 'In Progress';
   } else if (task.status === 'rejected') {
     pillClass = 'tc-pill-red';
     statusText = 'Rejected';
+  } else if (task.status === 'pending') {
+    pillClass = 'tc-pill-gray';
+    statusText = 'Pending';
+  } else if (task.status) {
+    pillClass = 'tc-pill-gray';
+    statusText = task.status.replace(/_/g, ' ');
   }
 
   // Format date to dd/mm/yyyy
