@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { 
   ListTodo, 
   CheckCircle2, 
@@ -11,7 +11,8 @@ import {
 import { api, Task } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
-import { calculateUrgency, getUrgencyCardStyle, getUrgencyLabel, getUrgencyColor } from '../utils/taskUrgency';
+import { calculateUrgency, getUrgencyLabel } from '../utils/taskUrgency';
+import TaskCard from '../components/TaskCard';
 import TaskModal from '../components/TaskModal';
 import TaskCalendarModal from '../components/TaskCalendarModal';
 import TaskChatDrawer from '../components/TaskChatDrawer';
@@ -39,6 +40,21 @@ const StaffPage: React.FC = () => {
   useEffect(() => {
     fetchTasks();
   }, []);
+
+  const assembledTasks = useMemo(() => {
+    const parentTaskIds = new Set(
+      tasks
+        .filter((t: any) => !t.isSubtask && !t.parentTaskId)
+        .map((t: any) => (t._id || t.id)?.toString())
+    );
+
+    return tasks.filter((t: any) => {
+      const isSub = Boolean(t.isSubtask || t.parentTaskId);
+      if (!isSub) return true;
+      const pId = (t.parentTaskId?._id || t.parentTaskId)?.toString();
+      return !parentTaskIds.has(pId);
+    });
+  }, [tasks]);
 
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter(t => t.status === 'completed' || t.status === 'approved').length;
@@ -121,74 +137,40 @@ const StaffPage: React.FC = () => {
         </div>
 
         {/* Tasks Section */}
-        <div className="staff-section">
-          <div className="staff-section-header">
-            <h2 className="staff-section-title">Recent Tasks</h2>
-            <Link to="/staff/tasks" className="staff-view-all">View All <ArrowRight size={14} /></Link>
+        <div className="staff-section" style={{ background: 'transparent', boxShadow: 'none', border: 'none' }}>
+          <div className="staff-section-header" style={{ background: '#ffffff', borderRadius: '12px', marginBottom: '1.25rem', padding: '1rem 1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div>
+              <h2 className="staff-section-title">Recent Tasks</h2>
+              <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.15rem' }}>
+                Your active tasks &amp; card decks
+              </div>
+            </div>
+            <Link to="/staff/tasks" className="staff-view-all">View All Tasks <ArrowRight size={14} /></Link>
           </div>
 
-          <table className="staff-task-table">
-            <thead>
-              <tr>
-                <th>Task Name</th>
-                <th>Deadline</th>
-                <th>Priority</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={4} style={{ textAlign: 'center', padding: '2rem' }}>Loading tasks...</td></tr>
-              ) : tasks.length === 0 ? (
-                <tr><td colSpan={4} style={{ textAlign: 'center', padding: '2rem' }}>No tasks!</td></tr>
-              ) : (
-                tasks.slice(0, 5).map((task) => {
-                  const isOverdue = task.deadline && new Date(task.deadline) < now;
-                  
-                  const urgency = calculateUrgency(task);
-                  const cardStyle = getUrgencyCardStyle(urgency);
-                  const urgencyLabel = getUrgencyLabel(urgency);
-                  const urgencyColor = getUrgencyColor(urgency);
-                  
-                  return (
-                    <tr 
-                      key={task._id || task.id} 
-                      style={{ backgroundColor: cardStyle.backgroundColor, cursor: 'pointer' }}
-                      onClick={() => setSelectedTask(task)}
-                      className="hover:bg-slate-50 transition-colors"
-                    >
-                      <td style={{ borderLeft: cardStyle.borderLeft, paddingLeft: '1rem' }}>
-                        <div className="staff-task-name">{task.title}</div>
-                        <div className="staff-task-sub">ID: {task._id?.substring(0,5) || task.id?.substring(0,5)}</div>
-                      </td>
-                      <td>
-                        <div className={`staff-task-deadline ${isOverdue ? 'overdue' : ''}`} style={{ color: isOverdue ? '#dc2626' : urgencyColor }}>
-                          {task.deadline ? new Date(task.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'No date'}
-                        </div>
-                      </td>
-                      <td>
-                        <span className="staff-badge" style={{ background: urgencyColor + '20', color: urgencyColor, border: `1px solid ${urgencyColor}40` }}>
-                          {urgencyLabel}
-                        </span>
-                      </td>
-                      <td>
-                        <span className="staff-badge" style={{ 
-                          background: task.status === 'approved' || task.status === 'completed' ? '#d1fae5' : 
-                                      task.status === 'rejected' ? '#fee2e2' : 
-                                      task.status === 'in_progress' || task.status === 'submitted_for_review' ? '#e0e7ff' : '#f1f5f9', 
-                          color: task.status === 'approved' || task.status === 'completed' ? '#059669' : 
-                                 task.status === 'rejected' ? '#b91c1c' : 
-                                 task.status === 'in_progress' || task.status === 'submitted_for_review' ? '#4338ca' : '#475569' 
-                        }}>
-                          {task.status.replace(/_/g, ' ').toUpperCase()}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
+          {loading ? (
+            <div style={{ padding: '2.5rem', textAlign: 'center', color: '#64748b', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              Loading tasks...
+            </div>
+          ) : assembledTasks.length === 0 ? (
+            <div style={{ padding: '2.5rem', textAlign: 'center', color: '#64748b', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              No tasks found.
+            </div>
+          ) : (
+            <div className="staff-tasks-deck-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: '1.25rem', alignItems: 'start' }}>
+              {assembledTasks.slice(0, 6).map((task: any) => (
+                <TaskCard 
+                  key={task._id || task.id} 
+                  task={task} 
+                  currentUser={user}
+                  onClick={() => setSelectedTask(task)} 
+                  onOpenChat={(t) => setChatTask(t)}
+                  onSubtaskCreated={fetchTasks}
+                  onTaskDeleted={fetchTasks}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
 

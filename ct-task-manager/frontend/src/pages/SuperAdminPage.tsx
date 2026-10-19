@@ -274,24 +274,45 @@ const SuperAdminPage = () => {
                 const urgency = calculateUrgency(task);
                 const cardStyle = getUrgencyCardStyle(urgency);
                 const urgencyColor = getUrgencyColor(urgency);
+                const subCount = task.subtasks?.length || task.subtaskCount || 0;
+                const isDeck = !task.isSubtask && subCount > 0;
                 
                 return (
-                <div 
-                  key={task._id} 
-                  className="sa-review-item" 
-                  style={{ backgroundColor: cardStyle.backgroundColor, borderLeft: cardStyle.borderLeft, cursor: 'pointer' }}
-                  onClick={() => handleTaskClick(task)}
-                >
-                  <div className="sa-review-info">
-                    <div className="sa-review-item-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      {task.title}
+                <div key={task._id} className={`sa-deck-container ${isDeck ? 'is-deck' : ''}`}>
+                  {isDeck && (
+                    <>
+                      <div className="sa-deck-layer-2" />
+                      <div className="sa-deck-layer-1" />
+                    </>
+                  )}
+                  <div 
+                    className={`sa-review-item ${isDeck ? 'sa-deck-item' : ''}`} 
+                    style={{ backgroundColor: cardStyle.backgroundColor, borderLeft: cardStyle.borderLeft, cursor: 'pointer' }}
+                    onClick={() => handleTaskClick(task)}
+                  >
+                    <div className="sa-review-info">
+                      <div className="sa-review-item-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        {task.isSubtask ? (
+                          <span style={{ fontSize: '0.72rem', background: '#e0e7ff', color: '#3730a3', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                            SUBTASK #{task.taskId}
+                          </span>
+                        ) : task.taskId ? (
+                          <span style={{ color: '#4f46e5', fontWeight: 700 }}>#{task.taskId}</span>
+                        ) : null}
+                        <span>{task.title}</span>
+                        {isDeck && (
+                          <span className="sa-deck-pill" title={`Assembled Card Deck with ${subCount} subtasks stacked backward`}>
+                            <Layers size={11} /> {subCount} Subtasks Deck
+                          </span>
+                        )}
+                      </div>
+                      <div className="sa-review-meta">
+                        <span><UsersIcon size={14} /> Assignee: {task.assignedTo?.name || 'Unassigned'}</span>
+                        <span style={{ color: urgencyColor }}><Clock size={14} /> Deadline: {new Date(task.deadline).toLocaleDateString()}</span>
+                      </div>
                     </div>
-                    <div className="sa-review-meta">
-                      <span><UsersIcon size={14} /> Assignee: {task.assignedTo?.name || 'Unassigned'}</span>
-                      <span style={{ color: urgencyColor }}><Clock size={14} /> Deadline: {new Date(task.deadline).toLocaleDateString()}</span>
-                    </div>
+                    <span className="sa-badge-inprogress" style={{ background: '#e0e7ff', color: '#3730a3' }}>Needs Review</span>
                   </div>
-                  <span className="sa-badge-inprogress" style={{ background: '#e0e7ff', color: '#3730a3' }}>Needs Review</span>
                 </div>
               )})
             ) : (
@@ -546,7 +567,18 @@ const SuperAdminPage = () => {
                     >
                       <td className="sa-task-name-cell" style={{ borderLeft: cardStyle.borderLeft, paddingLeft: '1rem' }}>
                         <div className={`sa-status-indicator ${getStatusColor(task.status)}`}></div>
-                        <span className="sa-task-name-text">{task.title}</span>
+                        <span className="sa-task-name-text">
+                          {task.isSubtask ? (
+                            <span style={{ fontSize: '0.72rem', background: '#e0e7ff', color: '#3730a3', padding: '1px 6px', borderRadius: '4px', marginRight: '6px', fontWeight: 700 }}>
+                              SUBTASK #{task.taskId}
+                            </span>
+                          ) : task.taskId ? (
+                            <span style={{ fontSize: '0.75rem', color: '#6366f1', marginRight: '6px', fontWeight: 700 }}>
+                              #{task.taskId}
+                            </span>
+                          ) : null}
+                          {task.title}
+                        </span>
                       </td>
                       <td>
                         <div className="sa-assignee-cell">

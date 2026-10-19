@@ -455,10 +455,10 @@ const TaskCard: React.FC<TaskCardProps> = ({
                     type="button"
                     className={`tc-subtasks-toggle-btn ${isSubtasksOpen ? 'open' : ''}`}
                     onClick={handleToggleSubtasks}
-                    title={isSubtasksOpen ? "Hide deck subtasks" : "View subtasks downwards in deck"}
+                    title={isSubtasksOpen ? "Hide subtasks" : "View subtasks"}
                   >
                     <Layers size={13} />
-                    <span>Deck ({progress?.approved || 0}/{subtaskCount})</span>
+                    <span>{subtaskCount === 1 ? 'Subtask' : 'Subtasks'} ({progress?.approved || 0}/{subtaskCount})</span>
                     {isSubtasksOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                   </button>
                 ) : (

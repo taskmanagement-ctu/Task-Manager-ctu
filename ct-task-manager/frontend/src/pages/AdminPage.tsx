@@ -1,12 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { 
   PieChart, 
   AlertCircle, 
-  Activity
+  Activity,
+  ArrowRight
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { api, Task } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { calculateUrgency, getUrgencyCardStyle, getUrgencyLabel, getUrgencyColor } from '../utils/taskUrgency';
+import { calculateUrgency } from '../utils/taskUrgency';
+import TaskCard from '../components/TaskCard';
 import TaskModal from '../components/TaskModal';
 import TaskChatDrawer from '../components/TaskChatDrawer';
 import './AdminPage.css';
@@ -46,6 +49,21 @@ const AdminPage: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [user]);
+
+  const assembledTasks = useMemo(() => {
+    const parentTaskIds = new Set(
+      tasks
+        .filter((t: any) => !t.isSubtask && !t.parentTaskId)
+        .map((t: any) => (t._id || t.id)?.toString())
+    );
+
+    return tasks.filter((t: any) => {
+      const isSub = Boolean(t.isSubtask || t.parentTaskId);
+      if (!isSub) return true;
+      const pId = (t.parentTaskId?._id || t.parentTaskId)?.toString();
+      return !parentTaskIds.has(pId);
+    });
+  }, [tasks]);
 
   // Calculate real stats
   const totalTasks = tasks.length;
@@ -111,58 +129,40 @@ const AdminPage: React.FC = () => {
         </div>
 
         {/* Department Tasks Section */}
-        <div className="admin-section">
-          <div className="admin-section-header">
+        <div className="admin-section" style={{ background: 'transparent', boxShadow: 'none', border: 'none' }}>
+          <div className="admin-section-header" style={{ background: '#ffffff', borderRadius: '12px', marginBottom: '1.25rem', padding: '1rem 1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <div>
               <h2 className="admin-section-title">Department Tasks</h2>
-              <div className="admin-section-subtitle">Recent tasks</div>
+              <div className="admin-section-subtitle">Recent tasks &amp; card decks</div>
             </div>
+            <Link to="/admin/tasks" className="admin-view-all" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', fontWeight: 600, color: '#021c3b', textDecoration: 'none' }}>
+              View All Tasks <ArrowRight size={14} />
+            </Link>
           </div>
 
-          <div className="admin-tasks-list">
-            {loading ? (
-              <p style={{ padding: '1rem', color: '#64748b' }}>Loading tasks...</p>
-            ) : tasks.length === 0 ? (
-              <p style={{ padding: '1rem', color: '#64748b' }}>No tasks.</p>
-            ) : (
-              tasks.slice(0, 5).map(task => {
-                const urgency = calculateUrgency(task);
-                const cardStyle = getUrgencyCardStyle(urgency);
-                const urgencyLabel = getUrgencyLabel(urgency);
-                const urgencyColor = getUrgencyColor(urgency);
-                
-                return (
-                <div 
-                  className="admin-task-item" 
+          {loading ? (
+            <div style={{ padding: '2.5rem', textAlign: 'center', color: '#64748b', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              Loading tasks...
+            </div>
+          ) : assembledTasks.length === 0 ? (
+            <div style={{ padding: '2.5rem', textAlign: 'center', color: '#64748b', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              No tasks found.
+            </div>
+          ) : (
+            <div className="admin-tasks-deck-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: '1.25rem', alignItems: 'start' }}>
+              {assembledTasks.slice(0, 6).map((task: any) => (
+                <TaskCard 
                   key={task._id || task.id} 
-                  style={{ backgroundColor: cardStyle.backgroundColor, borderLeft: cardStyle.borderLeft, cursor: 'pointer' }}
-                  onClick={() => setSelectedTask(task)}
-                >
-                  <div className="admin-task-indicator" style={{ background: urgencyColor }}></div>
-                  <div className="admin-task-header">
-                    <div className="admin-task-meta">
-                      <span className="admin-badge" style={{ background: urgencyColor + '20', color: urgencyColor, border: `1px solid ${urgencyColor}40` }}>
-                        {urgencyLabel}
-                      </span>
-                      <span className="admin-badge" style={{ 
-                        background: task.status === 'approved' || task.status === 'completed' ? '#d1fae5' : 
-                                    task.status === 'rejected' ? '#fee2e2' : 
-                                    task.status === 'in_progress' || task.status === 'submitted_for_review' ? '#e0e7ff' : '#f1f5f9', 
-                        color: task.status === 'approved' || task.status === 'completed' ? '#059669' : 
-                               task.status === 'rejected' ? '#b91c1c' : 
-                               task.status === 'in_progress' || task.status === 'submitted_for_review' ? '#4338ca' : '#475569' 
-                      }}>
-                        {task.status.replace(/_/g, ' ').toUpperCase()}
-                      </span>
-                      {task.deadline && <span className="admin-task-due" style={{ color: urgencyColor }}>Due: {new Date(task.deadline).toLocaleDateString()}</span>}
-                    </div>
-                  </div>
-                  <h3 className="admin-task-title">{task.title}</h3>
-                  <p className="admin-task-desc">{task.description}</p>
-                </div>
-              )})
-            )}
-          </div>
+                  task={task} 
+                  currentUser={user}
+                  onClick={() => setSelectedTask(task)} 
+                  onOpenChat={(t) => setChatTask(t)}
+                  onSubtaskCreated={fetchData}
+                  onTaskDeleted={fetchData}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
       </div>
