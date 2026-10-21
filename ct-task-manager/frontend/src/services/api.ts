@@ -275,6 +275,9 @@ export interface Task {
   ratedAt?: string | null;
   ratedUser?: any;
   comments?: TaskComment[];
+  isEdited?: boolean;
+  editedAt?: string | null;
+  editedBy?: any;
   createdAt: string;
   updatedAt: string;
 }

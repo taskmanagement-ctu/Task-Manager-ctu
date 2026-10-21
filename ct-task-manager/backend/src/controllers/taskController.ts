@@ -706,29 +706,84 @@ export const updateTask = async (req: Request, res: Response) => {
     // Authorization
     if (user.role === 'staff') {
       return res.status(403).json({ success: false, message: 'Forbidden. Staff cannot edit task content.' });
-    } else if (task.createdBy.toString() !== user._id.toString()) {
+    } else if (task.createdBy.toString() !== user._id.toString() && user.role !== 'super_admin') {
       return res.status(403).json({ success: false, message: 'Forbidden. You cannot edit a task that you did not create.' });
-
-
-
-
     }
 
-    // Only allow editing when status is pending
-    if (task.status !== 'pending') {
-      return res.status(400).json({ success: false, message: 'Tasks can only be edited while in pending status.' });
+    // Allow editing until task is finished (completed or approved)
+    if (task.status === 'completed' || task.status === 'approved') {
+      return res.status(400).json({ success: false, message: 'Tasks cannot be edited once finished (completed or approved).' });
     }
 
-    if (title) task.title = title;
-    if (description) task.description = description;
+    let hasChanges = false;
+    if (title && title.trim() && title.trim() !== task.title) {
+      task.title = title.trim();
+      hasChanges = true;
+    }
+    if (description !== undefined && description.trim() !== task.description) {
+      task.description = description.trim();
+      hasChanges = true;
+    }
     if (deadline) {
       const pd = new Date(deadline);
-      if (!isNaN(pd.getTime())) task.deadline = pd;
+      if (!isNaN(pd.getTime()) && pd.getTime() !== new Date(task.deadline).getTime()) {
+        task.deadline = pd;
+        hasChanges = true;
+      }
     }
 
-    await task.save();
+    if (hasChanges) {
+      task.isEdited = true;
+      task.editedAt = new Date();
+      task.editedBy = user._id;
 
-    return res.status(200).json({ success: true, data: { task } });
+      // Add audit system message to task comments / discussion
+      if (!task.comments) task.comments = [];
+      task.comments.push({
+        sender: user._id,
+        message: `Task details were edited by ${user.name || 'Creator'}.`,
+        channel: 'general',
+        createdAt: new Date(),
+        readBy: [user._id]
+      } as any);
+
+      await task.save();
+
+      // Collect all assignees to notify (assignedTo, delegatedTo, coAssignees)
+      const recipientIds = new Set<string>();
+      if (task.assignedTo) recipientIds.add(task.assignedTo.toString());
+      if (task.delegatedTo) recipientIds.add(task.delegatedTo.toString());
+      if (Array.isArray(task.coAssignees)) {
+        task.coAssignees.forEach((ca: any) => {
+          const cid = (ca?._id || ca)?.toString();
+          if (cid) recipientIds.add(cid);
+        });
+      }
+
+      // Notify assignees about the edit
+      for (const recipientId of recipientIds) {
+        if (recipientId !== user._id.toString()) {
+          createNotification(
+            recipientId,
+            'task_updated',
+            'Task Details Edited',
+            `Task #${task.taskId || ''} "${task.title}" was updated by ${user.name}.`,
+            task._id,
+            user._id
+          );
+        }
+      }
+    }
+
+    const populatedTask = await Task.findById(task._id)
+      .populate('createdBy', 'name role universityId email department')
+      .populate('assignedTo', 'name role department universityId email')
+      .populate('delegatedTo', 'name role department universityId email')
+      .populate('coAssignees', 'name role department universityId email')
+      .populate('parentTaskId', 'taskId title')
+      .populate('editedBy', 'name role universityId');
+
+    return res.status(200).json({ success: true, data: { task: populatedTask || task } });
   } catch (error) {
     console.error('Error updating task:', error);
     return res.status(500).json({ success: false, message: 'Server Error' });

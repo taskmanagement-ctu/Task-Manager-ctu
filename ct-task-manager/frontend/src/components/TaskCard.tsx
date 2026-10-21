@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, CheckCircle2, CornerDownRight, MessageSquare, ChevronDown, ChevronUp, ExternalLink, Plus, X, Check, Loader2, ListTree, Layers, Trash2, User, Users } from 'lucide-react';
+import { Calendar, Clock, CheckCircle2, CornerDownRight, MessageSquare, ChevronDown, ChevronUp, ExternalLink, Plus, X, Check, Loader2, ListTree, Layers, Trash2, User, Users, Edit2, PencilLine } from 'lucide-react';
 import { api } from '../services/api';
 import { calculateUrgency, getUrgencyCardStyle, getUrgencyLabel, getUrgencyColor } from '../utils/taskUrgency';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
@@ -9,6 +9,7 @@ interface TaskCardProps {
   task: any;
   currentUser: any;
   onClick: (task: any) => void;
+  onEdit?: (task: any) => void;
   onCreateSubtask?: () => void;
   onOpenChat?: (task: any) => void;
   forceExpanded?: boolean | null;
@@ -34,6 +35,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
   task, 
   currentUser, 
   onClick, 
+  onEdit,
   onCreateSubtask: _onCreateSubtask, 
   onOpenChat,
   forceExpanded,
@@ -77,6 +79,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
   );
   const isSuperAdmin = currentUser?.role === 'super_admin';
   const canDelete = isSuperAdmin || isCreator;
+  const canEdit = (isSuperAdmin || isCreator) && task.status !== 'completed' && task.status !== 'approved';
 
   const handleDeleteTask = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -421,6 +424,28 @@ const TaskCard: React.FC<TaskCardProps> = ({
               {urgencyLabel}
             </span>
           </div>
+
+          {/* WhatsApp-style Edited Badge with SVG icon */}
+          {task.isEdited && (
+            <div 
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+                fontSize: '0.66rem',
+                fontWeight: 600,
+                color: '#475569',
+                backgroundColor: '#f1f5f9',
+                border: '1px solid #cbd5e1',
+                borderRadius: '4px',
+                padding: '0.12rem 0.45rem'
+              }}
+              title={task.editedAt ? `Edited: ${formatDateDDMMYYYY(task.editedAt)}` : 'Task details were edited by creator'}
+            >
+              <PencilLine size={10} color="#64748b" />
+              <span>Edited</span>
+            </div>
+          )}
 
           <div className={`tc-status-pill ${pillClass}`}>{statusText}</div>
         </div>
@@ -785,6 +810,26 @@ const TaskCard: React.FC<TaskCardProps> = ({
         </div>
 
         <div className="tc-footer-right">
+          {/* Edit Button (Creator or Super Admin) */}
+          {canEdit && (
+            <button 
+              type="button"
+              className="tc-edit-btn"
+              title="Edit Task Details"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onEdit) {
+                  onEdit(task);
+                } else {
+                  onClick(task);
+                }
+              }}
+            >
+              <Edit2 size={12} />
+              <span>Edit</span>
+            </button>
+          )}
+
           {/* Delete Button (Creator or Super Admin) */}
           {canDelete && (
             <button 

@@ -305,6 +305,7 @@ interface TaskModalProps {
   departments?: any[];
   onCreateSubtask?: () => void;
   onOpenChat?: (task: any) => void;
+  initialEditMode?: boolean;
 }
 
 const TaskModal: React.FC<TaskModalProps> = ({ 
@@ -315,7 +316,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
   availableAssignees = EMPTY_ARRAY, 
   departments = EMPTY_ARRAY, 
   onCreateSubtask: _onCreateSubtask, 
-  onOpenChat 
+  onOpenChat,
+  initialEditMode = false
 }) => {
   const [task, setTask] = useState<any>(initialTask);
   const [parentMainTask, setParentMainTask] = useState<any>(!initialTask.isSubtask ? initialTask : null);
@@ -447,7 +449,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
   };
   
   // Edit mode
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(initialEditMode);
   const [editData, setEditData] = useState({
     title: task.title,
     description: task.description,
@@ -810,7 +812,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
   // Reset local state when task changes
   useEffect(() => {
     setTask(initialTask);
-    setIsEditing(false);
+    setIsEditing(initialEditMode || false);
     setIsAssigning(false);
     setIsRejecting(false);
     setRejectionReason('');
@@ -848,7 +850,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
       }
       fetchSubtasks();
     }
-  }, [initialTask]);
+  }, [initialTask, initialEditMode]);
 
   const fetchSubtasks = async () => {
     try {
@@ -964,8 +966,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
 
-  // Only the user who created the task can edit its details (while still pending)
-  const canEdit = isCreator && task.status === 'pending';
+  // Creator or Super Admin can edit task details until finished (completed or approved)
+  const canEdit = (isCreator || isSuperAdmin) && task.status !== 'completed' && task.status !== 'approved';
   
   const canAssign = (currentUser.role === 'super_admin' || currentUser.role === 'department_admin') && 
     task.status !== 'submitted_for_review' && task.status !== 'approved';
@@ -1237,6 +1239,28 @@ const TaskModal: React.FC<TaskModalProps> = ({
                     {statusStyle.text}
                   </span>
 
+                  {/* WhatsApp-style Edited Badge with SVG icon */}
+                  {task.isEdited && (
+                    <span 
+                      style={{ 
+                        fontSize: '0.72rem', 
+                        backgroundColor: '#f8fafc', 
+                        color: '#475569', 
+                        border: '1px solid #cbd5e1', 
+                        padding: '0.18rem 0.55rem', 
+                        borderRadius: '6px', 
+                        fontWeight: 600, 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        gap: '0.3rem' 
+                      }}
+                      title={task.editedAt ? `Edited on ${formatDateTimeDDMMYYYY(task.editedAt)}` : 'Task details were edited by creator'}
+                    >
+                      <Edit3 size={12} color="#64748b" />
+                      <span>Edited</span>
+                    </span>
+                  )}
+
                   {task.isSubtask && <span style={{ fontSize: '0.72rem', backgroundColor: '#e2e8f0', color: '#475569', padding: '0.18rem 0.55rem', borderRadius: '6px', fontWeight: 600 }}>SUBTASK</span>}
                   {(task.assignmentMode === 'shared' || (task.coAssignees && task.coAssignees.length > 1)) && (
                     <span style={{ fontSize: '0.72rem', backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '0.18rem 0.55rem', borderRadius: '6px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
@@ -1254,7 +1278,32 @@ const TaskModal: React.FC<TaskModalProps> = ({
                   {task.title}
                 </h2>
               </div>
-              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                {canEdit && (
+                  <button
+                    type="button"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      backgroundColor: '#2563eb',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '0.45rem 0.85rem',
+                      borderRadius: '8px',
+                      fontSize: '0.82rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 4px rgba(37, 99, 235, 0.25)',
+                      transition: 'all 0.15s ease'
+                    }}
+                    onClick={() => setIsEditing(true)}
+                    title="Edit Task Details"
+                  >
+                    <Edit3 size={14} />
+                    <span>Edit Task</span>
+                  </button>
+                )}
                 {onOpenChat && (
                   <button
                     type="button"

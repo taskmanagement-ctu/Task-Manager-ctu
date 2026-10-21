@@ -398,6 +398,50 @@
   flex-shrink: 0;
 }
 
+/* ─── Edit Button ─── */
+.tc-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.22rem 0.52rem;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tc-edit-btn:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1e40af;
+}
+
+/* ─── Delete Button ─── */
+.tc-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.22rem 0.5rem;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tc-delete-btn:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+
 /* ─── Chat Button ─── */
 .tc-chat-btn {
   display: inline-flex;

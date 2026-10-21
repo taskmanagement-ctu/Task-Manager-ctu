@@ -36,7 +36,8 @@ const notificationSchema = new Schema<INotification>(
         'deadline_extension_endorsed',
         'deadline_extension_approved',
         'deadline_extension_rejected',
-        'deadline_extended'
+        'deadline_extended',
+        'task_updated'
       ]
     },
     title: {
