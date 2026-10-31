@@ -62,6 +62,9 @@ export interface ITask extends Document {
     readAt?: Date | null;
     createdAt: Date;
   }>;
+  isEdited?: boolean;
+  editedAt?: Date | null;
+  editedBy?: mongoose.Types.ObjectId | null;
   createdAt: Date;
   dueSoonReminderSent?: boolean;
   dueSoonReminderSentAt?: Date | null;
@@ -365,7 +368,20 @@ const taskSchema = new Schema<ITask>(
           default: Date.now
         }
       }
-    ]
+    ],
+    isEdited: {
+      type: Boolean,
+      default: false
+    },
+    editedAt: {
+      type: Date,
+      default: null
+    },
+    editedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null
+    }
   },
   {
     timestamps: true,

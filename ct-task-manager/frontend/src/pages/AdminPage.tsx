@@ -21,6 +21,7 @@ const AdminPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [chatTask, setChatTask] = useState<any | null>(null);
+  const [openEditOnSelect, setOpenEditOnSelect] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -155,7 +156,8 @@ const AdminPage: React.FC = () => {
                   key={task._id || task.id} 
                   task={task} 
                   currentUser={user}
-                  onClick={() => setSelectedTask(task)} 
+                  onClick={() => { setOpenEditOnSelect(false); setSelectedTask(task); }} 
+                  onEdit={() => { setOpenEditOnSelect(true); setSelectedTask(task); }}
                   onOpenChat={(t) => setChatTask(t)}
                   onSubtaskCreated={fetchData}
                   onTaskDeleted={fetchData}
@@ -205,7 +207,8 @@ const AdminPage: React.FC = () => {
         <TaskModal 
           task={selectedTask} 
           currentUser={user}
-          onClose={() => setSelectedTask(null)}
+          initialEditMode={openEditOnSelect}
+          onClose={() => { setSelectedTask(null); setOpenEditOnSelect(false); }}
           onRefresh={() => {
             fetchData();
             api.getTaskById(selectedTask._id || selectedTask.id).then(res => setSelectedTask(res.data.task)).catch(() => setSelectedTask(null));

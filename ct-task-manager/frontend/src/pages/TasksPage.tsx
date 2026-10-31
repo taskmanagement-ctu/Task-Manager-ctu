@@ -51,6 +51,7 @@ const TasksPage: React.FC = () => {
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [creatingSubtaskFor, setCreatingSubtaskFor] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [openEditOnSelect, setOpenEditOnSelect] = useState(false);
 
   const handleExportTasks = async (format: 'excel' | 'pdf' | 'csv') => {
     try {
@@ -559,7 +560,8 @@ const TasksPage: React.FC = () => {
                   availableAssignees={availableAssignees}
                   onSubtaskCreated={loadTasks}
                   onTaskDeleted={loadTasks}
-                  onClick={() => setSelectedTask(task)} 
+                  onClick={() => { setOpenEditOnSelect(false); setSelectedTask(task); }} 
+                  onEdit={() => { setOpenEditOnSelect(true); setSelectedTask(task); }}
                   onCreateSubtask={() => handleCreateSubtaskForTask(task._id)}
                   onOpenChat={(t) => setChatTask(t)}
                 />
@@ -597,7 +599,8 @@ const TasksPage: React.FC = () => {
           currentUser={user}
           availableAssignees={availableAssignees}
           departments={departments}
-          onClose={() => setSelectedTask(null)}
+          initialEditMode={openEditOnSelect}
+          onClose={() => { setSelectedTask(null); setOpenEditOnSelect(false); }}
           onRefresh={() => {
             loadTasks();
             loadPendingCount();

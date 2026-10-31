@@ -14,7 +14,8 @@ import {
   Clock,
   AlertTriangle,
   ExternalLink,
-  Sparkles
+  Sparkles,
+  Edit2
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -182,6 +183,8 @@ export const NotificationDropdown: React.FC = () => {
         return <XCircle size={16} />;
       case 'task_rated':
         return <Star size={16} />;
+      case 'task_updated':
+        return <Edit2 size={16} />;
       case 'new_chat_message':
         return <MessageSquare size={16} />;
       case 'task_due_soon':
@@ -210,6 +213,8 @@ export const NotificationDropdown: React.FC = () => {
         return 'nd-icon-red';
       case 'task_rated':
         return 'nd-icon-gold';
+      case 'task_updated':
+        return 'nd-icon-blue';
       case 'new_chat_message':
         return 'nd-icon-cyan';
       default:
