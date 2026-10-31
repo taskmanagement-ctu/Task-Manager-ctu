@@ -139,6 +139,10 @@ const NotificationsPage: React.FC = () => {
         return <Star size={20} />;
       case 'new_chat_message':
         return <MessageSquare size={20} />;
+      case 'task_due_soon':
+        return <Clock size={20} />;
+      case 'task_overdue':
+        return <AlertCircle size={20} />;
       default:
         return <Bell size={20} />;
     }
@@ -150,12 +154,14 @@ const NotificationsPage: React.FC = () => {
       case 'task_delegated':
         return 'notif-icon-blue';
       case 'task_status_changed':
+      case 'task_due_soon':
         return 'notif-icon-amber';
       case 'task_submitted_for_review':
         return 'notif-icon-purple';
       case 'task_approved':
         return 'notif-icon-green';
       case 'task_rejected':
+      case 'task_overdue':
         return 'notif-icon-red';
       case 'task_rated':
         return 'notif-icon-gold';

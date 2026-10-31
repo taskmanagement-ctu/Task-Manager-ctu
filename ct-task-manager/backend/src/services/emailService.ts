@@ -901,3 +901,244 @@ export const sendTaskAssignedEmail = async (
 
 
 
+
+
+/**
+ * Send Task Due Soon Reminder Email (e.g. 3 Days Left)
+ */
+export const sendTaskDueSoonEmail = async (
+  toEmail: string,
+  recipientName: string,
+  taskTitle: string,
+  taskId: string,
+  deadline: Date | string,
+  daysRemaining: number = 3,
+  description?: string,
+  taskMongoId?: string
+) => {
+  if (!toEmail) return;
+
+  const formattedDeadline = deadline
+    ? new Date(deadline).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      })
+    : 'Upcoming';
+
+  const senderDisplayName = 'CT University TaskDesk';
+  const senderEmailAddress = process.env.EMAIL_USER || 'taskmanagement@ctuniversity.in';
+
+  const subject = `⏰ Reminder: Task Due in ${daysRemaining} Days - [Task #${taskId || ''}] ${taskTitle}`;
+  const appUrl = process.env.FRONTEND_URL || 'https://taskdesk.ctuniversity.in';
+  const targetId = taskMongoId || taskId || '';
+  const taskUrl = targetId 
+    ? `${appUrl}/tasks?openTask=${encodeURIComponent(targetId)}` 
+    : `${appUrl}/tasks`;
+
+  const descSnippet = description
+    ? description.length > 250
+      ? `${description.substring(0, 250)}...`
+      : description
+    : 'No description provided.';
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <title>Task Deadline Reminder - CT University TaskDesk</title>
+      <style>
+        body { margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; }
+        .wrapper { max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 14px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08); }
+        .header { background: #0f172a; padding: 28px 24px; text-align: center; }
+        .header h1 { margin: 0; font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.02em; }
+        .header p { margin: 6px 0 0; font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; }
+        .body { padding: 32px 28px; }
+        .badge { display: inline-block; background-color: #fff7ed; color: #c2410c; border: 1px solid #ffedd5; font-size: 11px; font-weight: 800; padding: 5px 12px; border-radius: 20px; letter-spacing: 0.04em; margin-bottom: 16px; text-transform: uppercase; }
+        .greeting { font-size: 17px; font-weight: 700; color: #0f172a; margin-bottom: 10px; }
+        .desc { font-size: 14px; line-height: 1.6; color: #475569; margin-bottom: 20px; }
+        .task-card { background: #fffbeb; border: 1px solid #fef3c7; border-left: 4px solid #f59e0b; border-radius: 10px; padding: 18px; margin: 20px 0; }
+        .task-title { font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 12px; }
+        .info-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
+        .info-label { color: #64748b; font-weight: 500; }
+        .info-value { color: #0f172a; font-weight: 700; text-align: right; }
+        .task-desc-box { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #fcd34d; font-size: 12.5px; color: #475569; line-height: 1.5; }
+        .cta-container { text-align: center; margin: 26px 0 10px; }
+        .cta-btn { display: inline-block; background-color: #f59e0b; color: #ffffff !important; text-decoration: none; font-size: 14px; font-weight: 700; padding: 12px 28px; border-radius: 8px; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25); }
+        .footer { background: #f8fafc; padding: 18px 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
+      </style>
+    </head>
+    <body>
+      <div class="wrapper">
+        <div class="header">
+          <h1>CT University TaskDesk</h1>
+          <p>Deadline Reminder</p>
+        </div>
+        <div class="body">
+          <div class="badge">⏳ ${daysRemaining} Days Left</div>
+          <div class="greeting">Hello, ${recipientName || 'Colleague'}!</div>
+          <div class="desc">
+            This is a friendly reminder that your assigned task is due in <strong>${daysRemaining} days</strong>. Please complete and submit it before the deadline.
+          </div>
+          <div class="task-card">
+            <div class="task-title">
+              <span style="color: #d97706; margin-right: 6px;">#${taskId || ''}</span> ${taskTitle}
+            </div>
+            <div class="info-row">
+              <span class="info-label">Deadline:</span>
+              <span class="info-value" style="color: #b45309;">📅 ${formattedDeadline}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Time Remaining:</span>
+              <span class="info-value" style="color: #b45309;">⏳ Approx. ${daysRemaining} Day(s)</span>
+            </div>
+            <div class="task-desc-box">
+              <strong>Description:</strong><br />
+              ${descSnippet}
+            </div>
+          </div>
+          <div class="cta-container">
+            <a href="${taskUrl}" class="cta-btn">Open TaskDesk &amp; Complete Task &rarr;</a>
+          </div>
+        </div>
+        <div class="footer">
+          &copy; ${new Date().getFullYear()} CT University • TaskDesk Institutional Access
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    return await transporter.sendMail({
+      from: `"${senderDisplayName}" <${senderEmailAddress}>`,
+      replyTo: `"${senderDisplayName}" <${senderEmailAddress}>`,
+      to: toEmail,
+      subject,
+      html,
+    });
+  } catch (error) {
+    console.error(`Failed to send Task Due Soon email to ${toEmail}:`, error);
+  }
+};
+
+/**
+ * Send Daily Task Overdue Alert Email
+ */
+export const sendTaskOverdueEmail = async (
+  toEmail: string,
+  recipientName: string,
+  taskTitle: string,
+  taskId: string,
+  deadline: Date | string,
+  daysOverdue: number = 1,
+  description?: string,
+  taskMongoId?: string
+) => {
+  if (!toEmail) return;
+
+  const formattedDeadline = deadline
+    ? new Date(deadline).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      })
+    : 'Passed';
+
+  const senderDisplayName = 'CT University TaskDesk';
+  const senderEmailAddress = process.env.EMAIL_USER || 'taskmanagement@ctuniversity.in';
+
+  const subject = `🚨 Overdue Alert: [Task #${taskId || ''}] ${taskTitle} is Overdue by ${daysOverdue} Day${daysOverdue > 1 ? 's' : ''}`;
+  const appUrl = process.env.FRONTEND_URL || 'https://taskdesk.ctuniversity.in';
+  const targetId = taskMongoId || taskId || '';
+  const taskUrl = targetId 
+    ? `${appUrl}/tasks?openTask=${encodeURIComponent(targetId)}` 
+    : `${appUrl}/tasks`;
+
+  const descSnippet = description
+    ? description.length > 250
+      ? `${description.substring(0, 250)}...`
+      : description
+    : 'No description provided.';
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <title>Task Overdue Alert - CT University TaskDesk</title>
+      <style>
+        body { margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; }
+        .wrapper { max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 14px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08); }
+        .header { background: #7f1d1d; padding: 28px 24px; text-align: center; }
+        .header h1 { margin: 0; font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.02em; }
+        .header p { margin: 6px 0 0; font-size: 11px; font-weight: 600; color: #fca5a5; text-transform: uppercase; letter-spacing: 0.08em; }
+        .body { padding: 32px 28px; }
+        .badge { display: inline-block; background-color: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; font-size: 11px; font-weight: 800; padding: 5px 12px; border-radius: 20px; letter-spacing: 0.04em; margin-bottom: 16px; text-transform: uppercase; }
+        .greeting { font-size: 17px; font-weight: 700; color: #0f172a; margin-bottom: 10px; }
+        .desc { font-size: 14px; line-height: 1.6; color: #475569; margin-bottom: 20px; }
+        .task-card { background: #fef2f2; border: 1px solid #fee2e2; border-left: 4px solid #ef4444; border-radius: 10px; padding: 18px; margin: 20px 0; }
+        .task-title { font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 12px; }
+        .info-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
+        .info-label { color: #64748b; font-weight: 500; }
+        .info-value { color: #0f172a; font-weight: 700; text-align: right; }
+        .task-desc-box { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #fca5a5; font-size: 12.5px; color: #475569; line-height: 1.5; }
+        .cta-container { text-align: center; margin: 26px 0 10px; }
+        .cta-btn { display: inline-block; background-color: #dc2626; color: #ffffff !important; text-decoration: none; font-size: 14px; font-weight: 700; padding: 12px 28px; border-radius: 8px; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25); }
+        .footer { background: #f8fafc; padding: 18px 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
+      </style>
+    </head>
+    <body>
+      <div class="wrapper">
+        <div class="header">
+          <h1>CT University TaskDesk</h1>
+          <p>Urgent Action Required</p>
+        </div>
+        <div class="body">
+          <div class="badge">🚨 Overdue by ${daysOverdue} Day${daysOverdue > 1 ? 's' : ''}</div>
+          <div class="greeting">Hello, ${recipientName || 'Colleague'}!</div>
+          <div class="desc">
+            Your assigned task is currently <strong>overdue</strong>. Please submit your work or request a deadline extension as soon as possible.
+          </div>
+          <div class="task-card">
+            <div class="task-title">
+              <span style="color: #dc2626; margin-right: 6px;">#${taskId || ''}</span> ${taskTitle}
+            </div>
+            <div class="info-row">
+              <span class="info-label">Original Deadline:</span>
+              <span class="info-value" style="color: #dc2626;">📅 ${formattedDeadline}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Overdue Duration:</span>
+              <span class="info-value" style="color: #dc2626;">⚠️ ${daysOverdue} Day${daysOverdue > 1 ? 's' : ''} Late</span>
+            </div>
+            <div class="task-desc-box">
+              <strong>Description:</strong><br />
+              ${descSnippet}
+            </div>
+          </div>
+          <div class="cta-container">
+            <a href="${taskUrl}" class="cta-btn">Open TaskDesk &amp; Update Task &rarr;</a>
+          </div>
+        </div>
+        <div class="footer">
+          &copy; ${new Date().getFullYear()} CT University • TaskDesk Institutional Access
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    return await transporter.sendMail({
+      from: `"${senderDisplayName}" <${senderEmailAddress}>`,
+      replyTo: `"${senderDisplayName}" <${senderEmailAddress}>`,
+      to: toEmail,
+      subject,
+      html,
+    });
+  } catch (error) {
+    console.error(`Failed to send Task Overdue email to ${toEmail}:`, error);
+  }
+};

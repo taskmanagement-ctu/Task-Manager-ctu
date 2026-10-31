@@ -12,6 +12,7 @@ import {
   Star,
   MessageSquare,
   Clock,
+  AlertTriangle,
   ExternalLink,
   Sparkles
 } from 'lucide-react';
@@ -183,6 +184,10 @@ export const NotificationDropdown: React.FC = () => {
         return <Star size={16} />;
       case 'new_chat_message':
         return <MessageSquare size={16} />;
+      case 'task_due_soon':
+        return <Clock size={16} />;
+      case 'task_overdue':
+        return <AlertTriangle size={16} />;
       default:
         return <Bell size={16} />;
     }
@@ -194,12 +199,14 @@ export const NotificationDropdown: React.FC = () => {
       case 'task_delegated':
         return 'nd-icon-blue';
       case 'task_status_changed':
+      case 'task_due_soon':
         return 'nd-icon-amber';
       case 'task_submitted_for_review':
         return 'nd-icon-purple';
       case 'task_approved':
         return 'nd-icon-green';
       case 'task_rejected':
+      case 'task_overdue':
         return 'nd-icon-red';
       case 'task_rated':
         return 'nd-icon-gold';

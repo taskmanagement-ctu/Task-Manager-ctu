@@ -63,6 +63,10 @@ export interface ITask extends Document {
     createdAt: Date;
   }>;
   createdAt: Date;
+  dueSoonReminderSent?: boolean;
+  dueSoonReminderSentAt?: Date | null;
+  lastOverdueReminderSentAt?: Date | null;
+  overdueReminderCount?: number;
   updatedAt: Date;
 }
 
@@ -307,6 +311,24 @@ const taskSchema = new Schema<ITask>(
         }
       }
     ],
+    dueSoonReminderSent: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    dueSoonReminderSentAt: {
+      type: Date,
+      default: null,
+    },
+    lastOverdueReminderSentAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    overdueReminderCount: {
+      type: Number,
+      default: 0,
+    },
     comments: [
       {
         sender: {

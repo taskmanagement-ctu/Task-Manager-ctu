@@ -69,6 +69,11 @@ export const connectDatabase = async (): Promise<void> => {
     import('../services/departmentSync')
       .then((m) => m.syncAndNormalizeDepartments())
       .catch((err) => console.warn('Department normalization sync error:', err.message));
+
+    // Start automated task deadline & overdue reminder scheduler
+    import('../services/taskScheduler')
+      .then((m) => m.initTaskDeadlineScheduler())
+      .catch((err) => console.error('Task deadline scheduler init error:', err.message));
   } catch (error) {
     if (error instanceof Error) {
       console.error(`❌ MongoDB connection failed: ${error.message}`);

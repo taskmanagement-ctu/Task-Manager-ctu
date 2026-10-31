@@ -723,7 +723,14 @@ export const updateTask = async (req: Request, res: Response) => {
     if (description) task.description = description;
     if (deadline) {
       const pd = new Date(deadline);
-      if (!isNaN(pd.getTime())) task.deadline = pd;
+      if (!isNaN(pd.getTime())) {
+        task.deadline = pd;
+        if (pd.getTime() > Date.now()) {
+          task.dueSoonReminderSent = false;
+          task.dueSoonReminderSentAt = null;
+          task.lastOverdueReminderSentAt = null;
+        }
+      }
     }
 
     await task.save();
@@ -2595,6 +2602,11 @@ export const reviewDeadlineExtension = async (req: Request, res: Response) => {
           });
 
           task.deadline = newDeadline;
+        if (newDeadline.getTime() > Date.now()) {
+          task.dueSoonReminderSent = false;
+          task.dueSoonReminderSentAt = null;
+          task.lastOverdueReminderSentAt = null;
+        }
           task.extensionRequest.status = 'approved';
           task.extensionRequest.decidedBy = user._id;
           task.extensionRequest.decidedAt = new Date();
@@ -2684,6 +2696,11 @@ export const reviewDeadlineExtension = async (req: Request, res: Response) => {
         });
 
         task.deadline = newDeadline;
+        if (newDeadline.getTime() > Date.now()) {
+          task.dueSoonReminderSent = false;
+          task.dueSoonReminderSentAt = null;
+          task.lastOverdueReminderSentAt = null;
+        }
         task.extensionRequest.status = 'approved';
         task.extensionRequest.decidedBy = user._id;
         task.extensionRequest.decidedAt = new Date();
@@ -2787,6 +2804,11 @@ export const directExtendDeadline = async (req: Request, res: Response) => {
     });
 
     task.deadline = parsedDeadline;
+    if (parsedDeadline.getTime() > Date.now()) {
+      task.dueSoonReminderSent = false;
+      task.dueSoonReminderSentAt = null;
+      task.lastOverdueReminderSentAt = null;
+    }
 
     // If there was an active pending extension request, mark it resolved
     if (task.extensionRequest && (task.extensionRequest.status === 'pending' || task.extensionRequest.status === 'endorsed')) {
@@ -2856,5 +2878,27 @@ export const directExtendDeadline = async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, message: 'Server Error', error: error.message });
   }
 };
+
+/**
+ * Manually trigger task deadline checks (3-day reminders and daily overdue alerts)
+ */
+export const triggerDeadlineCheck = async (_req: any, res: Response) => {
+  try {
+    const { checkAndSendTaskDeadlines } = await import('../services/taskScheduler');
+    const stats = await checkAndSendTaskDeadlines();
+    return res.status(200).json({
+      success: true,
+      message: 'Task deadline check executed successfully',
+      data: stats,
+    });
+  } catch (error: any) {
+    console.error('Error triggering deadline check:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to trigger deadline check',
+    });
+  }
+};
+
 
 
