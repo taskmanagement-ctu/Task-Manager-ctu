@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { api, User, Department } from '../services/api';
 import './SuperAdminStaffAssignmentsPage.css';
-import { Building, ShieldCheck, Mail, Phone, Search, Filter, X, Users, Shield, AlertTriangle, Crown } from 'lucide-react';
+import { Building, ShieldCheck, Mail, Phone, Search, Filter, X, Users, Shield, AlertTriangle, MoreVertical, Globe } from 'lucide-react';
 import ExportDropdownMenu from '../components/ExportDropdownMenu';
 import { exportStaffAssignments } from '../utils/generalExport';
 
@@ -15,6 +15,25 @@ const SuperAdminStaffAssignmentsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [roleFilter, setRoleFilter] = useState<'all' | 'admins' | 'staff'>('all');
+
+  // Admin Three-Dots Menu state
+  const [activeAdminMenuId, setActiveAdminMenuId] = useState<string | null>(null);
+  const adminMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close three dots menu on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (adminMenuRef.current && !adminMenuRef.current.contains(e.target as Node)) {
+        setActiveAdminMenuId(null);
+      }
+    };
+    if (activeAdminMenuId) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [activeAdminMenuId]);
 
   // Super Task Permission Modal state
   const [superTaskTarget, setSuperTaskTarget] = useState<User | null>(null);
@@ -396,7 +415,7 @@ const SuperAdminStaffAssignmentsPage: React.FC = () => {
                   return (
                     <div 
                       key={st.id} 
-                      className={`saa-card ${isAdmin ? 'is-admin-card' : ''}`}
+                      className={`saa-card ${isAdmin ? 'is-admin-card' : ''} ${activeAdminMenuId === st.id ? 'menu-active' : ''}`}
                     >
                       <div className="saa-card-header">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: 0 }}>
@@ -413,11 +432,16 @@ const SuperAdminStaffAssignmentsPage: React.FC = () => {
                             }}
                           />
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
                               <strong style={{ fontSize: '1rem', color: '#0f172a' }}>{st.name}</strong>
                               {isAdmin && (
                                 <span className="saa-admin-pill">
                                   <Shield size={11} /> Admin
+                                </span>
+                              )}
+                              {isAdmin && st.canCreateSuperAdminTasks && (
+                                <span className="saa-cross-dept-badge" title="Authorized for Cross-Department Task Delegation">
+                                  <Globe size={10} /> Cross-Dept
                                 </span>
                               )}
                             </div>
@@ -428,27 +452,58 @@ const SuperAdminStaffAssignmentsPage: React.FC = () => {
                         </div>
 
                         {isAdmin && (
-                          <div className="saa-card-top-action">
-                            {st.canCreateSuperAdminTasks ? (
-                              <button
-                                type="button"
-                                className="saa-super-task-btn active"
-                                title="Super Admin Task Creation Rights Active. Click to revoke."
-                                onClick={() => openSuperTaskModal(st, 'revoke')}
-                              >
-                                <Crown size={12} className="saa-crown-gold" />
-                                <span>Super Creator</span>
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                className="saa-super-task-btn inactive"
-                                title="Grant permission to create and assign tasks across all departments as Super Admin"
-                                onClick={() => openSuperTaskModal(st, 'grant')}
-                              >
-                                <Crown size={12} />
-                                <span>+ Super Rights</span>
-                              </button>
+                          <div 
+                            className="saa-menu-wrapper"
+                            ref={activeAdminMenuId === st.id ? adminMenuRef : null}
+                          >
+                            <button
+                              type="button"
+                              className={`saa-dots-btn ${activeAdminMenuId === st.id ? 'active' : ''}`}
+                              title="Department Admin Actions"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveAdminMenuId(activeAdminMenuId === st.id ? null : st.id);
+                              }}
+                            >
+                              <MoreVertical size={18} />
+                            </button>
+
+                            {activeAdminMenuId === st.id && (
+                              <div className="saa-dropdown-menu">
+                                {st.canCreateSuperAdminTasks ? (
+                                  <button
+                                    type="button"
+                                    className="saa-dropdown-item warning"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveAdminMenuId(null);
+                                      openSuperTaskModal(st, 'revoke');
+                                    }}
+                                  >
+                                    <Globe size={15} className="saa-item-icon amber" />
+                                    <div className="saa-item-content">
+                                      <span className="saa-item-title">Revoke Cross-Dept Access</span>
+                                      <span className="saa-item-desc">Restrict tasks to own department</span>
+                                    </div>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="saa-dropdown-item"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveAdminMenuId(null);
+                                      openSuperTaskModal(st, 'grant');
+                                    }}
+                                  >
+                                    <Globe size={15} className="saa-item-icon blue" />
+                                    <div className="saa-item-content">
+                                      <span className="saa-item-title">Cross-Dept Task Delegation</span>
+                                      <span className="saa-item-desc">Allow assigning across departments</span>
+                                    </div>
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </div>
                         )}
@@ -504,27 +559,32 @@ const SuperAdminStaffAssignmentsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Super Admin Task Rights Confirmation Modal */}
+      {/* Cross-Department Task Delegation Modal */}
       {superTaskTarget && superTaskAction && (
         <div className="modal-overlay" onClick={() => !isSuperTaskUpdating && setSuperTaskTarget(null)}>
-          <div className="modal-content" style={{ maxWidth: '490px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content" style={{ maxWidth: '500px' }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                 <div style={{
-                  width: '38px',
-                  height: '38px',
+                  width: '40px',
+                  height: '40px',
                   borderRadius: '10px',
-                  background: superTaskAction === 'grant' ? '#f5f3ff' : '#fef2f2',
+                  background: superTaskAction === 'grant' ? '#eff6ff' : '#fef2f2',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: superTaskAction === 'grant' ? '#7c3aed' : '#dc2626'
+                  color: superTaskAction === 'grant' ? '#2563eb' : '#dc2626'
                 }}>
-                  <Crown size={20} />
+                  <Globe size={20} />
                 </div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>
-                  {superTaskAction === 'grant' ? 'Grant Super Admin Task Rights' : 'Revoke Super Admin Task Rights'}
-                </h3>
+                <div>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>
+                    {superTaskAction === 'grant' ? 'Cross-Department Task Delegation' : 'Revoke Cross-Department Access'}
+                  </h3>
+                  <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px' }}>
+                    Task delegation privilege
+                  </div>
+                </div>
               </div>
               <button
                 type="button"
@@ -554,24 +614,24 @@ const SuperAdminStaffAssignmentsPage: React.FC = () => {
               {superTaskAction === 'grant' ? (
                 <div style={{ fontSize: '0.88rem', color: '#334155', lineHeight: 1.6 }}>
                   <p style={{ margin: '0 0 0.75rem' }}>
-                    Granting Super Admin task rights will allow <strong>{superTaskTarget.name}</strong> to:
+                    Authorizing cross-department task delegation enables <strong>{superTaskTarget.name}</strong> to:
                   </p>
                   <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#475569' }}>
-                    <li style={{ marginBottom: '0.35rem' }}>Create and assign tasks to <strong>ANY department</strong> university-wide.</li>
-                    <li style={{ marginBottom: '0.35rem' }}>Assign tasks to any faculty or staff across CT University.</li>
-                    <li>Operate with <strong>Direct Super Admin Workflow</strong> for institutional oversight.</li>
+                    <li style={{ marginBottom: '0.35rem' }}>Create and assign tasks across <strong>all university departments</strong>.</li>
+                    <li style={{ marginBottom: '0.35rem' }}>Assign tasks directly to faculty and staff across CT University.</li>
+                    <li>Coordinate institutional, inter-departmental initiatives.</li>
                   </ul>
-                  <p style={{ margin: '0.75rem 0 0', fontSize: '0.8rem', color: '#64748b' }}>
-                    <em>Note: The user remains a Department Admin and will NOT have access to system settings or user management.</em>
-                  </p>
+                  <div style={{ margin: '0.85rem 0 0', fontSize: '0.8rem', color: '#475569', background: '#f8fafc', borderLeft: '3px solid #2563eb', padding: '0.55rem 0.75rem', borderRadius: '0 6px 6px 0' }}>
+                    <em>Scope: This strictly grants cross-department task delegation authority. It does NOT grant Super Admin rights to system settings, user management, or department records.</em>
+                  </div>
                 </div>
               ) : (
                 <div style={{ fontSize: '0.88rem', color: '#334155', lineHeight: 1.6 }}>
                   <p style={{ margin: 0 }}>
-                    Are you sure you want to revoke Super Admin task creation rights from <strong>{superTaskTarget.name}</strong>?
+                    Are you sure you want to revoke cross-department task delegation from <strong>{superTaskTarget.name}</strong>?
                   </p>
                   <p style={{ margin: '0.5rem 0 0', color: '#64748b', fontSize: '0.82rem' }}>
-                    They will immediately be restricted back to assigning tasks within their own department only.
+                    They will immediately be restricted to creating and assigning tasks within their own department only.
                   </p>
                 </div>
               )}
@@ -589,7 +649,6 @@ const SuperAdminStaffAssignmentsPage: React.FC = () => {
               <button
                 type="button"
                 className={`btn ${superTaskAction === 'grant' ? 'btn-primary' : 'btn-danger'}`}
-                style={superTaskAction === 'grant' ? { background: '#7c3aed', borderColor: '#7c3aed' } : {}}
                 disabled={isSuperTaskUpdating}
                 onClick={handleConfirmSuperTaskPermission}
               >
@@ -597,11 +656,11 @@ const SuperAdminStaffAssignmentsPage: React.FC = () => {
                   'Updating...'
                 ) : superTaskAction === 'grant' ? (
                   <>
-                    <Crown size={15} style={{ marginRight: '6px' }} />
-                    Grant Permission
+                    <Globe size={15} style={{ marginRight: '6px' }} />
+                    Authorize Access
                   </>
                 ) : (
-                  'Revoke Permission'
+                  'Revoke Access'
                 )}
               </button>
             </div>

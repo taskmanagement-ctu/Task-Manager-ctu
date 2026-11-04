@@ -1400,7 +1400,7 @@ export const toggleSuperTaskPermission = async (req: Request, res: Response) => 
     if (user.role !== 'department_admin') {
       return res.status(400).json({
         success: false,
-        message: 'Super Admin task privileges can only be granted to Department Admins.',
+        message: 'Cross-department task privileges can only be granted to Department Admins.',
       });
     }
 
@@ -1415,11 +1415,11 @@ export const toggleSuperTaskPermission = async (req: Request, res: Response) => 
         recipient: user._id,
         type: 'task_updated',
         title: newStatus
-          ? 'Super Admin Task Creation Rights Granted 👑'
-          : 'Super Admin Task Creation Rights Revoked',
+          ? 'Cross-Department Task Access Granted'
+          : 'Cross-Department Task Access Revoked',
         message: newStatus
           ? `You have been authorized by ${operator?.name || 'Super Admin'} to create and assign tasks university-wide across all departments.`
-          : `Your cross-department Super Admin task creation privileges have been revoked by ${operator?.name || 'Super Admin'}.`,
+          : `Your cross-department task creation privileges have been revoked by ${operator?.name || 'Super Admin'}.`,
         triggeredBy: operator?._id || null,
       });
     } catch (notifErr) {
@@ -1431,8 +1431,8 @@ export const toggleSuperTaskPermission = async (req: Request, res: Response) => 
     return res.status(200).json({
       success: true,
       message: newStatus
-        ? `Super Admin task creation rights granted to ${user.name}.`
-        : `Super Admin task creation rights revoked from ${user.name}.`,
+        ? `Cross-department task access granted to ${user.name}.`
+        : `Cross-department task access revoked from ${user.name}.`,
       data: {
         user: updatedUser,
       },
