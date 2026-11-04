@@ -683,6 +683,7 @@ export const login = async (req: Request, res: Response) => {
           phone: user.phone,
           department: user.department,
           role: user.role,
+          canCreateSuperAdminTasks: user.canCreateSuperAdminTasks || false,
         },
       },
     });
@@ -717,6 +718,7 @@ export const getMe = async (req: Request, res: Response) => {
           department: user.department,
           role: user.role,
           isActive: user.isActive,
+          canCreateSuperAdminTasks: user.canCreateSuperAdminTasks || false,
         },
       },
     });

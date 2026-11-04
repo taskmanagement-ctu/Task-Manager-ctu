@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api, User, Department } from '../services/api';
 import './SuperAdminStaffAssignmentsPage.css';
-import { Building, ShieldCheck, Mail, Phone, Search, Filter, X, Users, Shield, AlertTriangle } from 'lucide-react';
+import { Building, ShieldCheck, Mail, Phone, Search, Filter, X, Users, Shield, AlertTriangle, Crown } from 'lucide-react';
 import ExportDropdownMenu from '../components/ExportDropdownMenu';
 import { exportStaffAssignments } from '../utils/generalExport';
 
@@ -15,6 +15,43 @@ const SuperAdminStaffAssignmentsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [roleFilter, setRoleFilter] = useState<'all' | 'admins' | 'staff'>('all');
+
+  // Super Task Permission Modal state
+  const [superTaskTarget, setSuperTaskTarget] = useState<User | null>(null);
+  const [superTaskAction, setSuperTaskAction] = useState<'grant' | 'revoke' | null>(null);
+  const [isSuperTaskUpdating, setIsSuperTaskUpdating] = useState(false);
+
+  const openSuperTaskModal = (targetUser: User, action: 'grant' | 'revoke') => {
+    setSuperTaskTarget(targetUser);
+    setSuperTaskAction(action);
+  };
+
+  const handleConfirmSuperTaskPermission = async () => {
+    if (!superTaskTarget || !superTaskAction) return;
+    try {
+      setIsSuperTaskUpdating(true);
+      const isGranting = superTaskAction === 'grant';
+      const res = await api.toggleSuperTaskPermission(superTaskTarget.id, isGranting);
+      if (res.success) {
+        setStaff((prevStaff) =>
+          prevStaff.map((s) =>
+            s.id === superTaskTarget.id
+              ? { ...s, canCreateSuperAdminTasks: isGranting }
+              : s
+          )
+        );
+        setSuperTaskTarget(null);
+        setSuperTaskAction(null);
+      } else {
+        alert(res.message || 'Failed to update permission.');
+      }
+    } catch (err: any) {
+      console.error('Error toggling super task permission:', err);
+      alert(err.message || 'Error updating permission.');
+    } finally {
+      setIsSuperTaskUpdating(false);
+    }
+  };
 
   // Promote Modal state
   const [showPromoteModal, setShowPromoteModal] = useState(false);
@@ -362,7 +399,7 @@ const SuperAdminStaffAssignmentsPage: React.FC = () => {
                       className={`saa-card ${isAdmin ? 'is-admin-card' : ''}`}
                     >
                       <div className="saa-card-header">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: 0 }}>
                           <div 
                             className="user-avatar" 
                             style={{ 
@@ -371,10 +408,11 @@ const SuperAdminStaffAssignmentsPage: React.FC = () => {
                               borderRadius: '50%',
                               backgroundImage: `url(https://ui-avatars.com/api/?name=${encodeURIComponent(st.name)}&background=${isAdmin ? 'fef3c7' : 'e2e8f0'}&color=${isAdmin ? '92400e' : '1e293b'}&bold=true)`,
                               backgroundSize: 'cover',
-                              border: isAdmin ? '2px solid #fbbf24' : '1px solid #cbd5e1'
+                              border: isAdmin ? '2px solid #fbbf24' : '1px solid #cbd5e1',
+                              flexShrink: 0
                             }}
                           />
-                          <div>
+                          <div style={{ minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                               <strong style={{ fontSize: '1rem', color: '#0f172a' }}>{st.name}</strong>
                               {isAdmin && (
@@ -388,6 +426,32 @@ const SuperAdminStaffAssignmentsPage: React.FC = () => {
                             </span>
                           </div>
                         </div>
+
+                        {isAdmin && (
+                          <div className="saa-card-top-action">
+                            {st.canCreateSuperAdminTasks ? (
+                              <button
+                                type="button"
+                                className="saa-super-task-btn active"
+                                title="Super Admin Task Creation Rights Active. Click to revoke."
+                                onClick={() => openSuperTaskModal(st, 'revoke')}
+                              >
+                                <Crown size={12} className="saa-crown-gold" />
+                                <span>Super Creator</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="saa-super-task-btn inactive"
+                                title="Grant permission to create and assign tasks across all departments as Super Admin"
+                                onClick={() => openSuperTaskModal(st, 'grant')}
+                              >
+                                <Crown size={12} />
+                                <span>+ Super Rights</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       <div className="saa-card-body">
@@ -439,6 +503,111 @@ const SuperAdminStaffAssignmentsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Super Admin Task Rights Confirmation Modal */}
+      {superTaskTarget && superTaskAction && (
+        <div className="modal-overlay" onClick={() => !isSuperTaskUpdating && setSuperTaskTarget(null)}>
+          <div className="modal-content" style={{ maxWidth: '490px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <div style={{
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '10px',
+                  background: superTaskAction === 'grant' ? '#f5f3ff' : '#fef2f2',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: superTaskAction === 'grant' ? '#7c3aed' : '#dc2626'
+                }}>
+                  <Crown size={20} />
+                </div>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>
+                  {superTaskAction === 'grant' ? 'Grant Super Admin Task Rights' : 'Revoke Super Admin Task Rights'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                className="close-btn"
+                disabled={isSuperTaskUpdating}
+                onClick={() => setSuperTaskTarget(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: '0.5rem 0 1rem' }}>
+              <div style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                padding: '0.85rem 1rem',
+                marginBottom: '1rem'
+              }}>
+                <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.98rem' }}>{superTaskTarget.name}</div>
+                <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '0.2rem' }}>
+                  {superTaskTarget.department || 'Department Admin'} • ID: {superTaskTarget.universityId}
+                </div>
+              </div>
+
+              {superTaskAction === 'grant' ? (
+                <div style={{ fontSize: '0.88rem', color: '#334155', lineHeight: 1.6 }}>
+                  <p style={{ margin: '0 0 0.75rem' }}>
+                    Granting Super Admin task rights will allow <strong>{superTaskTarget.name}</strong> to:
+                  </p>
+                  <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#475569' }}>
+                    <li style={{ marginBottom: '0.35rem' }}>Create and assign tasks to <strong>ANY department</strong> university-wide.</li>
+                    <li style={{ marginBottom: '0.35rem' }}>Assign tasks to any faculty or staff across CT University.</li>
+                    <li>Operate with <strong>Direct Super Admin Workflow</strong> for institutional oversight.</li>
+                  </ul>
+                  <p style={{ margin: '0.75rem 0 0', fontSize: '0.8rem', color: '#64748b' }}>
+                    <em>Note: The user remains a Department Admin and will NOT have access to system settings or user management.</em>
+                  </p>
+                </div>
+              ) : (
+                <div style={{ fontSize: '0.88rem', color: '#334155', lineHeight: 1.6 }}>
+                  <p style={{ margin: 0 }}>
+                    Are you sure you want to revoke Super Admin task creation rights from <strong>{superTaskTarget.name}</strong>?
+                  </p>
+                  <p style={{ margin: '0.5rem 0 0', color: '#64748b', fontSize: '0.82rem' }}>
+                    They will immediately be restricted back to assigning tasks within their own department only.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.25rem' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={isSuperTaskUpdating}
+                onClick={() => setSuperTaskTarget(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={`btn ${superTaskAction === 'grant' ? 'btn-primary' : 'btn-danger'}`}
+                style={superTaskAction === 'grant' ? { background: '#7c3aed', borderColor: '#7c3aed' } : {}}
+                disabled={isSuperTaskUpdating}
+                onClick={handleConfirmSuperTaskPermission}
+              >
+                {isSuperTaskUpdating ? (
+                  'Updating...'
+                ) : superTaskAction === 'grant' ? (
+                  <>
+                    <Crown size={15} style={{ marginRight: '6px' }} />
+                    Grant Permission
+                  </>
+                ) : (
+                  'Revoke Permission'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Promote Staff Modal */}
       {showPromoteModal && selectedStaff && (

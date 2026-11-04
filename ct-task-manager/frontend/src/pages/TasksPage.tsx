@@ -129,7 +129,7 @@ const TasksPage: React.FC = () => {
     if (user?.role === 'staff') return;
     
     try {
-      if (user?.role === 'super_admin') {
+      if (user?.role === 'super_admin' || user?.canCreateSuperAdminTasks) {
         const [usersRes, teamRes] = await Promise.all([
           api.getUsers({ limit: 1000, status: 'Active' }),
           api.getAdminAssignments(user.id).catch(() => ({ data: { assignments: [] } }))
@@ -177,7 +177,7 @@ const TasksPage: React.FC = () => {
   };
 
   const loadDepartments = async () => {
-    if (user?.role !== 'super_admin') return;
+    if (user?.role !== 'super_admin' && !user?.canCreateSuperAdminTasks) return;
     try {
       const res = await api.getDepartments();
       if (res.success) {

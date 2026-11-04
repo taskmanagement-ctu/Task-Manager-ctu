@@ -210,7 +210,7 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
       let depts: string[] = [];
       if (departments && departments.length > 0) {
         depts = departments.map(d => typeof d === 'string' ? d : d.name).filter(Boolean);
-      } else if (currentUser?.role === 'super_admin') {
+      } else if (currentUser?.role === 'super_admin' || currentUser?.canCreateSuperAdminTasks) {
         try {
           const res = await api.getDepartments();
           if (res.success && res.data?.departments) {
@@ -325,7 +325,7 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
       if (inlineAssignRoleFilter === 'admin' && !a.role?.includes('admin')) return false;
       if (inlineAssignRoleFilter === 'staff' && a.role !== 'staff') return false;
       
-      if (currentUser?.role === 'super_admin' && inlineAssignDeptFilter !== 'all') {
+      if ((currentUser?.role === 'super_admin' || currentUser?.canCreateSuperAdminTasks) && inlineAssignDeptFilter !== 'all') {
         if (!a.department || a.department.toLowerCase() !== inlineAssignDeptFilter.toLowerCase()) return false;
       }
     }
@@ -502,7 +502,7 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
       if (assignRoleFilter === 'staff' && a.role !== 'staff') return false;
       
       // Department filter (only applies when not in My Team)
-      if (currentUser?.role === 'super_admin' && assignDeptFilter !== 'all') {
+      if ((currentUser?.role === 'super_admin' || currentUser?.canCreateSuperAdminTasks) && assignDeptFilter !== 'all') {
         if (!a.department || a.department.trim().toLowerCase() !== assignDeptFilter.trim().toLowerCase()) {
           return false;
         }
@@ -794,7 +794,7 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
                         />
                       </div>
                       
-                      {currentUser?.role === 'super_admin' && (
+                      {(currentUser?.role === 'super_admin' || currentUser?.canCreateSuperAdminTasks) && (
                         <div className="ct-dropdown-filter-controls">
                           <div className="ct-dept-filter-wrapper">
                             <Building2 size={13} className="ct-dept-filter-icon" />
@@ -1268,7 +1268,7 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
                                 />
                               </div>
                               
-                              {currentUser?.role === 'super_admin' && (
+                              {(currentUser?.role === 'super_admin' || currentUser?.canCreateSuperAdminTasks) && (
                                 <div className="ct-dropdown-filter-controls">
                                   <div className="ct-dept-filter-wrapper">
                                     <Building2 size={13} className="ct-dept-filter-icon" />

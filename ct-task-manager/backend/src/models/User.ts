@@ -9,6 +9,7 @@ export interface IUser extends Document {
   baseDepartment?: string | null;
   passwordHash: string;
   role: 'super_admin' | 'department_admin' | 'staff';
+  canCreateSuperAdminTasks?: boolean;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -57,6 +58,10 @@ const userSchema = new Schema<IUser>(
       type: String,
       enum: ['super_admin', 'department_admin', 'staff'],
       default: 'staff',
+    },
+    canCreateSuperAdminTasks: {
+      type: Boolean,
+      default: false,
     },
     isActive: {
       type: Boolean,

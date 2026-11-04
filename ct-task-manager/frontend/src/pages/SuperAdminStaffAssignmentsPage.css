@@ -271,6 +271,10 @@
 .saa-card-header {
   padding: 1.15rem 1.25rem;
   border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 
 .saa-admin-pill {
@@ -436,3 +440,55 @@
   }
 }
 
+
+/* Super Task Rights Top-Right Action */
+.saa-card-top-action {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.saa-super-task-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid transparent;
+  outline: none;
+  white-space: nowrap;
+}
+
+.saa-super-task-btn.active {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+  color: #ffffff;
+  border-color: #6d28d9;
+  box-shadow: 0 2px 6px rgba(109, 40, 217, 0.25);
+}
+
+.saa-super-task-btn.active:hover {
+  background: linear-gradient(135deg, #6d28d9 0%, #5b21b6 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(109, 40, 217, 0.35);
+}
+
+.saa-super-task-btn.inactive {
+  background: #f8fafc;
+  color: #64748b;
+  border: 1px dashed #cbd5e1;
+}
+
+.saa-super-task-btn.inactive:hover {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #94a3b8;
+  border-style: solid;
+  transform: translateY(-1px);
+}
+
+.saa-crown-gold {
+  color: #fbbf24;
+}

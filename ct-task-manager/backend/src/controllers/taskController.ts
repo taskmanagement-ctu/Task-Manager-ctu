@@ -146,7 +146,7 @@ export const createTask = async (req: Request, res: Response) => {
 
         let workflowType: 'super_admin_direct' | 'department_admin' | undefined = undefined;
 
-        if (user.role === 'super_admin') {
+        if (user.role === 'super_admin' || user.canCreateSuperAdminTasks) {
           if (targetUser.role === 'department_admin') {
             workflowType = 'department_admin';
           } else {
@@ -833,7 +833,7 @@ export const assignTask = async (req: Request, res: Response) => {
         return res.status(400).json({ success: false, message: 'Target user is invalid or inactive.' });
       }
 
-      if (user.role === 'department_admin') {
+      if (user.role === 'department_admin' && !user.canCreateSuperAdminTasks) {
         const hasPermission = await checkAdminStaffPermission(user._id.toString(), assignedTo);
         if (!hasPermission) {
           return res.status(403).json({ success: false, message: 'Forbidden. Can only assign to yourself or your active staff.' });
@@ -848,7 +848,7 @@ export const assignTask = async (req: Request, res: Response) => {
         if (!canTouch && task.assignedTo !== null) {
             return res.status(403).json({ success: false, message: 'Forbidden. Cannot manipulate a task outside your permission scope.' });
         }
-      } else if (user.role === 'super_admin') {
+      } else if (user.role === 'super_admin' || user.canCreateSuperAdminTasks) {
         // If workflowType is missing (migration) or it's unassigned, figure it out
         if (!task.workflowType) {
           if (targetUser.role === 'department_admin') {
@@ -1374,7 +1374,7 @@ export const createSubtask = async (req: Request, res: Response) => {
     }
 
     // Check if Dept Admin can create subtasks on this parent
-    if (user.role === 'department_admin') {
+    if (user.role === 'department_admin' && !user.canCreateSuperAdminTasks) {
       const canManageParent = 
         parentTask.createdBy.toString() === user._id.toString() ||
         (parentTask.assignedTo && parentTask.assignedTo.toString() === user._id.toString()) ||
@@ -1438,7 +1438,7 @@ export const createSubtask = async (req: Request, res: Response) => {
 
       let workflowType: 'super_admin_direct' | 'department_admin' | undefined = undefined;
 
-      if (user.role === 'super_admin') {
+      if (user.role === 'super_admin' || user.canCreateSuperAdminTasks) {
         if (targetUser.role === 'department_admin') {
           workflowType = 'department_admin';
         } else {

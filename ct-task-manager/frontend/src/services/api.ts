@@ -213,6 +213,7 @@ export interface User {
   department: string | null;
   baseDepartment?: string | null;
   role: string;
+  canCreateSuperAdminTasks?: boolean;
   isActive?: boolean;
   isPrimarySuperAdmin?: boolean;
   rosterStatus?: 'assigned' | 'unassigned' | 'lead' | 'super_admin';
@@ -768,6 +769,17 @@ export const api = {
   /**
    * Update user status (activate/deactivate).
    */
+  /**
+   * Grant or revoke permission for a Department Admin to create tasks across all departments as Super Admin.
+   */
+  toggleSuperTaskPermission: async (id: string, enabled?: boolean): Promise<{ success: boolean; message: string; data: { user: User } }> => {
+    return fetchWithAuth(`/api/users/${id}/super-task-permission`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    });
+  },
+
   updateUserStatus: async (id: string, isActive: boolean): Promise<{ success: boolean; message: string; data: { user: User } }> => {
     return fetchWithAuth(`/api/users/${id}/status`, {
       method: 'PATCH',

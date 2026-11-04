@@ -11,6 +11,7 @@ import {
   updateUserProfile,
   changeDepartmentAdmin,
   transferSuperAdmin,
+  toggleSuperTaskPermission,
 } from '../controllers/userController';
 import { changePassword } from '../controllers/authController';
 import { authenticate, authorizeRoles } from '../middleware/auth';
@@ -71,5 +72,9 @@ router.post('/change-department-admin', changeDepartmentAdmin);
 // @route   POST /api/users/transfer-super-admin
 // @desc    Transfer or delegate Super Administrator role to another user
 router.post('/transfer-super-admin', transferSuperAdmin);
+
+// @route   PATCH /api/users/:id/super-task-permission
+// @desc    Grant or revoke permission to create tasks across all departments as Super Admin
+router.patch('/:id/super-task-permission', toggleSuperTaskPermission);
 
 export default router;

@@ -1383,4 +1383,62 @@ export const transferSuperAdmin = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Grant or revoke permission for a Department Admin to create tasks across all departments as Super Admin
+ */
+export const toggleSuperTaskPermission = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { enabled } = req.body;
+    const operator = req.user;
 
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    if (user.role !== 'department_admin') {
+      return res.status(400).json({
+        success: false,
+        message: 'Super Admin task privileges can only be granted to Department Admins.',
+      });
+    }
+
+    const newStatus = typeof enabled === 'boolean' ? enabled : !user.canCreateSuperAdminTasks;
+    user.canCreateSuperAdminTasks = newStatus;
+    await user.save();
+
+    // In-app Notification for the target user
+    try {
+      const Notification = (await import('../models/Notification')).default;
+      await Notification.create({
+        recipient: user._id,
+        type: 'task_updated',
+        title: newStatus
+          ? 'Super Admin Task Creation Rights Granted 👑'
+          : 'Super Admin Task Creation Rights Revoked',
+        message: newStatus
+          ? `You have been authorized by ${operator?.name || 'Super Admin'} to create and assign tasks university-wide across all departments.`
+          : `Your cross-department Super Admin task creation privileges have been revoked by ${operator?.name || 'Super Admin'}.`,
+        triggeredBy: operator?._id || null,
+      });
+    } catch (notifErr) {
+      console.error('Error creating notification for super task permission:', notifErr);
+    }
+
+    const updatedUser = await User.findById(user._id).select('-passwordHash');
+
+    return res.status(200).json({
+      success: true,
+      message: newStatus
+        ? `Super Admin task creation rights granted to ${user.name}.`
+        : `Super Admin task creation rights revoked from ${user.name}.`,
+      data: {
+        user: updatedUser,
+      },
+    });
+  } catch (error: any) {
+    console.error('Error toggling super task permission:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Server Error' });
+  }
+};
