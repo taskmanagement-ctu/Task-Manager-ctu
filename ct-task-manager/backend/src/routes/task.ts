@@ -21,7 +21,8 @@ import {
   requestDeadlineExtension,
   reviewDeadlineExtension,
   directExtendDeadline,
-  triggerDeadlineCheck
+  triggerDeadlineCheck,
+  getDeadlineRequests
 } from '../controllers/taskController';
 import { authenticate, authorizeRoles } from '../middleware/auth';
 import { uploadAny } from '../middleware/upload';
@@ -44,6 +45,11 @@ router.post('/', authorizeRoles('super_admin', 'department_admin'), uploadAny.ar
 // @desc    Get department-wise NAAC report and leaderboard
 // @access  Super Admin, Department Admin, Staff
 router.get('/naac-report', authorizeRoles('super_admin', 'department_admin', 'staff'), getNaacReport);
+
+// @route   GET /api/tasks/deadline-requests
+// @desc    Get deadline extension requests with status filtering
+// @access  Super Admin, Department Admin
+router.get('/deadline-requests', authorizeRoles('super_admin', 'department_admin'), getDeadlineRequests);
 
 // @route   GET /api/tasks
 // @desc    Get all visible tasks with filtering/pagination

@@ -9,6 +9,7 @@ import {
   UserCheck, 
   Building, 
   BarChart2,
+  CalendarClock,
   Menu,
   X
 } from 'lucide-react';
@@ -18,11 +19,23 @@ import NotificationDropdown from './NotificationDropdown';
 import TopbarBreadcrumbs from './TopbarBreadcrumbs';
 import { useSettings } from '../context/SettingsContext';
 import PortalBrandLogo from './PortalBrandLogo';
+import { api } from '../services/api';
 
 const SuperAdminLayout: React.FC = () => {
   const { currentUser } = useAuth();
   const { systemName } = useSettings();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [pendingDeadlinesCount, setPendingDeadlinesCount] = useState<number>(0);
+
+  useEffect(() => {
+    api.getDeadlineRequests({ status: 'pending', limit: 1 })
+      .then(res => {
+        if (res.success && res.data?.counts?.pending !== undefined) {
+          setPendingDeadlinesCount(res.data.counts.pending);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Background body scroll lock & ESC key listener
   useEffect(() => {
@@ -112,6 +125,25 @@ const SuperAdminLayout: React.FC = () => {
           </NavLink>
           <NavLink to="/super-admin/tasks" className={({ isActive }) => `sa-nav-item ${isActive ? 'active' : ''}`} onClick={() => setIsMobileSidebarOpen(false)}>
             <FileText size={18} /> Tasks
+          </NavLink>
+          <NavLink to="/super-admin/deadline-requests" className={({ isActive }) => `sa-nav-item ${isActive ? 'active' : ''}`} onClick={() => setIsMobileSidebarOpen(false)}>
+            <CalendarClock size={18} style={{ flexShrink: 0 }} />
+            <span style={{ whiteSpace: 'nowrap' }}>Deadline Requests</span>
+            {pendingDeadlinesCount > 0 && (
+              <span style={{
+                marginLeft: 'auto',
+                backgroundColor: '#f59e0b',
+                color: '#ffffff',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                padding: '2px 7px',
+                borderRadius: '12px',
+                lineHeight: 1.2,
+                flexShrink: 0
+              }}>
+                {pendingDeadlinesCount}
+              </span>
+            )}
           </NavLink>
           <NavLink to="/super-admin/team" className={({ isActive }) => `sa-nav-item ${isActive ? 'active' : ''}`} onClick={() => setIsMobileSidebarOpen(false)}>
             <Users size={18} /> Manage Team

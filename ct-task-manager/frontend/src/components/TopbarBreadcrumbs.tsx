@@ -12,6 +12,7 @@ const ROUTE_NAME_MAP: Record<string, string> = {
   // Super Admin
   '/super-admin': 'Dashboard',
   '/super-admin/tasks': 'Task Management',
+  '/super-admin/deadline-requests': 'Deadline Requests',
   '/super-admin/team': 'Team Directory',
   '/super-admin/users': 'User Accounts',
   '/super-admin/staff-manage': 'Staff Assignments',
@@ -23,6 +24,7 @@ const ROUTE_NAME_MAP: Record<string, string> = {
   // Dept Admin
   '/admin': 'Dashboard',
   '/admin/tasks': 'Department Tasks',
+  '/admin/deadline-requests': 'Deadline Requests',
   '/admin/staff': 'Department Staff',
   '/admin/verified-users': 'Verified Users',
   '/admin/profile': 'Profile & Security',

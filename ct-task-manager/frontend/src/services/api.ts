@@ -896,6 +896,24 @@ export const api = {
     });
   },
 
+  getDeadlineRequests: async (params?: { status?: string; search?: string; page?: number; limit?: number }): Promise<{
+    success: boolean;
+    data: {
+      tasks: any[];
+      total: number;
+      page: number;
+      totalPages: number;
+      counts: { pending: number; approved: number; rejected: number; total: number };
+    };
+  }> => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.append('status', params.status);
+    if (params?.search) qs.append('search', params.search);
+    if (params?.page) qs.append('page', String(params.page));
+    if (params?.limit) qs.append('limit', String(params.limit));
+    return fetchWithAuth(`/api/tasks/deadline-requests?${qs.toString()}`);
+  },
+
   assignTask: async (id: string, assignedTo: string | string[] | null, assignmentMode?: 'individual' | 'shared'): Promise<{ success: boolean; message: string; data: any }> => {
     return fetchWithAuth(`/api/tasks/${id}/assign`, {
       method: 'PATCH',

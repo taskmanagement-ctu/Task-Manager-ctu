@@ -1,6 +1,12 @@
 import { Request, Response } from 'express';
 import Department from '../models/Department';
-import User from '../models/User';
+import User, { PRIMARY_SUPER_ADMIN_ID } from '../models/User';
+import Notification from '../models/Notification';
+import {
+  sendDepartmentPermissionGrantedEmail,
+  sendDepartmentPermissionRevokedEmail,
+  sendDepartmentPermissionUpdatedEmail,
+} from '../services/emailService';
 import {
   normalizeDepartmentName,
   areDepartmentsEqual,
@@ -190,11 +196,120 @@ export const updateDepartmentPermissions = async (req: Request, res: Response) =
       return res.status(404).json({ success: false, message: 'Department not found' });
     }
 
+    // Capture previous state
+    const prevAccess = department.verifiedUserAccess || 'none';
+    const prevCanAdd = department.canAddVerifiedUsers ?? true;
+    const prevCanUpload = department.canUploadVerifiedUsers ?? true;
+
+    // Apply updates
     if (verifiedUserAccess !== undefined) department.verifiedUserAccess = verifiedUserAccess;
     if (canAddVerifiedUsers !== undefined) department.canAddVerifiedUsers = Boolean(canAddVerifiedUsers);
     if (canUploadVerifiedUsers !== undefined) department.canUploadVerifiedUsers = Boolean(canUploadVerifiedUsers);
 
     await department.save();
+
+    const newAccess = department.verifiedUserAccess || 'none';
+    const newCanAdd = department.canAddVerifiedUsers ?? true;
+    const newCanUpload = department.canUploadVerifiedUsers ?? true;
+
+    // Determine what changed
+    const accessChanged = prevAccess !== newAccess;
+    const addChanged = prevCanAdd !== newCanAdd;
+    const uploadChanged = prevCanUpload !== newCanUpload;
+
+    const wasRevoked = prevAccess !== 'none' && newAccess === 'none';
+    const wasGranted = prevAccess === 'none' && newAccess !== 'none';
+    const wasUpdated = prevAccess !== 'none' && newAccess !== 'none' && (addChanged || uploadChanged);
+
+    if (wasRevoked || wasGranted || wasUpdated) {
+      try {
+        // Find all department admins of this department
+        const allAdmins = await User.find({
+          role: 'department_admin',
+          isActive: true,
+        });
+
+        const targetAdmins = allAdmins.filter(admin => 
+          (admin.department && areDepartmentsEqual(admin.department, department.name)) ||
+          (admin.baseDepartment && areDepartmentsEqual(admin.baseDepartment, department.name))
+        );
+
+        const operator = (req as any).user;
+        const operatorDisplayName =
+          operator?.name ||
+          (operator?.universityId === PRIMARY_SUPER_ADMIN_ID
+            ? 'Primary Super Admin (10001)'
+            : 'Super Admin');
+
+        for (const admin of targetAdmins) {
+          // Send In-App Notification
+          try {
+            let notifTitle = '';
+            let notifMessage = '';
+
+            if (wasGranted) {
+              notifTitle = 'Staff Directory Access Granted';
+              notifMessage = `Your department (${department.name}) has been granted Staff Directory access by ${operatorDisplayName}.`;
+            } else if (wasRevoked) {
+              notifTitle = 'Staff Directory Access Revoked';
+              notifMessage = `Staff Directory access for your department (${department.name}) has been revoked by ${operatorDisplayName}.`;
+            } else if (wasUpdated) {
+              notifTitle = 'Staff Directory Privileges Updated';
+              notifMessage = `Privileges for Staff Directory in your department (${department.name}) have been updated by ${operatorDisplayName}.`;
+            }
+
+            if (notifTitle) {
+              await Notification.create({
+                recipient: admin._id,
+                type: 'task_updated',
+                title: notifTitle,
+                message: notifMessage,
+                triggeredBy: operator?._id || null,
+              });
+            }
+          } catch (notifErr) {
+            console.error(`Error creating notification for dept admin ${admin._id}:`, notifErr);
+          }
+
+          // Send Email Notification
+          try {
+            if (wasGranted) {
+              sendDepartmentPermissionGrantedEmail({
+                toEmail: admin.email,
+                recipientName: admin.name,
+                universityId: admin.universityId,
+                departmentName: department.name,
+                canAdd: newCanAdd,
+                canUpload: newCanUpload,
+                updatedByName: operatorDisplayName,
+              }).catch(err => console.error(`Error sending dept permission granted email to ${admin.email}:`, err));
+            } else if (wasRevoked) {
+              sendDepartmentPermissionRevokedEmail({
+                toEmail: admin.email,
+                recipientName: admin.name,
+                universityId: admin.universityId,
+                departmentName: department.name,
+                updatedByName: operatorDisplayName,
+              }).catch(err => console.error(`Error sending dept permission revoked email to ${admin.email}:`, err));
+            } else if (wasUpdated) {
+              sendDepartmentPermissionUpdatedEmail({
+                toEmail: admin.email,
+                recipientName: admin.name,
+                universityId: admin.universityId,
+                departmentName: department.name,
+                canAdd: newCanAdd,
+                canUpload: newCanUpload,
+                updatedByName: operatorDisplayName,
+              }).catch(err => console.error(`Error sending dept permission updated email to ${admin.email}:`, err));
+            }
+          } catch (emailErr) {
+            console.error(`Error dispatching email to dept admin ${admin.email}:`, emailErr);
+          }
+        }
+      } catch (postUpdateErr) {
+        console.error('Error dispatching department permission notifications/emails:', postUpdateErr);
+      }
+    }
 
     return res.status(200).json({
       success: true,

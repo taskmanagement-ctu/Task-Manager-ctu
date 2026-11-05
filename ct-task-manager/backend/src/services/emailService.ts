@@ -1370,3 +1370,379 @@ export const sendCrossDeptTaskPermissionRevokedEmail = async (
     console.error(`Failed to send cross-department task permission revoked email to ${toEmail}:`, error);
   }
 };
+
+/**
+ * Send Department Staff Directory Permission Granted Email
+ */
+export const sendDepartmentPermissionGrantedEmail = async ({
+  toEmail,
+  recipientName,
+  universityId,
+  departmentName,
+  canAdd,
+  canUpload,
+  updatedByName,
+}: {
+  toEmail: string;
+  recipientName: string;
+  universityId: string;
+  departmentName: string;
+  canAdd: boolean;
+  canUpload: boolean;
+  updatedByName?: string;
+}) => {
+  if (!toEmail) {
+    console.warn('sendDepartmentPermissionGrantedEmail: No recipient email provided.');
+    return;
+  }
+
+  const subject = `Staff Directory Access & Permissions Granted 📁 - CT University TaskDesk`;
+  const appUrl = process.env.FRONTEND_URL || 'https://taskdesk.ctuniversity.in';
+  const directoryUrl = `${appUrl}/verified-users`;
+  const deptDisplay = departmentName || 'Assigned Department';
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <title>Staff Directory Access Granted - CT University TaskDesk</title>
+      <style>
+        body { margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; }
+        .wrapper { max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 14px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08); }
+        .header { background: #0f172a; padding: 28px 24px; text-align: center; }
+        .header h1 { margin: 0; font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.02em; }
+        .header p { margin: 6px 0 0; font-size: 11px; font-weight: 600; color: #10b981; text-transform: uppercase; letter-spacing: 0.08em; }
+        .body { padding: 32px 28px; }
+        .badge { display: inline-block; background-color: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; font-size: 12px; font-weight: 800; padding: 6px 14px; border-radius: 20px; letter-spacing: 0.04em; margin-bottom: 16px; }
+        .greeting { font-size: 17px; font-weight: 700; color: #0f172a; margin-bottom: 12px; }
+        .desc { font-size: 14px; line-height: 1.6; color: #475569; margin-bottom: 20px; }
+        .info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0; }
+        .info-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
+        .info-label { color: #64748b; font-weight: 500; }
+        .info-value { color: #0f172a; font-weight: 700; text-align: right; }
+        .privileges-card { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 16px; margin: 20px 0; }
+        .privileges-title { font-size: 13px; font-weight: 700; color: #166534; margin-bottom: 8px; }
+        .privileges-list { margin: 0; padding-left: 20px; font-size: 13px; color: #15803d; line-height: 1.6; }
+        .cta-container { text-align: center; margin: 28px 0 12px; }
+        .cta-btn { display: inline-block; background-color: #10b981; color: #ffffff !important; text-decoration: none; font-size: 14px; font-weight: 700; padding: 12px 28px; border-radius: 8px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25); }
+        .footer { background: #f8fafc; padding: 18px 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
+      </style>
+    </head>
+    <body>
+      <div class="wrapper">
+        <div class="header">
+          <h1>CT University TaskDesk</h1>
+          <p>Institutional Task &amp; Administration</p>
+        </div>
+        <div class="body">
+          <div class="badge">📁 STAFF DIRECTORY ACCESS GRANTED</div>
+          <div class="greeting">Hello ${recipientName || 'Colleague'}!</div>
+          <div class="desc">
+            We are pleased to inform you that your department (<strong>${deptDisplay}</strong>) has been granted <strong>Staff Directory Access &amp; Management Privileges</strong> on CT University TaskDesk by <strong>${updatedByName || 'Super Admin'}</strong>.
+          </div>
+          <div class="info-card">
+            <div class="info-row">
+              <span class="info-label">University ID:</span>
+              <span class="info-value">${universityId}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Department:</span>
+              <span class="info-value">${deptDisplay}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Directory Access:</span>
+              <span class="info-value" style="color: #15803d;">Staff Directory Active</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Direct Info Addition:</span>
+              <span class="info-value" style="color: ${canAdd ? '#15803d' : '#94a3b8'};">${canAdd ? '✅ Allowed' : '❌ Restricted'}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Bulk Excel / CSV Upload:</span>
+              <span class="info-value" style="color: ${canUpload ? '#15803d' : '#94a3b8'};">${canUpload ? '✅ Allowed' : '❌ Restricted'}</span>
+            </div>
+            ${
+              updatedByName
+                ? `<div class="info-row" style="margin-bottom: 0;">
+                     <span class="info-label">Authorized By:</span>
+                     <span class="info-value">${updatedByName}</span>
+                   </div>`
+                : ''
+            }
+          </div>
+          <div class="privileges-card">
+            <div class="privileges-title">✨ What You Can Do Now:</div>
+            <ul class="privileges-list">
+              <li>View and search verified faculty and staff records for <strong>${deptDisplay}</strong></li>
+              <li>${canAdd ? 'Add new staff member records directly through the directory dashboard' : 'Direct manual addition is restricted by administrator policy'}</li>
+              <li>${canUpload ? 'Bulk import and update department staff rosters via Excel / CSV spreadsheets' : 'Bulk spreadsheet uploading is restricted by administrator policy'}</li>
+              <li>Ensure verified staff profiles match for task delegation and tracking</li>
+            </ul>
+          </div>
+          <div class="desc">
+            Your privileges are active immediately. You can now access the Staff Directory in your TaskDesk side navigation.
+          </div>
+          <div class="cta-container">
+            <a href="${directoryUrl}" class="cta-btn">Access Staff Directory &rarr;</a>
+          </div>
+        </div>
+        <div class="footer">
+          &copy; ${new Date().getFullYear()} CT University • TaskDesk Institutional Access
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    return await transporter.sendMail({
+      from: `"CT University TaskDesk" <${process.env.EMAIL_USER || 'taskmanagement@ctuniversity.in'}>`,
+      to: toEmail,
+      subject,
+      html,
+    });
+  } catch (error) {
+    console.error(`Failed to send department permission granted email to ${toEmail}:`, error);
+  }
+};
+
+/**
+ * Send Department Staff Directory Permission Revoked Email
+ */
+export const sendDepartmentPermissionRevokedEmail = async ({
+  toEmail,
+  recipientName,
+  universityId,
+  departmentName,
+  updatedByName,
+}: {
+  toEmail: string;
+  recipientName: string;
+  universityId: string;
+  departmentName: string;
+  updatedByName?: string;
+}) => {
+  if (!toEmail) {
+    console.warn('sendDepartmentPermissionRevokedEmail: No recipient email provided.');
+    return;
+  }
+
+  const subject = `Update: Staff Directory Access Revoked - CT University TaskDesk`;
+  const appUrl = process.env.FRONTEND_URL || 'https://taskdesk.ctuniversity.in';
+  const dashboardUrl = `${appUrl}/dashboard`;
+  const deptDisplay = departmentName || 'Assigned Department';
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <title>Staff Directory Access Revoked - CT University TaskDesk</title>
+      <style>
+        body { margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; }
+        .wrapper { max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 14px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08); }
+        .header { background: #0f172a; padding: 28px 24px; text-align: center; }
+        .header h1 { margin: 0; font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.02em; }
+        .header p { margin: 6px 0 0; font-size: 11px; font-weight: 600; color: #ef4444; text-transform: uppercase; letter-spacing: 0.08em; }
+        .body { padding: 32px 28px; }
+        .badge { display: inline-block; background-color: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; font-size: 12px; font-weight: 800; padding: 6px 14px; border-radius: 20px; letter-spacing: 0.04em; margin-bottom: 16px; }
+        .greeting { font-size: 17px; font-weight: 700; color: #0f172a; margin-bottom: 12px; }
+        .desc { font-size: 14px; line-height: 1.6; color: #475569; margin-bottom: 20px; }
+        .info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0; }
+        .info-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
+        .info-label { color: #64748b; font-weight: 500; }
+        .info-value { color: #0f172a; font-weight: 700; text-align: right; }
+        .notice-card { background: #fff1f2; border-left: 4px solid #ef4444; border-radius: 4px; padding: 14px 16px; margin: 20px 0; font-size: 13px; color: #881337; line-height: 1.5; }
+        .cta-container { text-align: center; margin: 28px 0 12px; }
+        .cta-btn { display: inline-block; background-color: #2563eb; color: #ffffff !important; text-decoration: none; font-size: 14px; font-weight: 700; padding: 12px 28px; border-radius: 8px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25); }
+        .footer { background: #f8fafc; padding: 18px 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
+      </style>
+    </head>
+    <body>
+      <div class="wrapper">
+        <div class="header">
+          <h1>CT University TaskDesk</h1>
+          <p>Institutional Task &amp; Administration</p>
+        </div>
+        <div class="body">
+          <div class="badge">⚠️ PERMISSION REVOKED</div>
+          <div class="greeting">Hello ${recipientName || 'Colleague'},</div>
+          <div class="desc">
+            This is an official notification to inform you that <strong>Staff Directory Access</strong> for your department (<strong>${deptDisplay}</strong>) has been revoked on CT University TaskDesk by <strong>${updatedByName || 'Super Admin'}</strong>.
+          </div>
+          <div class="info-card">
+            <div class="info-row">
+              <span class="info-label">University ID:</span>
+              <span class="info-value">${universityId}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Department:</span>
+              <span class="info-value">${deptDisplay}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Directory Access:</span>
+              <span class="info-value" style="color: #dc2626;">Revoked / Disabled</span>
+            </div>
+            ${
+              updatedByName
+                ? `<div class="info-row" style="margin-bottom: 0;">
+                     <span class="info-label">Updated By:</span>
+                     <span class="info-value">${updatedByName}</span>
+                   </div>`
+                : ''
+            }
+          </div>
+          <div class="notice-card">
+            <strong>Access Notice:</strong> You will no longer be able to access, view, or manage verified staff rosters for this department in the directory. Your existing departmental task management, assignment, and review permissions remain fully unaffected.
+          </div>
+          <div class="desc">
+            You continue to have full access to manage and review tasks within your department on TaskDesk.
+          </div>
+          <div class="cta-container">
+            <a href="${dashboardUrl}" class="cta-btn">Access TaskDesk Dashboard &rarr;</a>
+          </div>
+        </div>
+        <div class="footer">
+          &copy; ${new Date().getFullYear()} CT University • TaskDesk Institutional Access
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    return await transporter.sendMail({
+      from: `"CT University TaskDesk" <${process.env.EMAIL_USER || 'taskmanagement@ctuniversity.in'}>`,
+      to: toEmail,
+      subject,
+      html,
+    });
+  } catch (error) {
+    console.error(`Failed to send department permission revoked email to ${toEmail}:`, error);
+  }
+};
+
+/**
+ * Send Department Staff Directory Privileges Updated Email
+ */
+export const sendDepartmentPermissionUpdatedEmail = async ({
+  toEmail,
+  recipientName,
+  universityId,
+  departmentName,
+  canAdd,
+  canUpload,
+  updatedByName,
+}: {
+  toEmail: string;
+  recipientName: string;
+  universityId: string;
+  departmentName: string;
+  canAdd: boolean;
+  canUpload: boolean;
+  updatedByName?: string;
+}) => {
+  if (!toEmail) {
+    console.warn('sendDepartmentPermissionUpdatedEmail: No recipient email provided.');
+    return;
+  }
+
+  const subject = `Update: Staff Directory Privileges Modified - CT University TaskDesk`;
+  const appUrl = process.env.FRONTEND_URL || 'https://taskdesk.ctuniversity.in';
+  const directoryUrl = `${appUrl}/verified-users`;
+  const deptDisplay = departmentName || 'Assigned Department';
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <title>Staff Directory Privileges Modified - CT University TaskDesk</title>
+      <style>
+        body { margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; }
+        .wrapper { max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 14px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08); }
+        .header { background: #0f172a; padding: 28px 24px; text-align: center; }
+        .header h1 { margin: 0; font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.02em; }
+        .header p { margin: 6px 0 0; font-size: 11px; font-weight: 600; color: #3b82f6; text-transform: uppercase; letter-spacing: 0.08em; }
+        .body { padding: 32px 28px; }
+        .badge { display: inline-block; background-color: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; font-size: 12px; font-weight: 800; padding: 6px 14px; border-radius: 20px; letter-spacing: 0.04em; margin-bottom: 16px; }
+        .greeting { font-size: 17px; font-weight: 700; color: #0f172a; margin-bottom: 12px; }
+        .desc { font-size: 14px; line-height: 1.6; color: #475569; margin-bottom: 20px; }
+        .info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0; }
+        .info-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
+        .info-label { color: #64748b; font-weight: 500; }
+        .info-value { color: #0f172a; font-weight: 700; text-align: right; }
+        .cta-container { text-align: center; margin: 28px 0 12px; }
+        .cta-btn { display: inline-block; background-color: #2563eb; color: #ffffff !important; text-decoration: none; font-size: 14px; font-weight: 700; padding: 12px 28px; border-radius: 8px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25); }
+        .footer { background: #f8fafc; padding: 18px 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
+      </style>
+    </head>
+    <body>
+      <div class="wrapper">
+        <div class="header">
+          <h1>CT University TaskDesk</h1>
+          <p>Institutional Task &amp; Administration</p>
+        </div>
+        <div class="body">
+          <div class="badge">ℹ️ PRIVILEGES MODIFIED</div>
+          <div class="greeting">Hello ${recipientName || 'Colleague'}!</div>
+          <div class="desc">
+            This is an official notification to inform you that your department's (<strong>${deptDisplay}</strong>) <strong>Staff Directory Privileges</strong> on CT University TaskDesk have been updated by <strong>${updatedByName || 'Super Admin'}</strong>.
+          </div>
+          <div class="info-card">
+            <div class="info-row">
+              <span class="info-label">University ID:</span>
+              <span class="info-value">${universityId}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Department:</span>
+              <span class="info-value">${deptDisplay}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Directory Access:</span>
+              <span class="info-value" style="color: #15803d;">Staff Directory Active</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Direct Info Addition:</span>
+              <span class="info-value" style="color: ${canAdd ? '#15803d' : '#94a3b8'};">${canAdd ? '✅ Allowed' : '❌ Restricted'}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Bulk Excel / CSV Upload:</span>
+              <span class="info-value" style="color: ${canUpload ? '#15803d' : '#94a3b8'};">${canUpload ? '✅ Allowed' : '❌ Restricted'}</span>
+            </div>
+            ${
+              updatedByName
+                ? `<div class="info-row" style="margin-bottom: 0;">
+                     <span class="info-label">Updated By:</span>
+                     <span class="info-value">${updatedByName}</span>
+                   </div>`
+                : ''
+            }
+          </div>
+          <div class="desc">
+            These changes take effect immediately in your TaskDesk Staff Directory dashboard.
+          </div>
+          <div class="cta-container">
+            <a href="${directoryUrl}" class="cta-btn">Access Staff Directory &rarr;</a>
+          </div>
+        </div>
+        <div class="footer">
+          &copy; ${new Date().getFullYear()} CT University • TaskDesk Institutional Access
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    return await transporter.sendMail({
+      from: `"CT University TaskDesk" <${process.env.EMAIL_USER || 'taskmanagement@ctuniversity.in'}>`,
+      to: toEmail,
+      subject,
+      html,
+    });
+  } catch (error) {
+    console.error(`Failed to send department permission updated email to ${toEmail}:`, error);
+  }
+};

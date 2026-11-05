@@ -6,6 +6,7 @@ import {
   Users, 
   Menu, 
   ShieldCheck,
+  CalendarClock,
   X
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -22,6 +23,7 @@ const DeptAdminLayout: React.FC = () => {
   const { systemName } = useSettings();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [canAccessVerified, setCanAccessVerified] = useState(false);
+  const [pendingDeadlinesCount, setPendingDeadlinesCount] = useState<number>(0);
 
   // Background body scroll lock & ESC key listener
   useEffect(() => {
@@ -75,11 +77,25 @@ const DeptAdminLayout: React.FC = () => {
       .catch(err => {
         console.error('Failed to check verified user access', err);
       });
+
+    api.getDeadlineRequests({ status: 'pending', limit: 1 })
+      .then(res => {
+        if (res.success && res.data?.counts?.pending !== undefined) {
+          setPendingDeadlinesCount(res.data.counts.pending);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const navLinks = [
     { to: "/admin", icon: <LayoutDashboard size={20} />, label: "Dashboard", end: true },
     { to: "/admin/tasks", icon: <CheckSquare size={20} />, label: "Tasks" },
+    { 
+      to: "/admin/deadline-requests", 
+      icon: <CalendarClock size={20} />, 
+      label: "Deadline Requests",
+      badge: pendingDeadlinesCount > 0 ? pendingDeadlinesCount : undefined
+    },
     { to: "/admin/staff", icon: <Users size={20} />, label: "My Team" },
     ...(canAccessVerified ? [{ to: "/admin/verified-users", icon: <ShieldCheck size={20} />, label: "Verified Users" }] : []),
   ];
@@ -130,8 +146,23 @@ const DeptAdminLayout: React.FC = () => {
                 className={({ isActive }) => `dept-nav-item ${isActive ? 'active' : ''}`}
                 onClick={() => setSidebarOpen(false)}
               >
-                {link.icon}
-                {link.label}
+                <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>{link.icon}</span>
+                <span style={{ whiteSpace: 'nowrap' }}>{link.label}</span>
+                {link.badge !== undefined && (
+                  <span style={{
+                    marginLeft: 'auto',
+                    backgroundColor: '#f59e0b',
+                    color: '#ffffff',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    padding: '2px 7px',
+                    borderRadius: '12px',
+                    lineHeight: 1.2,
+                    flexShrink: 0
+                  }}>
+                    {link.badge}
+                  </span>
+                )}
               </NavLink>
             ))}
           </nav>

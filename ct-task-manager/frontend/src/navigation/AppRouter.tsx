@@ -13,6 +13,7 @@ import SuperAdminDepartmentsPage from '../pages/SuperAdminDepartmentsPage';
 import SuperAdminTeamPage from '../pages/SuperAdminTeamPage';
 import DeptAdminStaffPage from '../pages/DeptAdminStaffPage';
 import TasksPage from '../pages/TasksPage';
+import DeadlineRequestsPage from '../pages/DeadlineRequestsPage';
 import NaacDashboardPage from '../pages/NaacDashboardPage';
 import ProfilePage from '../pages/ProfilePage';
 import { AuthProvider, useAuth } from '../context/AuthContext';
@@ -72,6 +73,7 @@ const AppRouter = () => {
               <Route path="team" element={<SuperAdminTeamPage />} />
               <Route path="staff-manage" element={<SuperAdminStaffAssignmentsPage />} />
               <Route path="tasks" element={<TasksPage />} />
+              <Route path="deadline-requests" element={<DeadlineRequestsPage />} />
               <Route path="departments" element={<SuperAdminDepartmentsPage />} />
               <Route path="naac" element={<NaacDashboardPage />} />
               <Route path="profile" element={<ProfilePage />} />
@@ -89,6 +91,7 @@ const AppRouter = () => {
               <Route index element={<AdminPage />} />
               <Route path="staff" element={<DeptAdminStaffPage />} />
               <Route path="tasks" element={<TasksPage />} />
+              <Route path="deadline-requests" element={<DeadlineRequestsPage />} />
               <Route path="verified-users" element={<VerifiedUsersPage />} />
               <Route path="profile" element={<ProfilePage />} />
               <Route path="notifications" element={<Navigate to="/admin/tasks" replace />} />
@@ -97,6 +100,7 @@ const AppRouter = () => {
             {/* Aliases for /dept-admin */}
             <Route path="/dept-admin" element={<Navigate to="/admin" replace />} />
             <Route path="/dept-admin/tasks" element={<Navigate to="/admin/tasks" replace />} />
+            <Route path="/dept-admin/deadline-requests" element={<Navigate to="/admin/deadline-requests" replace />} />
             <Route path="/dept-admin/staff" element={<Navigate to="/admin/staff" replace />} />
             <Route path="/dept-admin/verified-users" element={<Navigate to="/admin/verified-users" replace />} />
             <Route path="/dept-admin/profile" element={<Navigate to="/admin/profile" replace />} />

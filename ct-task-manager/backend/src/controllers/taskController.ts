@@ -2814,6 +2814,134 @@ export const reviewDeadlineExtension = async (req: Request, res: Response) => {
   }
 };
 
+// GET /api/tasks/deadline-requests
+export const getDeadlineRequests = async (req: Request, res: Response) => {
+  try {
+    const user = req.user;
+    const { status, search, page = 1, limit = 20 } = req.query;
+
+    if (!user || !['super_admin', 'department_admin'].includes(user.role)) {
+      return res.status(403).json({ success: false, message: 'Forbidden. Admin access required.' });
+    }
+
+    const baseCondition: any = {
+      extensionRequest: { $ne: null }
+    };
+
+    // Role-based filtering
+    let roleOrCond: any[] | null = null;
+    if (user.role === 'department_admin') {
+      const myStaffAssignments = await StaffAssignment.find({ adminId: user._id, isActive: true });
+      const myStaffIds = myStaffAssignments.map((a: any) => a.staffId);
+
+      roleOrCond = [
+        { createdBy: user._id },
+        { assignedTo: user._id },
+        { delegatedTo: user._id },
+        { coAssignees: user._id },
+        { assignedTo: { $in: myStaffIds } },
+        { delegatedTo: { $in: myStaffIds } },
+        { coAssignees: { $in: myStaffIds } },
+        { 'extensionRequest.stage': 'department_admin' },
+        { 'extensionRequest.requestedBy': { $in: myStaffIds } }
+      ];
+    }
+
+    // Status filter
+    const statusFilter = (status as string) || 'all';
+    let statusCond: any = null;
+    if (statusFilter === 'pending') {
+      statusCond = { 'extensionRequest.status': { $in: ['pending', 'endorsed'] } };
+    } else if (statusFilter === 'approved') {
+      statusCond = { 'extensionRequest.status': 'approved' };
+    } else if (statusFilter === 'rejected') {
+      statusCond = { 'extensionRequest.status': 'rejected' };
+    }
+
+    // Search filter
+    let searchCond: any = null;
+    if (search && String(search).trim()) {
+      const searchRegex = new RegExp(String(search).trim(), 'i');
+      const matchingUsers = await User.find({ name: searchRegex }).select('_id');
+      const matchingUserIds = matchingUsers.map((u: any) => u._id);
+
+      searchCond = {
+        $or: [
+          { title: searchRegex },
+          { taskId: searchRegex },
+          { 'extensionRequest.reason': searchRegex },
+          ...(matchingUserIds.length > 0
+            ? [{ 'extensionRequest.requestedBy': { $in: matchingUserIds } }, { assignedTo: { $in: matchingUserIds } }]
+            : [])
+        ]
+      };
+    }
+
+    // Compose query
+    const andClauses: any[] = [baseCondition];
+    if (roleOrCond) andClauses.push({ $or: roleOrCond });
+    if (statusCond) andClauses.push(statusCond);
+    if (searchCond) andClauses.push(searchCond);
+
+    const query = andClauses.length === 1 ? baseCondition : { $and: andClauses };
+
+    const pageNum = Math.max(1, parseInt(page as string) || 1);
+    const limitNum = Math.max(1, parseInt(limit as string) || 20);
+
+    const total = await Task.countDocuments(query);
+    const tasks = await Task.find(query)
+      .populate('createdBy', 'name role department email universityId')
+      .populate('assignedTo', 'name role department email universityId')
+      .populate('delegatedTo', 'name role department email universityId')
+      .populate('coAssignees', 'name role department email universityId')
+      .populate('extensionRequest.requestedBy', 'name role department email universityId')
+      .populate('extensionRequest.deptAdminActionBy', 'name role department email universityId')
+      .populate('extensionRequest.decidedBy', 'name role department email universityId')
+      .populate('deadlineHistory.changedBy', 'name role department universityId email')
+      .sort({ 'extensionRequest.createdAt': -1, updatedAt: -1 })
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum);
+
+    // Compute status counts for tabs
+    const countsBaseAnd: any[] = [baseCondition];
+    if (roleOrCond) countsBaseAnd.push({ $or: roleOrCond });
+    if (searchCond) countsBaseAnd.push(searchCond);
+    const countsBaseQuery = countsBaseAnd.length === 1 ? baseCondition : { $and: countsBaseAnd };
+
+    const [pendingCount, approvedCount, rejectedCount, totalCount] = await Promise.all([
+      Task.countDocuments({
+        $and: [...countsBaseAnd, { 'extensionRequest.status': { $in: ['pending', 'endorsed'] } }]
+      }),
+      Task.countDocuments({
+        $and: [...countsBaseAnd, { 'extensionRequest.status': 'approved' }]
+      }),
+      Task.countDocuments({
+        $and: [...countsBaseAnd, { 'extensionRequest.status': 'rejected' }]
+      }),
+      Task.countDocuments(countsBaseQuery)
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        tasks,
+        total,
+        page: pageNum,
+        totalPages: Math.ceil(total / limitNum),
+        counts: {
+          pending: pendingCount,
+          approved: approvedCount,
+          rejected: rejectedCount,
+          total: totalCount
+        }
+      }
+    });
+  } catch (error: any) {
+    console.error('Error fetching deadline requests:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Server Error' });
+  }
+};
+
 // PATCH /api/tasks/:id/extend-deadline
 export const directExtendDeadline = async (req: Request, res: Response) => {
   try {
