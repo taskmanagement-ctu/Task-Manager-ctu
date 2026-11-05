@@ -67,7 +67,7 @@ export const TopbarBreadcrumbs: React.FC<TopbarBreadcrumbsProps> = ({
       {/* Active Page Title (Visible on both Desktop and Mobile) */}
       <div className="tbc-page-title-box">
         <h1 className="tbc-page-title">{pageTitle}</h1>
-        {departmentName && (
+        {departmentName && pageTitle !== 'Verified Users' && (
           <span className="tbc-dept-sub">({departmentName})</span>
         )}
       </div>

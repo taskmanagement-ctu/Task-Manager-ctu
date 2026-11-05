@@ -88,7 +88,7 @@ export const importFile = async (req: Request, res: Response): Promise<void> => 
         });
         return;
       }
-      departmentOverride = perms.department || undefined;
+      departmentOverride = undefined;
       if (perms.access === 'staff') defaultUserType = 'staff';
       if (perms.access === 'student') defaultUserType = 'student';
     }
@@ -180,7 +180,7 @@ export const createVerifiedUser = async (req: Request, res: Response): Promise<v
         });
         return;
       }
-      finalDepartment = perms.department;
+      finalDepartment = finalDepartment || perms.department;
       if (perms.access === 'staff' && finalUserType !== 'staff') {
         res.status(403).json({
           success: false,
@@ -257,10 +257,10 @@ export const updateVerifiedUser = async (req: Request, res: Response): Promise<v
 
     if (user.role === 'department_admin') {
       const perms = await getDeptAdminPermissions(user);
-      if (!perms.allowed || target.department !== perms.department) {
+      if (!perms.allowed) {
         res.status(403).json({
           success: false,
-          message: 'Forbidden. You cannot edit verified users outside your department.',
+          message: 'Forbidden. Your department does not have permission to edit verified users.',
         });
         return;
       }
@@ -318,10 +318,7 @@ export const updateVerifiedUser = async (req: Request, res: Response): Promise<v
 
     // Handle department
     let finalDepartment = target.department;
-    if (user.role === 'department_admin') {
-      const perms = await getDeptAdminPermissions(user);
-      finalDepartment = perms.department;
-    } else if (department !== undefined) {
+    if (department !== undefined) {
       finalDepartment = department ? String(department).trim() : null;
       if (finalDepartment) {
         const allDepts = await Department.find({});
@@ -402,10 +399,10 @@ export const deleteVerifiedUser = async (req: Request, res: Response): Promise<v
 
     if (user.role === 'department_admin') {
       const perms = await getDeptAdminPermissions(user);
-      if (!perms.allowed || target.department !== perms.department) {
+      if (!perms.allowed) {
         res.status(403).json({
           success: false,
-          message: 'Forbidden. You cannot delete verified users outside your department.',
+          message: 'Forbidden. Your department does not have permission to delete verified users.',
         });
         return;
       }
@@ -445,20 +442,6 @@ export const bulkDeleteVerifiedUsers = async (req: Request, res: Response): Prom
         res.status(403).json({
           success: false,
           message: 'Forbidden. You do not have permission to delete verified users.',
-        });
-        return;
-      }
-
-      // Check if any selected user belongs to a different department
-      const nonDeptCount = await VerifiedUser.countDocuments({
-        _id: { $in: validIds },
-        department: { $ne: perms.department },
-      });
-
-      if (nonDeptCount > 0) {
-        res.status(403).json({
-          success: false,
-          message: 'Forbidden. Some selected users are outside your department.',
         });
         return;
       }
@@ -525,7 +508,19 @@ export const getVerifiedUsers = async (req: Request, res: Response): Promise<voi
         });
         return;
       }
-      filter.department = perms.department;
+
+      // Allow department filtering across all departments
+      if (departmentQuery && departmentQuery !== 'All') {
+        const allDepts = await Department.find({});
+        const matched = findMatchingDepartment(allDepts, departmentQuery);
+        if (matched) {
+          filter.department = matched.name;
+        } else {
+          const norm = normalizeDepartmentName(departmentQuery);
+          filter.department = { $regex: new RegExp(norm.replace(/\s+/g, '.*'), 'i') };
+        }
+      }
+
       if (perms.access === 'staff') {
         filter.userType = { $in: ['staff', null, undefined] };
       } else if (perms.access === 'student') {
@@ -620,7 +615,6 @@ export const getStats = async (req: Request, res: Response): Promise<void> => {
         res.status(403).json({ success: false, message: 'Forbidden' });
         return;
       }
-      filter.department = perms.department;
       if (perms.access === 'staff') filter.userType = { $in: ['staff', null, undefined] };
       if (perms.access === 'student') filter.userType = 'student';
     }

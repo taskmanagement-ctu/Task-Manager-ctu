@@ -174,9 +174,7 @@ const VerifiedUsersPage = () => {
         if (selectedUsers.length === selectedIds.length) {
           exportData = selectedUsers;
         } else {
-          const deptParam = isDeptAdmin
-            ? currentUser?.department || undefined
-            : (departmentFilter !== 'All' ? departmentFilter : undefined);
+          const deptParam = departmentFilter !== 'All' ? departmentFilter : undefined;
           const fullRes = await api.getVerifiedUsers({
             export: true,
             limit: 10000,
@@ -189,9 +187,7 @@ const VerifiedUsersPage = () => {
           exportData = fullRes.data.users.filter((u) => selectedIds.includes(u._id));
         }
       } else {
-        const deptParam = isDeptAdmin
-          ? currentUser?.department || undefined
-          : (departmentFilter !== 'All' ? departmentFilter : undefined);
+        const deptParam = departmentFilter !== 'All' ? departmentFilter : undefined;
         const fullRes = await api.getVerifiedUsers({
           export: true,
           limit: 10000,
@@ -210,7 +206,7 @@ const VerifiedUsersPage = () => {
       }
 
       const filterInfo = {
-        department: isDeptAdmin ? (currentUser?.department || undefined) : departmentFilter,
+        department: departmentFilter !== 'All' ? departmentFilter : undefined,
         status: statusFilter,
         search,
       };
@@ -269,9 +265,7 @@ const VerifiedUsersPage = () => {
   const fetchUsers = useCallback(async (page = 1) => {
     setLoading(true);
     try {
-      const deptParam = isDeptAdmin
-        ? currentUser?.department || undefined
-        : (departmentFilter !== 'All' ? departmentFilter : undefined);
+      const deptParam = departmentFilter !== 'All' ? departmentFilter : undefined;
 
       const result = await api.getVerifiedUsers({
         page,
@@ -290,7 +284,7 @@ const VerifiedUsersPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, departmentFilter, categoryFilter, sortBy, sortOrder, isDeptAdmin, currentUser]);
+  }, [search, statusFilter, departmentFilter, categoryFilter, sortBy, sortOrder]);
 
   // ─── Fetch Stats ────────────────────────────────────
   const fetchStats = useCallback(async () => {
@@ -403,9 +397,7 @@ const VerifiedUsersPage = () => {
       setInlineError('');
       return;
     }
-    const defaultDept = isDeptAdmin 
-      ? (currentUser?.department || '') 
-      : (departments[0]?.name || '');
+    const defaultDept = inlineForm.department || currentUser?.department || departments[0]?.name || '';
 
     setInlineForm({
       universityId: '',
@@ -467,7 +459,7 @@ const VerifiedUsersPage = () => {
       }
     }
 
-    const dept = isDeptAdmin ? currentUser?.department : (inlineForm.department || departments[0]?.name);
+    const dept = inlineForm.department || currentUser?.department || departments[0]?.name;
     if (!dept) {
       setInlineError('Please select a valid department.');
       return;
@@ -643,7 +635,7 @@ const VerifiedUsersPage = () => {
         name: editForm.name.trim(),
         email: editForm.email.trim(),
         phone: finalPhone,
-        department: isDeptAdmin ? currentUser?.department : (editForm.department.trim() || null),
+        department: editForm.department.trim() || null,
         designation: editForm.designation.trim() || null,
         category: editForm.category.trim() || null,
         userType: editForm.userType,
@@ -687,12 +679,10 @@ const VerifiedUsersPage = () => {
       <div className="vu-header">
         <div>
           <h1 className="vu-title">
-            Verified Users {isDeptAdmin && currentUser?.department ? `• ${currentUser.department}` : ''}
+            Verified Users {departmentFilter !== 'All' ? `• ${departmentFilter}` : ''}
           </h1>
           <p className="vu-description">
-            {isDeptAdmin 
-              ? `Manage authorized staff and registration requests for ${currentUser?.department || 'your department'}.`
-              : 'Manage university staff members authorized to register accounts and review portal access requests.'}
+            Manage university staff members authorized to register accounts and review portal access requests.
           </p>
         </div>
       </div>
@@ -844,7 +834,7 @@ const VerifiedUsersPage = () => {
               onChange={(e) => handleSearchChange(e.target.value)}
             />
 
-            {!isDeptAdmin && departments.length > 0 && (
+            {departments.length > 0 && (
               <select
                 className="vu-filter-select"
                 value={departmentFilter}
@@ -1220,21 +1210,17 @@ const VerifiedUsersPage = () => {
                         />
                       </td>
                       <td>
-                        {isDeptAdmin ? (
-                          <span className="vu-inline-dept-badge">{currentUser?.department || '—'}</span>
-                        ) : (
-                          <select
-                            className="vu-inline-select"
-                            value={inlineForm.department}
-                            onChange={(e) => setInlineForm(prev => ({ ...prev, department: e.target.value }))}
-                            onKeyDown={handleInlineKeyDown}
-                          >
-                            <option value="">Select Dept</option>
-                            {departments.map((d) => (
-                              <option key={d._id} value={d.name}>{d.name}</option>
-                            ))}
-                          </select>
-                        )}
+                        <select
+                          className="vu-inline-select"
+                          value={inlineForm.department}
+                          onChange={(e) => setInlineForm(prev => ({ ...prev, department: e.target.value }))}
+                          onKeyDown={handleInlineKeyDown}
+                        >
+                          <option value="">Select Dept</option>
+                          {departments.map((d) => (
+                            <option key={d._id} value={d.name}>{d.name}</option>
+                          ))}
+                        </select>
                       </td>
                       <td>
                         <input
@@ -1589,27 +1575,17 @@ const VerifiedUsersPage = () => {
                 {/* Department */}
                 <div className="vu-edit-form-group">
                   <label htmlFor="edit-dept">Department</label>
-                  {isDeptAdmin ? (
-                    <input
-                      type="text"
-                      className="vu-edit-input"
-                      value={currentUser?.department || ''}
-                      disabled
-                      style={{ backgroundColor: '#f1f5f9' }}
-                    />
-                  ) : (
-                    <select
-                      id="edit-dept"
-                      className="vu-edit-select"
-                      value={editForm.department}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, department: e.target.value }))}
-                    >
-                      <option value="">Select Department...</option>
-                      {departments.map((d) => (
-                        <option key={d._id} value={d.name}>{d.name}</option>
-                      ))}
-                    </select>
-                  )}
+                  <select
+                    id="edit-dept"
+                    className="vu-edit-select"
+                    value={editForm.department}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, department: e.target.value }))}
+                  >
+                    <option value="">Select Department...</option>
+                    {departments.map((d) => (
+                      <option key={d._id} value={d.name}>{d.name}</option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Designation */}
