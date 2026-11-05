@@ -21,6 +21,8 @@ import {
   sendRoleDemotionEmail,
   sendSuperAdminPromotionEmail,
   sendSuperAdminTransferEmail,
+  sendCrossDeptTaskPermissionGrantedEmail,
+  sendCrossDeptTaskPermissionRevokedEmail,
 } from '../services/emailService';
 
 // GET /api/users
@@ -386,6 +388,9 @@ export const updateUserRole = async (req: Request, res: Response) => {
       if (existingAdmin) {
         // Demote existing admin to staff and revert to their base department
         existingAdmin.role = 'staff';
+        if (existingAdmin.canCreateSuperAdminTasks) {
+          existingAdmin.canCreateSuperAdminTasks = false;
+        }
         const targetBase = existingAdmin.baseDepartment ||
           (await VerifiedUser.findOne({ universityId: existingAdmin.universityId }))?.department ||
           existingAdmin.department;
@@ -433,6 +438,9 @@ export const updateUserRole = async (req: Request, res: Response) => {
 
     // Cascading side-effects for Staff Assignment
     if (oldRole === 'department_admin' && role !== 'department_admin') {
+      if (userToUpdate.canCreateSuperAdminTasks) {
+        userToUpdate.canCreateSuperAdminTasks = false;
+      }
       // If manually demoted without replacement, revert department to baseDepartment
       if (userToUpdate.baseDepartment && userToUpdate.department !== userToUpdate.baseDepartment) {
         userToUpdate.department = userToUpdate.baseDepartment;
@@ -1390,7 +1398,7 @@ export const toggleSuperTaskPermission = async (req: Request, res: Response) => 
   try {
     const { id } = req.params;
     const { enabled } = req.body;
-    const operator = req.user;
+    const operator = (req as any).user;
 
     const user = await User.findById(id);
     if (!user) {
@@ -1404,9 +1412,16 @@ export const toggleSuperTaskPermission = async (req: Request, res: Response) => 
       });
     }
 
-    const newStatus = typeof enabled === 'boolean' ? enabled : !user.canCreateSuperAdminTasks;
+    const previousStatus = !!user.canCreateSuperAdminTasks;
+    const newStatus = typeof enabled === 'boolean' ? enabled : !previousStatus;
     user.canCreateSuperAdminTasks = newStatus;
     await user.save();
+
+    const operatorDisplayName =
+      operator?.name ||
+      (operator?.universityId === PRIMARY_SUPER_ADMIN_ID
+        ? 'Primary Super Admin (10001)'
+        : 'Super Admin');
 
     // In-app Notification for the target user
     try {
@@ -1418,12 +1433,37 @@ export const toggleSuperTaskPermission = async (req: Request, res: Response) => 
           ? 'Cross-Department Task Access Granted'
           : 'Cross-Department Task Access Revoked',
         message: newStatus
-          ? `You have been authorized by ${operator?.name || 'Super Admin'} to create and assign tasks university-wide across all departments.`
-          : `Your cross-department task creation privileges have been revoked by ${operator?.name || 'Super Admin'}.`,
+          ? `You have been authorized by ${operatorDisplayName} to create and assign tasks university-wide across all departments.`
+          : `Your cross-department task creation privileges have been revoked by ${operatorDisplayName}.`,
         triggeredBy: operator?._id || null,
       });
     } catch (notifErr) {
       console.error('Error creating notification for super task permission:', notifErr);
+    }
+
+    // Send email notification on grant or revocation
+    if (newStatus !== previousStatus || typeof enabled !== 'boolean') {
+      if (newStatus) {
+        sendCrossDeptTaskPermissionGrantedEmail(
+          user.email,
+          user.name,
+          user.universityId,
+          user.department,
+          operatorDisplayName
+        ).catch((err) =>
+          console.error('Error sending cross-dept task permission granted email:', err)
+        );
+      } else {
+        sendCrossDeptTaskPermissionRevokedEmail(
+          user.email,
+          user.name,
+          user.universityId,
+          user.department,
+          operatorDisplayName
+        ).catch((err) =>
+          console.error('Error sending cross-dept task permission revoked email:', err)
+        );
+      }
     }
 
     const updatedUser = await User.findById(user._id).select('-passwordHash');

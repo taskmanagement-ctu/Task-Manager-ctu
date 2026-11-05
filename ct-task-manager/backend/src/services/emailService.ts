@@ -1142,3 +1142,231 @@ export const sendTaskOverdueEmail = async (
     console.error(`Failed to send Task Overdue email to ${toEmail}:`, error);
   }
 };
+
+/**
+ * Send Cross-Department Task Assignment Permission Granted Email
+ */
+export const sendCrossDeptTaskPermissionGrantedEmail = async (
+  toEmail: string,
+  recipientName: string,
+  universityId: string,
+  departmentName?: string | null,
+  grantedByName?: string
+) => {
+  if (!toEmail) {
+    console.warn('sendCrossDeptTaskPermissionGrantedEmail: No recipient email provided.');
+    return;
+  }
+
+  const subject = `Cross-Department Task Assignment Privileges Granted 🌐 - CT University TaskDesk`;
+  const appUrl = process.env.FRONTEND_URL || 'https://taskdesk.ctuniversity.in';
+  const tasksUrl = `${appUrl}/tasks`;
+  const deptDisplay = departmentName || 'Assigned Department';
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <title>Cross-Department Privileges Granted - CT University TaskDesk</title>
+      <style>
+        body { margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; }
+        .wrapper { max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 14px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08); }
+        .header { background: #0f172a; padding: 28px 24px; text-align: center; }
+        .header h1 { margin: 0; font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.02em; }
+        .header p { margin: 6px 0 0; font-size: 11px; font-weight: 600; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.08em; }
+        .body { padding: 32px 28px; }
+        .badge { display: inline-block; background-color: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; font-size: 12px; font-weight: 800; padding: 6px 14px; border-radius: 20px; letter-spacing: 0.04em; margin-bottom: 16px; }
+        .greeting { font-size: 17px; font-weight: 700; color: #0f172a; margin-bottom: 12px; }
+        .desc { font-size: 14px; line-height: 1.6; color: #475569; margin-bottom: 20px; }
+        .info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0; }
+        .info-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
+        .info-label { color: #64748b; font-weight: 500; }
+        .info-value { color: #0f172a; font-weight: 700; text-align: right; }
+        .privileges-card { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 16px; margin: 20px 0; }
+        .privileges-title { font-size: 13px; font-weight: 700; color: #166534; margin-bottom: 8px; }
+        .privileges-list { margin: 0; padding-left: 20px; font-size: 13px; color: #15803d; line-height: 1.6; }
+        .cta-container { text-align: center; margin: 28px 0 12px; }
+        .cta-btn { display: inline-block; background-color: #0284c7; color: #ffffff !important; text-decoration: none; font-size: 14px; font-weight: 700; padding: 12px 28px; border-radius: 8px; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25); }
+        .footer { background: #f8fafc; padding: 18px 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
+      </style>
+    </head>
+    <body>
+      <div class="wrapper">
+        <div class="header">
+          <h1>CT University TaskDesk</h1>
+          <p>Institutional Task &amp; Administration</p>
+        </div>
+        <div class="body">
+          <div class="badge">🌐 CROSS-DEPARTMENT ACCESS GRANTED</div>
+          <div class="greeting">Hello ${recipientName || 'Colleague'}!</div>
+          <div class="desc">
+            We are pleased to inform you that you have been granted <strong>Cross-Department Task Assignment privileges</strong> on CT University TaskDesk by <strong>${grantedByName || 'Super Admin'}</strong>.
+          </div>
+          <div class="info-card">
+            <div class="info-row">
+              <span class="info-label">University ID:</span>
+              <span class="info-value">${universityId}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Base Department:</span>
+              <span class="info-value">${deptDisplay}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Delegation Scope:</span>
+              <span class="info-value" style="color: #0284c7;">University-Wide (All Departments)</span>
+            </div>
+            ${
+              grantedByName
+                ? `<div class="info-row" style="margin-bottom: 0;">
+                     <span class="info-label">Authorized By:</span>
+                     <span class="info-value">${grantedByName}</span>
+                   </div>`
+                : ''
+            }
+          </div>
+          <div class="privileges-card">
+            <div class="privileges-title">✨ What You Can Do Now:</div>
+            <ul class="privileges-list">
+              <li>Create and assign tasks across <strong>all university departments</strong></li>
+              <li>Assign tasks directly to faculty and staff members institutional-wide</li>
+              <li>Select any department recipient in the TaskDesk task creation form</li>
+              <li>Coordinate inter-departmental initiatives and special projects</li>
+            </ul>
+          </div>
+          <div class="desc">
+            Your privileges are active immediately. You can now access TaskDesk and begin assigning cross-department tasks.
+          </div>
+          <div class="cta-container">
+            <a href="${tasksUrl}" class="cta-btn">Open TaskDesk &rarr;</a>
+          </div>
+        </div>
+        <div class="footer">
+          &copy; ${new Date().getFullYear()} CT University • TaskDesk Institutional Access
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    return await transporter.sendMail({
+      from: `"CT University TaskDesk" <${process.env.EMAIL_USER || 'taskmanagement@ctuniversity.in'}>`,
+      to: toEmail,
+      subject,
+      html,
+    });
+  } catch (error) {
+    console.error(`Failed to send cross-department task permission granted email to ${toEmail}:`, error);
+  }
+};
+
+/**
+ * Send Cross-Department Task Assignment Permission Revoked Email
+ */
+export const sendCrossDeptTaskPermissionRevokedEmail = async (
+  toEmail: string,
+  recipientName: string,
+  universityId: string,
+  departmentName?: string | null,
+  revokedByName?: string
+) => {
+  if (!toEmail) {
+    console.warn('sendCrossDeptTaskPermissionRevokedEmail: No recipient email provided.');
+    return;
+  }
+
+  const subject = `Update: Cross-Department Task Assignment Privileges Revoked - CT University TaskDesk`;
+  const appUrl = process.env.FRONTEND_URL || 'https://taskdesk.ctuniversity.in';
+  const tasksUrl = `${appUrl}/tasks`;
+  const deptDisplay = departmentName || 'Assigned Department';
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <title>Cross-Department Privileges Revoked - CT University TaskDesk</title>
+      <style>
+        body { margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; }
+        .wrapper { max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 14px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08); }
+        .header { background: #0f172a; padding: 28px 24px; text-align: center; }
+        .header h1 { margin: 0; font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.02em; }
+        .header p { margin: 6px 0 0; font-size: 11px; font-weight: 600; color: #f59e0b; text-transform: uppercase; letter-spacing: 0.08em; }
+        .body { padding: 32px 28px; }
+        .badge { display: inline-block; background-color: #fef3c7; color: #b45309; border: 1px solid #fde68a; font-size: 12px; font-weight: 800; padding: 6px 14px; border-radius: 20px; letter-spacing: 0.04em; margin-bottom: 16px; }
+        .greeting { font-size: 17px; font-weight: 700; color: #0f172a; margin-bottom: 12px; }
+        .desc { font-size: 14px; line-height: 1.6; color: #475569; margin-bottom: 20px; }
+        .info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0; }
+        .info-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
+        .info-label { color: #64748b; font-weight: 500; }
+        .info-value { color: #0f172a; font-weight: 700; text-align: right; }
+        .notice-card { background: #fffbeb; border-left: 4px solid #f59e0b; border-radius: 4px; padding: 14px 16px; margin: 20px 0; font-size: 13px; color: #78350f; line-height: 1.5; }
+        .cta-container { text-align: center; margin: 28px 0 12px; }
+        .cta-btn { display: inline-block; background-color: #2563eb; color: #ffffff !important; text-decoration: none; font-size: 14px; font-weight: 700; padding: 12px 28px; border-radius: 8px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25); }
+        .footer { background: #f8fafc; padding: 18px 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
+      </style>
+    </head>
+    <body>
+      <div class="wrapper">
+        <div class="header">
+          <h1>CT University TaskDesk</h1>
+          <p>Institutional Task &amp; Administration</p>
+        </div>
+        <div class="body">
+          <div class="badge">⚠️ PERMISSION UPDATE</div>
+          <div class="greeting">Hello ${recipientName || 'Colleague'},</div>
+          <div class="desc">
+            This is an official notification to inform you that your <strong>Cross-Department Task Assignment privileges</strong> on CT University TaskDesk have been revoked by <strong>${revokedByName || 'Super Admin'}</strong>.
+          </div>
+          <div class="info-card">
+            <div class="info-row">
+              <span class="info-label">University ID:</span>
+              <span class="info-value">${universityId}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Department:</span>
+              <span class="info-value">${deptDisplay}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Task Assignment Scope:</span>
+              <span class="info-value" style="color: #b45309;">Restricted to ${deptDisplay} Department</span>
+            </div>
+            ${
+              revokedByName
+                ? `<div class="info-row" style="margin-bottom: 0;">
+                     <span class="info-label">Updated By:</span>
+                     <span class="info-value">${revokedByName}</span>
+                   </div>`
+                : ''
+            }
+          </div>
+          <div class="notice-card">
+            <strong>Scope Notice:</strong> Your task creation and assignment scope is now restricted to faculty and staff within your assigned department (<strong>${deptDisplay}</strong>). Previously created cross-department tasks and current workflows remain unaffected.
+          </div>
+          <div class="desc">
+            You continue to have full access to manage tasks and staff within your department on TaskDesk.
+          </div>
+          <div class="cta-container">
+            <a href="${tasksUrl}" class="cta-btn">Access TaskDesk Dashboard &rarr;</a>
+          </div>
+        </div>
+        <div class="footer">
+          &copy; ${new Date().getFullYear()} CT University • TaskDesk Institutional Access
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    return await transporter.sendMail({
+      from: `"CT University TaskDesk" <${process.env.EMAIL_USER || 'taskmanagement@ctuniversity.in'}>`,
+      to: toEmail,
+      subject,
+      html,
+    });
+  } catch (error) {
+    console.error(`Failed to send cross-department task permission revoked email to ${toEmail}:`, error);
+  }
+};
