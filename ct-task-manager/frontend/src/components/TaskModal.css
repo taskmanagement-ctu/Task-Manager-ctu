@@ -1025,6 +1025,146 @@
   cursor: not-allowed;
 }
 
+/* Paperclip attach button in TaskModal comment box */
+.tm-comment-attach-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #64748b;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.tm-comment-attach-btn:hover:not(:disabled) {
+  background: #e2e8f0;
+  color: #0284c7;
+  border-color: #94a3b8;
+}
+
+.tm-comment-attach-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Modal Staged attachments tray */
+.tm-comment-staged-tray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.35rem;
+}
+
+.tm-comment-staged-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.72rem;
+  color: #1e293b;
+  max-width: 200px;
+}
+
+.tm-comment-staged-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.tm-comment-staged-saved {
+  font-size: 0.65rem;
+  color: #15803d;
+  background: #dcfce7;
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.tm-comment-staged-size {
+  font-size: 0.65rem;
+  color: #64748b;
+}
+
+.tm-comment-staged-remove {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0.1rem;
+  display: flex;
+  align-items: center;
+  border-radius: 3px;
+}
+
+.tm-comment-staged-remove:hover {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
+.tm-comment-compressing-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #0284c7;
+  font-size: 0.7rem;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+}
+
+/* Modal comment attachment list in message bubble */
+.tm-comment-att-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+}
+
+.tm-comment-att-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 0.18rem 0.45rem;
+  font-size: 0.72rem;
+  color: #0284c7;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+}
+
+.tm-comment-att-chip:hover {
+  background: #f0f9ff;
+  border-color: #0284c7;
+}
+
+.tm-comment-att-name {
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tm-comment-att-size {
+  color: #64748b;
+  font-size: 0.65rem;
+  font-weight: 500;
+}
+
 .tm-comment-inline-error {
   display: flex;
   align-items: center;

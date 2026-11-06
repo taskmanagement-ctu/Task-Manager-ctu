@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ChevronDown, ChevronUp, Paperclip, FileText, Star, Building2, MessageSquare, Video, Plus, Check, X, Layers, ArrowLeft, ExternalLink, Trash2, User, Users, Clock, AlignLeft, FileSpreadsheet, Image as ImageIcon, File as FileIcon, Download, Loader2, CheckCircle2, FolderUp, AlertCircle, Send, Calendar, CalendarPlus, Edit3, CheckCheck, XCircle, Info } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, Paperclip, FileText, Star, Building2, MessageSquare, Video, Plus, Check, X, Layers, ArrowLeft, ExternalLink, Trash2, User, Users, Clock, AlignLeft, FileSpreadsheet, Image as ImageIcon, File as FileIcon, Download, Loader2, CheckCircle2, FolderUp, AlertCircle, Send, Calendar, CalendarPlus, Edit3, CheckCheck, XCircle, Info, Zap } from 'lucide-react';
 import { api } from '../services/api';
 import { calculateUrgency, getUrgencyColor, getUrgencyLabel } from '../utils/taskUrgency';
+import { processMultipleFiles, CompressedFileResult, formatBytes } from '../utils/fileCompressor';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import './TaskModal.css';
 
@@ -421,18 +422,47 @@ const TaskModal: React.FC<TaskModalProps> = ({
     }
   };
 
+  const [modalCommentFiles, setModalCommentFiles] = useState<CompressedFileResult[]>([]);
+  const [isModalCompressing, setIsModalCompressing] = useState(false);
+  const modalCommentFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleModalCommentFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    try {
+      setIsModalCompressing(true);
+      const results = await processMultipleFiles(files);
+      setModalCommentFiles(prev => [...prev, ...results]);
+    } catch (err) {
+      console.error('Failed to compress modal comment files:', err);
+    } finally {
+      setIsModalCompressing(false);
+      if (modalCommentFileInputRef.current) modalCommentFileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveModalCommentFile = (index: number) => {
+    setModalCommentFiles(prev => {
+      const target = prev[index];
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
   const handleAddComment = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!newCommentText.trim() || isPostingComment) return;
+    if ((!newCommentText.trim() && modalCommentFiles.length === 0) || isPostingComment || isModalCompressing) return;
 
     try {
       setIsPostingComment(true);
       setCommentError('');
       const channelToSend = (currentUser?.role === 'super_admin' ? 'super_admin' : currentUser?.role === 'staff' ? 'staff' : 'general');
-      const res = await api.addTaskComment(task._id, newCommentText.trim(), channelToSend);
+      const filesToSend = modalCommentFiles.map(cf => cf.file);
+      const res = await api.addTaskComment(task._id, newCommentText.trim(), channelToSend, filesToSend);
       if (res.success) {
         setTaskComments(res.data || []);
         setNewCommentText('');
+        setModalCommentFiles([]);
         setTask((prev: any) => ({
           ...prev,
           comments: res.data || []
@@ -1933,6 +1963,25 @@ const TaskModal: React.FC<TaskModalProps> = ({
                             <span className="tm-comment-date">{formatDateTimeDDMMYYYY(cmt.createdAt)}</span>
                           </div>
                           <div className="tm-comment-text">{cmt.message}</div>
+                          {cmt.attachmentsData && cmt.attachmentsData.length > 0 && (
+                            <div className="tm-comment-att-list">
+                              {cmt.attachmentsData.map((att: any, aIdx: number) => (
+                                <a
+                                  key={att._id || aIdx}
+                                  href={`/api/files/${att._id}`}
+                                  download={att.filename}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="tm-comment-att-chip"
+                                  title={`Download ${att.filename} (${formatBytes(att.length)})`}
+                                >
+                                  <Paperclip size={11} />
+                                  <span className="tm-comment-att-name">{att.filename}</span>
+                                  <span className="tm-comment-att-size">({formatBytes(att.length)})</span>
+                                </a>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -1952,7 +2001,58 @@ const TaskModal: React.FC<TaskModalProps> = ({
 
                 {/* Inline Comment Input Box */}
                 <div className="tm-comment-box-wrap">
+                  {/* Staged files for modal comment */}
+                  {modalCommentFiles.length > 0 && (
+                    <div className="tm-comment-staged-tray">
+                      {modalCommentFiles.map((sf, idx) => (
+                        <div key={idx} className="tm-comment-staged-chip">
+                          <Paperclip size={10} />
+                          <span className="tm-comment-staged-name" title={sf.file.name}>{sf.file.name}</span>
+                          {sf.isCompressed ? (
+                            <span className="tm-comment-staged-saved" title={`Original: ${formatBytes(sf.originalSize)}`}>
+                              <Zap size={9} /> {formatBytes(sf.compressedSize)} (-{sf.percentSaved}%)
+                            </span>
+                          ) : (
+                            <span className="tm-comment-staged-size">{formatBytes(sf.compressedSize)}</span>
+                          )}
+                          <button
+                            type="button"
+                            className="tm-comment-staged-remove"
+                            onClick={() => handleRemoveModalCommentFile(idx)}
+                            title="Remove attachment"
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {isModalCompressing && (
+                    <div className="tm-comment-compressing-notice">
+                      <Loader2 size={11} className="tm-spin" />
+                      <span>Optimizing & compressing attachment...</span>
+                    </div>
+                  )}
+
                   <div className="tm-comment-input-row">
+                    <input
+                      type="file"
+                      ref={modalCommentFileInputRef}
+                      multiple
+                      style={{ display: 'none' }}
+                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip,.rar"
+                      onChange={handleModalCommentFileSelect}
+                    />
+                    <button
+                      type="button"
+                      className="tm-comment-attach-btn"
+                      onClick={() => modalCommentFileInputRef.current?.click()}
+                      disabled={isPostingComment || isModalCompressing}
+                      title="Attach file / image (auto-compressed)"
+                    >
+                      <Paperclip size={13} />
+                    </button>
                     <textarea
                       className="tm-comment-textarea"
                       rows={1}
@@ -1973,7 +2073,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                       type="button"
                       className="tm-comment-submit-btn"
                       onClick={() => handleAddComment()}
-                      disabled={isPostingComment || !newCommentText.trim()}
+                      disabled={isPostingComment || isModalCompressing || (!newCommentText.trim() && modalCommentFiles.length === 0)}
                       title="Post comment (Enter)"
                     >
                       {isPostingComment ? (

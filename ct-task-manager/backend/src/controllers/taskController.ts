@@ -1875,16 +1875,66 @@ export const getNaacReport = async (req: Request, res: Response) => {
 };
 
 // POST /api/tasks/:id/comments
+// Helper to enrich comment objects with GridFS attachment metadata
+const enrichCommentsWithAttachments = async (comments: any[]) => {
+  if (!Array.isArray(comments) || comments.length === 0) return [];
+  
+  const allAttIds: mongoose.Types.ObjectId[] = [];
+  comments.forEach((c: any) => {
+    if (Array.isArray(c.attachments) && c.attachments.length > 0) {
+      c.attachments.forEach((id: any) => {
+        const idStr = (id?._id || id)?.toString();
+        if (idStr && mongoose.Types.ObjectId.isValid(idStr)) {
+          allAttIds.push(new mongoose.Types.ObjectId(idStr));
+        }
+      });
+    }
+  });
+
+  const metaMap: Record<string, any> = {};
+  if (allAttIds.length > 0) {
+    const db = mongoose.connection.db;
+    if (db) {
+      const filesCollection = db.collection('attachments.files');
+      const files = await filesCollection.find({ _id: { $in: allAttIds } }).toArray();
+      files.forEach((f: any) => {
+        metaMap[f._id.toString()] = {
+          _id: f._id.toString(),
+          filename: f.filename,
+          length: f.length,
+          contentType: f.contentType,
+          uploadDate: f.uploadDate
+        };
+      });
+    }
+  }
+
+  return comments.map((c: any) => {
+    const obj = c.toObject ? c.toObject() : { ...c };
+    if (Array.isArray(obj.attachments)) {
+      obj.attachmentsData = obj.attachments
+        .map((id: any) => metaMap[(id?._id || id)?.toString()])
+        .filter(Boolean);
+    } else {
+      obj.attachmentsData = [];
+    }
+    return obj;
+  });
+};
+
 // POST /api/tasks/:id/comments
-// Add a comment/chat message to a task
+// Add a comment/chat message to a task (supports message + file attachments)
 export const addTaskComment = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { message, channel } = req.body;
     const user = req.user;
 
-    if (!message || !message.trim()) {
-      return res.status(400).json({ success: false, message: 'Message cannot be empty.' });
+    const files = (req.files as Express.Multer.File[]) || [];
+    const messageText = (message || '').trim();
+
+    if (!messageText && files.length === 0) {
+      return res.status(400).json({ success: false, message: 'Message or file attachment is required.' });
     }
 
     const task = await Task.findById(id);
@@ -1923,6 +1973,31 @@ export const addTaskComment = async (req: Request, res: Response) => {
       task.comments = [];
     }
 
+    // Process file attachments via GridFSBucket
+    const attachmentIds: mongoose.Types.ObjectId[] = [];
+    if (files.length > 0) {
+      const db = mongoose.connection.db;
+      if (db) {
+        const bucket = new mongoose.mongo.GridFSBucket(db, {
+          bucketName: 'attachments'
+        });
+
+        for (const file of files) {
+          await new Promise<void>((resolve, reject) => {
+            const uploadStream = bucket.openUploadStream(file.originalname, {
+              contentType: file.mimetype
+            });
+            uploadStream.end(file.buffer);
+            uploadStream.on('finish', () => {
+              attachmentIds.push(uploadStream.id as mongoose.Types.ObjectId);
+              resolve();
+            });
+            uploadStream.on('error', reject);
+          });
+        }
+      }
+    }
+
     // Determine chat channel for 3-tier hierarchy:
     // A 3-tier task has a distinct assignedTo (Dept Admin) and delegatedTo (Staff)
     // OR a shared task with coAssignees where assignedTo is Dept Admin
@@ -1946,8 +2021,9 @@ export const addTaskComment = async (req: Request, res: Response) => {
 
     const newComment = {
       sender: user._id,
-      message: message.trim(),
+      message: messageText,
       channel: commentChannel,
+      attachments: attachmentIds,
       readBy: [user._id],
       createdAt: new Date()
     };
@@ -1993,20 +2069,27 @@ export const addTaskComment = async (req: Request, res: Response) => {
     }
     chatNotifyTargets.delete(user._id.toString());
 
+    const fileCount = files.length;
+    const notifSnippet = fileCount > 0 
+      ? (messageText ? `${messageText} (📎 ${fileCount} file${fileCount > 1 ? 's' : ''})` : `📎 Sent ${fileCount} attachment${fileCount > 1 ? 's' : ''}`)
+      : messageText;
+
     for (const recipientId of chatNotifyTargets) {
       createNotification(
         recipientId,
         'new_chat_message',
         'New Chat Message',
-        `${user.name || 'Someone'} sent a message on Task #${task.taskId || ''} "${task.title}".`,
+        `${user.name || 'Someone'}: "${notifSnippet.slice(0, 80)}" on Task #${task.taskId || ''} "${task.title}".`,
         task._id,
         user._id
       );
     }
 
+    const enrichedComments = await enrichCommentsWithAttachments(returnComments);
+
     return res.status(201).json({
       success: true,
-      data: returnComments,
+      data: enrichedComments,
       message: 'Comment posted successfully.'
     });
   } catch (error: any) {
@@ -2065,9 +2148,11 @@ export const getTaskComments = async (req: Request, res: Response) => {
       }
     }
 
+    const enrichedComments = await enrichCommentsWithAttachments(visibleComments);
+
     return res.status(200).json({
       success: true,
-      data: visibleComments
+      data: enrichedComments
     });
   } catch (error: any) {
     console.error('Error fetching task comments:', error);

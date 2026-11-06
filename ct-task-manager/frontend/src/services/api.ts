@@ -227,6 +227,14 @@ export interface User {
   rosterStaffCount?: number;
 }
 
+export interface CommentAttachment {
+  _id: string;
+  filename: string;
+  length?: number;
+  contentType?: string;
+  uploadDate?: string;
+}
+
 export interface TaskComment {
   _id: string;
   sender: {
@@ -241,6 +249,7 @@ export interface TaskComment {
   message: string;
   channel?: 'super_admin' | 'staff' | 'general';
   attachments?: any[];
+  attachmentsData?: CommentAttachment[];
   readBy?: string[];
   readAt?: string | null;
   createdAt: string;
@@ -997,7 +1006,24 @@ export const api = {
     return fetchWithAuth(`/api/tasks/${taskId}/comments`);
   },
 
-  addTaskComment: async (taskId: string, message: string, channel?: string): Promise<{ success: boolean; data: TaskComment[]; message: string }> => {
+  addTaskComment: async (
+    taskId: string, 
+    message: string, 
+    channel?: string,
+    files?: File[]
+  ): Promise<{ success: boolean; data: TaskComment[]; message: string }> => {
+    if (files && files.length > 0) {
+      const formData = new FormData();
+      if (message) formData.append('message', message);
+      if (channel) formData.append('channel', channel);
+      files.forEach((file) => formData.append('files', file));
+
+      return fetchWithAuth(`/api/tasks/${taskId}/comments`, {
+        method: 'POST',
+        body: formData,
+      });
+    }
+
     return fetchWithAuth(`/api/tasks/${taskId}/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

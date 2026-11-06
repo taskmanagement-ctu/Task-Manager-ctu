@@ -127,9 +127,9 @@ router.get('/:id/subtasks', getSubtasks);
 router.get('/:id/progress', getTaskProgress);
 
 // @route   POST /api/tasks/:id/comments
-// @desc    Post a comment/message to a task
+// @desc    Post a comment/message to a task (supports message + file attachments)
 // @access  Task participants & admins
-router.post('/:id/comments', addTaskComment);
+router.post('/:id/comments', uploadAny.array('files'), addTaskComment);
 
 // @route   GET /api/tasks/:id/comments
 // @desc    Get all comments for a task

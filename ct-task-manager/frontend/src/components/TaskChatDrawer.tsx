@@ -10,10 +10,52 @@ import {
   CheckCheck,
   Check,
   RefreshCw,
-  Sparkles
+  Sparkles,
+  Paperclip,
+  Download,
+  FileText,
+  FileSpreadsheet,
+  FolderArchive,
+  File as FileGeneric,
+  Image as ImageIcon,
+  ZoomIn,
+  Zap,
+  Loader2
 } from 'lucide-react';
 import { api, Task, TaskComment, User } from '../services/api';
+import { processMultipleFiles, CompressedFileResult, formatBytes } from '../utils/fileCompressor';
 import './TaskChatDrawer.css';
+
+const getAttachmentCategory = (filename: string) => {
+  const ext = (filename || '').split('.').pop()?.toLowerCase() || '';
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext)) {
+    return { type: 'image', label: ext.toUpperCase(), color: '#7c3aed', bg: '#f5f3ff' };
+  }
+  if (['pdf'].includes(ext)) {
+    return { type: 'pdf', label: 'PDF', color: '#dc2626', bg: '#fef2f2' };
+  }
+  if (['xls', 'xlsx', 'csv'].includes(ext)) {
+    return { type: 'sheet', label: ext.toUpperCase(), color: '#16a34a', bg: '#f0fdf4' };
+  }
+  if (['doc', 'docx', 'txt', 'rtf'].includes(ext)) {
+    return { type: 'doc', label: ext.toUpperCase(), color: '#2563eb', bg: '#eff6ff' };
+  }
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
+    return { type: 'archive', label: ext.toUpperCase(), color: '#d97706', bg: '#fffbeb' };
+  }
+  return { type: 'other', label: ext ? ext.toUpperCase() : 'FILE', color: '#475569', bg: '#f8fafc' };
+};
+
+const renderFileTypeIcon = (type: string, color: string) => {
+  switch (type) {
+    case 'image': return <ImageIcon size={15} color={color} />;
+    case 'pdf': return <FileText size={15} color={color} />;
+    case 'sheet': return <FileSpreadsheet size={15} color={color} />;
+    case 'doc': return <FileText size={15} color={color} />;
+    case 'archive': return <FolderArchive size={15} color={color} />;
+    default: return <FileGeneric size={15} color={color} />;
+  }
+};
 
 interface TaskChatDrawerProps {
   task: Task | null;
@@ -47,14 +89,53 @@ const TaskChatDrawer: React.FC<TaskChatDrawerProps> = ({
   const isSharedTeam = task?.assignmentMode === 'shared' || Boolean(task?.coAssignees && task.coAssignees.length > 1);
   const [activeTab, setActiveTab] = useState<'super_admin' | 'staff'>('super_admin');
 
+  // File upload & compressor state
+  const [stagedFiles, setStagedFiles] = useState<CompressedFileResult[]>([]);
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [compressStatus, setCompressStatus] = useState('');
+  const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string } | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-scroll to bottom of chat
   const scrollToBottom = (smooth = true) => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
     }
+  };
+
+  // File upload selection with compression
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    try {
+      setIsCompressing(true);
+      setCompressStatus(`Optimizing ${files.length} file${files.length > 1 ? 's' : ''}...`);
+      const results = await processMultipleFiles(files);
+      setStagedFiles((prev) => [...prev, ...results]);
+    } catch (err: any) {
+      console.error('File compression error:', err);
+      setError('Failed to process some attachments.');
+    } finally {
+      setIsCompressing(false);
+      setCompressStatus('');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleRemoveStagedFile = (index: number) => {
+    setStagedFiles((prev) => {
+      const target = prev[index];
+      if (target?.previewUrl) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   // Fetch comments
@@ -126,9 +207,11 @@ const TaskChatDrawer: React.FC<TaskChatDrawerProps> = ({
   // Handle Send Message
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!newMessage.trim() || !task?._id || sending) return;
+    if ((!newMessage.trim() && stagedFiles.length === 0) || !task?._id || sending || isCompressing) return;
 
     const messageText = newMessage.trim();
+    const filesToSend = stagedFiles.map((sf) => sf.file);
+
     setSending(true);
     setError(null);
 
@@ -139,10 +222,11 @@ const TaskChatDrawer: React.FC<TaskChatDrawerProps> = ({
           : 'general');
 
     try {
-      const res = await api.addTaskComment(task._id, messageText, channelToSend);
+      const res = await api.addTaskComment(task._id, messageText, channelToSend, filesToSend);
       if (res.success) {
         setComments(res.data);
         setNewMessage('');
+        setStagedFiles([]);
         if (inputRef.current) {
           inputRef.current.style.height = 'auto';
         }
@@ -546,7 +630,60 @@ const TaskChatDrawer: React.FC<TaskChatDrawerProps> = ({
                         )}
 
                         <div className="chat-bubble">
-                          <p className="chat-text">{msg.message}</p>
+                          {/* Attachments rendering */}
+                          {msg.attachmentsData && msg.attachmentsData.length > 0 && (
+                            <div className="chat-attachments-wrap">
+                              {msg.attachmentsData.map((att: any, attIdx: number) => {
+                                const isImg = att.contentType && att.contentType.startsWith('image/');
+                                const fileUrl = `/api/files/${att._id}`;
+
+                                if (isImg) {
+                                  return (
+                                    <div key={att._id || attIdx} className="chat-img-att-item">
+                                      <img 
+                                        src={fileUrl} 
+                                        alt={att.filename} 
+                                        className="chat-img-thumb"
+                                        onClick={() => setLightboxImage({ url: fileUrl, title: att.filename })}
+                                        loading="lazy"
+                                      />
+                                      <div className="chat-img-meta" onClick={() => setLightboxImage({ url: fileUrl, title: att.filename })}>
+                                        <ZoomIn size={12} />
+                                        <span className="chat-img-meta-name">{att.filename}</span>
+                                        <span className="chat-att-size">({formatBytes(att.length)})</span>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                const cat = getAttachmentCategory(att.filename);
+                                return (
+                                  <a 
+                                    key={att._id || attIdx} 
+                                    href={fileUrl} 
+                                    download={att.filename}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="chat-file-att-card"
+                                    title={`Download ${att.filename}`}
+                                  >
+                                    <div className="chat-file-att-icon" style={{ background: cat.bg, color: cat.color }}>
+                                      {renderFileTypeIcon(cat.type, cat.color)}
+                                    </div>
+                                    <div className="chat-file-att-info">
+                                      <span className="chat-file-att-name">{att.filename}</span>
+                                      <span className="chat-file-att-size">{formatBytes(att.length)}</span>
+                                    </div>
+                                    <div className="chat-file-att-dl">
+                                      <Download size={13} />
+                                    </div>
+                                  </a>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {msg.message && <p className="chat-text">{msg.message}</p>}
                           <div className="chat-meta">
                             <span className="chat-time">{formatTime(msg.createdAt)}</span>
                           </div>
@@ -588,7 +725,74 @@ const TaskChatDrawer: React.FC<TaskChatDrawerProps> = ({
 
         {/* Bottom Input Area */}
         <div className="task-chat-footer">
+          {/* Compression In Progress Indicator */}
+          {isCompressing && (
+            <div className="task-chat-compress-status">
+              <Loader2 size={13} className="spinning" />
+              <span>{compressStatus || 'Optimizing & compressing files...'}</span>
+            </div>
+          )}
+
+          {/* Staged files bar (before sending) */}
+          {stagedFiles.length > 0 && (
+            <div className="task-chat-staged-tray">
+              {stagedFiles.map((sf, idx) => {
+                const cat = getAttachmentCategory(sf.file.name);
+                return (
+                  <div key={idx} className="task-chat-staged-chip">
+                    {sf.previewUrl ? (
+                      <img src={sf.previewUrl} alt="preview" className="staged-thumb" />
+                    ) : (
+                      <div className="staged-icon-wrap" style={{ background: cat.bg, color: cat.color }}>
+                        {renderFileTypeIcon(cat.type, cat.color)}
+                      </div>
+                    )}
+                    <div className="staged-details">
+                      <span className="staged-name" title={sf.file.name}>{sf.file.name}</span>
+                      <div className="staged-metrics">
+                        {sf.isCompressed ? (
+                          <span className="staged-pill-saved" title={`Original: ${formatBytes(sf.originalSize)}`}>
+                            <Zap size={10} /> {formatBytes(sf.compressedSize)} (-{sf.percentSaved}%)
+                          </span>
+                        ) : (
+                          <span className="staged-pill-raw">{formatBytes(sf.compressedSize)}</span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="staged-remove-btn"
+                      onClick={() => handleRemoveStagedFile(idx)}
+                      title="Remove attachment"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <form className="task-chat-input-form" onSubmit={handleSendMessage}>
+            <input
+              type="file"
+              ref={fileInputRef}
+              multiple
+              style={{ display: 'none' }}
+              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip,.rar"
+              onChange={handleFileSelect}
+            />
+
+            <button
+              type="button"
+              className="task-chat-attach-btn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending || isCompressing}
+              title="Attach files / images (auto-compressed)"
+            >
+              <Paperclip size={17} />
+            </button>
+
             <textarea
               ref={inputRef}
               className="task-chat-textarea"
@@ -602,19 +806,55 @@ const TaskChatDrawer: React.FC<TaskChatDrawerProps> = ({
               rows={1}
               disabled={sending}
             />
+
             <button 
               type="submit" 
               className="task-chat-send-btn" 
-              disabled={!newMessage.trim() || sending}
+              disabled={(!newMessage.trim() && stagedFiles.length === 0) || sending || isCompressing}
               title="Send Message"
             >
               {sending ? <RefreshCw size={16} className="spinning" /> : <Send size={16} />}
             </button>
           </form>
+
           <div className="task-chat-shortcuts">
-            <span>Press <strong>Enter ↵</strong> to send</span>
+            <span>Press <strong>Enter ↵</strong> to send • Attachments auto-compressed</span>
           </div>
         </div>
+
+        {/* Full Image Lightbox Modal */}
+        {lightboxImage && (
+          <div className="chat-lightbox-overlay" onClick={() => setLightboxImage(null)}>
+            <div className="chat-lightbox-box" onClick={(e) => e.stopPropagation()}>
+              <div className="chat-lightbox-header">
+                <span className="chat-lightbox-title" title={lightboxImage.title}>
+                  {lightboxImage.title}
+                </span>
+                <div className="chat-lightbox-actions">
+                  <a
+                    href={lightboxImage.url}
+                    download={lightboxImage.title}
+                    className="chat-lightbox-btn"
+                    title="Download original file"
+                  >
+                    <Download size={16} />
+                  </a>
+                  <button
+                    type="button"
+                    className="chat-lightbox-btn"
+                    onClick={() => setLightboxImage(null)}
+                    title="Close preview"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+              <div className="chat-lightbox-body">
+                <img src={lightboxImage.url} alt={lightboxImage.title} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
