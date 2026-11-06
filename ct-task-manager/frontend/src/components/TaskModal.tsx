@@ -1457,7 +1457,16 @@ const TaskModal: React.FC<TaskModalProps> = ({
                 </div>
 
                 {/* Actions for Dept Admin */}
-                {currentUser?.role === 'department_admin' && task.extensionRequest.stage === 'department_admin' && (
+                {currentUser?.role === 'department_admin' && (
+                  isCreator ||
+                  (task.assignedTo?._id || task.assignedTo) === (currentUser?._id || currentUser?.id) ||
+                  (task.delegatedTo?._id || task.delegatedTo) === (currentUser?._id || currentUser?.id) ||
+                  Boolean(currentUser?.department && (
+                    (task.department && task.department.trim().toLowerCase() === currentUser.department.trim().toLowerCase()) ||
+                    (task.assignedTo?.department && task.assignedTo.department.trim().toLowerCase() === currentUser.department.trim().toLowerCase()) ||
+                    (task.extensionRequest?.requestedBy?.department && task.extensionRequest.requestedBy.department.trim().toLowerCase() === currentUser.department.trim().toLowerCase())
+                  ))
+                ) && task.extensionRequest.stage === 'department_admin' && (
                   <div className="tm-ext-banner-actions">
                     {isCreatorSuperAdmin ? (
                       <button 

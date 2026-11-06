@@ -2444,27 +2444,14 @@ export const requestDeadlineExtension = async (req: Request, res: Response) => {
       } else {
         // Staff requesting on a Super Admin task
         if (task.delegatedTo && task.delegatedTo.toString() === user._id.toString() && task.assignedTo) {
+          // Delegated by Dept Admin: Dept Admin must endorse first
           stage = 'department_admin';
           targetReviewerId = task.assignedTo;
         } else {
-          // Check if staff has a Dept Admin in their department
-          const staffUser = await User.findById(user._id);
-          const deptAdmin = staffUser?.department
-            ? await User.findOne({
-                department: { $regex: new RegExp(`^${staffUser.department.trim()}$`, 'i') },
-                role: 'department_admin',
-                isActive: true
-              })
-            : null;
-
-          if (deptAdmin) {
-            stage = 'department_admin';
-            targetReviewerId = deptAdmin._id as mongoose.Types.ObjectId;
-          } else {
-            // No Dept Admin in department -> escalate straight to Super Admin
-            stage = 'super_admin';
-            targetReviewerId = task.createdBy;
-          }
+          // Directly assigned to staff by Super Admin without delegation:
+          // Escalates directly to Super Admin!
+          stage = 'super_admin';
+          targetReviewerId = task.createdBy;
         }
       }
     } else {
@@ -2569,8 +2556,48 @@ export const reviewDeadlineExtension = async (req: Request, res: Response) => {
 
     // Review by Department Admin
     if (user.role === 'department_admin') {
-      if (task.extensionRequest.stage !== 'department_admin' && !isCreatorSuperAdmin) {
+      if (task.extensionRequest.stage !== 'department_admin') {
         return res.status(403).json({ success: false, message: 'This extension request is not awaiting Department Admin review.' });
+      }
+
+      // Check jurisdiction:
+      // A Department Admin can only review/endorse if they created the task, were assigned/delegated the task,
+      // or the staff belongs to their roster or department.
+      const userIdStr = user._id.toString();
+      const isCreator = task.createdBy && task.createdBy.toString() === userIdStr;
+      const isAssigned = task.assignedTo && task.assignedTo.toString() === userIdStr;
+      let isAuthorizedDeptAdmin = isCreator || isAssigned;
+
+      if (!isAuthorizedDeptAdmin) {
+        const myStaffAssignments = await StaffAssignment.find({ adminId: user._id, isActive: true });
+        const myStaffIds = myStaffAssignments.map((a: any) => a.staffId.toString());
+        const reqByStr = task.extensionRequest.requestedBy ? task.extensionRequest.requestedBy.toString() : '';
+        const assignedToStr = task.assignedTo ? task.assignedTo.toString() : '';
+        const delegatedToStr = task.delegatedTo ? task.delegatedTo.toString() : '';
+
+        if (
+          (reqByStr && myStaffIds.includes(reqByStr)) ||
+          (assignedToStr && myStaffIds.includes(assignedToStr)) ||
+          (delegatedToStr && myStaffIds.includes(delegatedToStr))
+        ) {
+          isAuthorizedDeptAdmin = true;
+        }
+      }
+
+      if (!isAuthorizedDeptAdmin && user.department) {
+        const reqUser = task.extensionRequest.requestedBy 
+          ? await User.findById(task.extensionRequest.requestedBy) 
+          : null;
+        if (reqUser && reqUser.department && reqUser.department.trim().toLowerCase() === user.department.trim().toLowerCase()) {
+          isAuthorizedDeptAdmin = true;
+        }
+      }
+
+      if (!isAuthorizedDeptAdmin) {
+        return res.status(403).json({
+          success: false,
+          message: 'Forbidden. You are not authorized to review extension requests for staff outside your department.'
+        });
       }
 
       if (action === 'reject') {
@@ -2834,16 +2861,29 @@ export const getDeadlineRequests = async (req: Request, res: Response) => {
       const myStaffAssignments = await StaffAssignment.find({ adminId: user._id, isActive: true });
       const myStaffIds = myStaffAssignments.map((a: any) => a.staffId);
 
+      // Also include staff in the same department as this Dept Admin
+      const deptStaffUsers = user.department
+        ? await User.find({
+            department: { $regex: new RegExp(`^${user.department.trim()}$`, 'i') },
+            role: 'staff'
+          }).select('_id')
+        : [];
+      const deptStaffIds = deptStaffUsers.map((u: any) => u._id);
+
+      const allMyStaffIds = Array.from(new Set([
+        ...myStaffIds.map((id: any) => id.toString()),
+        ...deptStaffIds.map((id: any) => id.toString())
+      ])).map((idStr: string) => new mongoose.Types.ObjectId(idStr));
+
       roleOrCond = [
         { createdBy: user._id },
         { assignedTo: user._id },
         { delegatedTo: user._id },
         { coAssignees: user._id },
-        { assignedTo: { $in: myStaffIds } },
-        { delegatedTo: { $in: myStaffIds } },
-        { coAssignees: { $in: myStaffIds } },
-        { 'extensionRequest.stage': 'department_admin' },
-        { 'extensionRequest.requestedBy': { $in: myStaffIds } }
+        { assignedTo: { $in: allMyStaffIds } },
+        { delegatedTo: { $in: allMyStaffIds } },
+        { coAssignees: { $in: allMyStaffIds } },
+        { 'extensionRequest.requestedBy': { $in: allMyStaffIds } }
       ];
     }
 

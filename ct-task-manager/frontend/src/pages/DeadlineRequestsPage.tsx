@@ -332,8 +332,17 @@ const DeadlineRequestsPage: React.FC = () => {
             const daysDelta = getDaysDiff(task.deadline, ext?.requestedDeadline);
             const isCreatorSuperAdmin = task.createdBy?.role === 'super_admin';
             const isDeptAdmin = currentUser?.role === 'department_admin';
-            const canEndorse = isDeptAdmin && isCreatorSuperAdmin && ext?.status === 'pending' && ext?.stage === 'department_admin';
-            const canApprove = isSuperAdmin || (isDeptAdmin && !isCreatorSuperAdmin);
+            const isMyDeptOrTask = isSuperAdmin || (
+              (task.createdBy?._id || task.createdBy) === (currentUser?._id || currentUser?.id) ||
+              (task.assignedTo?._id || task.assignedTo) === (currentUser?._id || currentUser?.id) ||
+              (task.delegatedTo?._id || task.delegatedTo) === (currentUser?._id || currentUser?.id) ||
+              Boolean(currentUser?.department && (
+                (task.department && task.department.trim().toLowerCase() === currentUser.department.trim().toLowerCase()) ||
+                (reqUser?.department && reqUser.department.trim().toLowerCase() === currentUser.department.trim().toLowerCase())
+              ))
+            );
+            const canEndorse = isDeptAdmin && isMyDeptOrTask && isCreatorSuperAdmin && ext?.status === 'pending' && ext?.stage === 'department_admin';
+            const canApprove = isSuperAdmin || (isDeptAdmin && isMyDeptOrTask && !isCreatorSuperAdmin);
             const isPendingOrEndorsed = ext?.status === 'pending' || ext?.status === 'endorsed';
 
             return (
