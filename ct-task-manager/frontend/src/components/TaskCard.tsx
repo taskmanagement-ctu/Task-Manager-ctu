@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, CheckCircle2, CornerDownRight, MessageSquare, ChevronDown, ChevronUp, ExternalLink, Plus, X, Check, Loader2, ListTree, Layers, Trash2, User, Users, Edit2, PencilLine } from 'lucide-react';
+import { Calendar, Clock, CheckCircle2, CornerDownRight, MessageSquare, ChevronDown, ChevronUp, ExternalLink, Plus, X, Check, Loader2, ListTree, Layers, Trash2, User, Users, Edit2, PencilLine, Play } from 'lucide-react';
 import { api } from '../services/api';
 import { calculateUrgency, getUrgencyCardStyle, getUrgencyLabel, getUrgencyColor } from '../utils/taskUrgency';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
@@ -16,6 +16,7 @@ interface TaskCardProps {
   availableAssignees?: any[];
   onSubtaskCreated?: () => void;
   onTaskDeleted?: () => void;
+  onTaskUpdated?: () => void;
 }
 
 const formatToLocalDateTimeInput = (dateString?: string | Date) => {
@@ -41,10 +42,12 @@ const TaskCard: React.FC<TaskCardProps> = ({
   forceExpanded,
   availableAssignees = [],
   onSubtaskCreated,
-  onTaskDeleted
+  onTaskDeleted,
+  onTaskUpdated
 }) => {
   const [progress, setProgress] = useState<any>(null);
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
+  const [isStartingTask, setIsStartingTask] = useState<boolean>(false);
 
   // Subtasks downwards drawer state
   const [isSubtasksOpen, setIsSubtasksOpen] = useState<boolean>(false);
@@ -80,6 +83,34 @@ const TaskCard: React.FC<TaskCardProps> = ({
   const isSuperAdmin = currentUser?.role === 'super_admin';
   const canDelete = isSuperAdmin || isCreator;
   const canEdit = (isSuperAdmin || isCreator) && task.status !== 'completed' && task.status !== 'approved';
+
+  // Performer / Assignee Check
+  const myId = currentUserId?.toString();
+  const myUnivId = currentUser?.universityId?.toString();
+  const isAssigned = Boolean(
+    (task.assignedTo && ((task.assignedTo._id || task.assignedTo.id || task.assignedTo)?.toString() === myId || (task.assignedTo.universityId && task.assignedTo.universityId === myUnivId))) ||
+    (task.delegatedTo && ((task.delegatedTo._id || task.delegatedTo.id || task.delegatedTo)?.toString() === myId || (task.delegatedTo.universityId && task.delegatedTo.universityId === myUnivId))) ||
+    (task.coAssignees && task.coAssignees.some((ca: any) => (ca._id || ca.id || ca)?.toString() === myId || (ca.universityId && ca.universityId === myUnivId)))
+  );
+
+  const handleQuickStartTask = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isStartingTask) return;
+    try {
+      setIsStartingTask(true);
+      await api.updateTaskStatus(task._id, 'in_progress');
+      if (onTaskUpdated) {
+        onTaskUpdated();
+      } else if (onSubtaskCreated) {
+        onSubtaskCreated();
+      }
+    } catch (err: any) {
+      console.error('Failed to start task', err);
+      alert(`Error starting task: ${err.message || 'Unknown error'}`);
+    } finally {
+      setIsStartingTask(false);
+    }
+  };
 
   const handleDeleteTask = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -810,6 +841,48 @@ const TaskCard: React.FC<TaskCardProps> = ({
         </div>
 
         <div className="tc-footer-right">
+          {/* Quick Start Button for Assignee */}
+          {isAssigned && task.status === 'pending' && (
+            <button 
+              type="button"
+              className="tc-start-btn"
+              title="Start working on this task (Move to In Progress)"
+              onClick={handleQuickStartTask}
+              disabled={isStartingTask}
+            >
+              {isStartingTask ? <Loader2 size={12} className="animate-spin" /> : <Play size={11} fill="currentColor" />}
+              <span>Start</span>
+            </button>
+          )}
+
+          {isAssigned && task.status === 'rejected' && (
+            <button 
+              type="button"
+              className="tc-start-btn restart"
+              title="Restart working on this task"
+              onClick={handleQuickStartTask}
+              disabled={isStartingTask}
+            >
+              {isStartingTask ? <Loader2 size={12} className="animate-spin" /> : <Play size={11} fill="currentColor" />}
+              <span>Restart</span>
+            </button>
+          )}
+
+          {isAssigned && (task.status === 'in_progress' || task.status === 'completed') && (
+            <button 
+              type="button"
+              className="tc-submit-btn"
+              title="Open task to review and submit"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClick(task);
+              }}
+            >
+              <CheckCircle2 size={11} />
+              <span>Submit</span>
+            </button>
+          )}
+
           {/* Edit Button (Creator or Super Admin) */}
           {canEdit && (
             <button 

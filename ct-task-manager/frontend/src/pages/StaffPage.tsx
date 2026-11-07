@@ -167,6 +167,7 @@ const StaffPage: React.FC = () => {
                   onOpenChat={(t) => setChatTask(t)}
                   onSubtaskCreated={fetchTasks}
                   onTaskDeleted={fetchTasks}
+                  onTaskUpdated={fetchTasks}
                 />
               ))}
             </div>

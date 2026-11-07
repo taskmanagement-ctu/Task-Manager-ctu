@@ -161,6 +161,7 @@ const AdminPage: React.FC = () => {
                   onOpenChat={(t) => setChatTask(t)}
                   onSubtaskCreated={fetchData}
                   onTaskDeleted={fetchData}
+                  onTaskUpdated={fetchData}
                 />
               ))}
             </div>

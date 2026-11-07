@@ -2346,6 +2346,227 @@
   }
 }
 
+/* ─── Top Header Start Task Button ─── */
+.tm-top-start-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  padding: 0.45rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.3);
+  transition: all 0.15s ease;
+}
+
+.tm-top-start-btn:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(29, 78, 216, 0.38);
+}
+
+.tm-top-start-btn:active {
+  transform: translateY(0);
+}
+
+.tm-top-start-btn.restart {
+  background: #dc2626;
+  box-shadow: 0 2px 5px rgba(220, 38, 38, 0.3);
+}
+
+.tm-top-start-btn.restart:hover {
+  background: #b91c1c;
+  box-shadow: 0 4px 10px rgba(185, 28, 28, 0.38);
+}
+
+.tm-top-start-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ─── Unmissable Hero Banner for Pending / Rejected Task ─── */
+.tm-pending-hero-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);
+  border: 1.5px solid #bfdbfe;
+  border-radius: 10px;
+  padding: 0.85rem 1.15rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.08);
+}
+
+.tm-pending-hero-banner.rejected {
+  background: linear-gradient(135deg, #fef2f2 0%, #fff7ed 100%);
+  border-color: #fecaca;
+  box-shadow: 0 2px 5px rgba(220, 38, 38, 0.08);
+}
+
+.tm-pending-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex: 1;
+}
+
+.tm-pending-hero-pulse-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #dbeafe;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+}
+
+.tm-pending-hero-pulse-icon.rejected {
+  background-color: #fee2e2;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.15);
+}
+
+.tm-pending-hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.tm-pending-hero-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #1e3a8a;
+}
+
+.tm-pending-hero-desc {
+  font-size: 0.8rem;
+  color: #475569;
+  line-height: 1.35;
+}
+
+.tm-pending-hero-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  padding: 0.55rem 1.25rem;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.tm-pending-hero-cta:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.45);
+}
+
+.tm-pending-hero-cta:active {
+  transform: translateY(0);
+}
+
+.tm-pending-hero-cta.rejected {
+  background: #dc2626;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35);
+}
+
+.tm-pending-hero-cta.rejected:hover {
+  background: #b91c1c;
+  box-shadow: 0 4px 12px rgba(185, 28, 28, 0.45);
+}
+
+.tm-pending-hero-cta:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+@media (max-width: 640px) {
+  .tm-pending-hero-banner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+  .tm-pending-hero-cta {
+    justify-content: center;
+    width: 100%;
+  }
+}
+
+/* ─── Sticky Modal Bottom Action Bar ─── */
+.tm-sticky-bottom-bar {
+  position: sticky;
+  bottom: -2rem;
+  background: #ffffff;
+  padding: 1rem 1.75rem;
+  margin: 1.75rem -2rem -2rem -2rem;
+  border-top: 1.5px solid #e2e8f0;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  box-shadow: 0 -6px 20px rgba(15, 23, 42, 0.08);
+  z-index: 30;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+@media (max-width: 768px) {
+  .tm-sticky-bottom-bar {
+    bottom: -1.25rem;
+    margin: 1.25rem -1rem -1rem -1rem;
+    padding: 0.85rem 1rem;
+  }
+}
+
+.tm-btn-submit-task {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background-color: #10b981;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 0.65rem 1.45rem;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
+  transition: all 0.15s ease;
+}
+
+.tm-btn-submit-task:hover {
+  background-color: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.45);
+}
+
+.tm-btn-submit-task:active {
+  transform: translateY(0);
+}
+
+.tm-btn-submit-task:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+
 
 
 

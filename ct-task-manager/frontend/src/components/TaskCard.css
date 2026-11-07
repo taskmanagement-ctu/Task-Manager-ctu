@@ -442,6 +442,83 @@
   color: #991b1b;
 }
 
+/* ─── Quick Start Task Button ─── */
+.tc-start-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #2563eb;
+  border: 1px solid #1d4ed8;
+  color: #ffffff;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 0.24rem 0.65rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3);
+  white-space: nowrap;
+}
+
+.tc-start-btn:hover {
+  background: #1d4ed8;
+  border-color: #1e40af;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(29, 78, 216, 0.4);
+  transform: translateY(-1px);
+}
+
+.tc-start-btn:active {
+  transform: translateY(0);
+}
+
+.tc-start-btn.restart {
+  background: #dc2626;
+  border-color: #b91c1c;
+  box-shadow: 0 1px 3px rgba(220, 38, 38, 0.3);
+}
+
+.tc-start-btn.restart:hover {
+  background: #b91c1c;
+  box-shadow: 0 2px 6px rgba(185, 28, 28, 0.4);
+}
+
+.tc-start-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ─── Quick Submit Task Button ─── */
+.tc-submit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: #10b981;
+  border: 1px solid #059669;
+  color: #ffffff;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 0.24rem 0.65rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.3);
+  white-space: nowrap;
+}
+
+.tc-submit-btn:hover {
+  background: #059669;
+  border-color: #047857;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(5, 150, 105, 0.4);
+  transform: translateY(-1px);
+}
+
+.tc-submit-btn:active {
+  transform: translateY(0);
+}
+
 /* ─── Chat Button ─── */
 .tc-chat-btn {
   display: inline-flex;

@@ -1072,7 +1072,10 @@ export const submitReview = async (req: Request, res: Response) => {
       // Usually, it means "If there are required extensions, the uploaded files must have those extensions."
       // Let's ensure every uploaded file has an allowed extension (if restricted) and maybe at least one file is uploaded if required.
       if (files.length === 0) {
-        return res.status(400).json({ success: false, message: `Attachments required with formats: ${task.requiredCompletionExtensions.join(', ')}` });
+        const existingAttachments = task.completionAttachments || [];
+        if (existingAttachments.length === 0) {
+          return res.status(400).json({ success: false, message: `Attachments required with formats: ${task.requiredCompletionExtensions.join(', ')}` });
+        }
       }
 
       for (const ext of fileExts) {

@@ -231,6 +231,24 @@ const TaskChatDrawer: React.FC<TaskChatDrawerProps> = ({
           inputRef.current.style.height = 'auto';
         }
         scrollToBottom();
+
+        // Smart Auto-Transition: If task is pending and sender is assignee, mark in_progress
+        const myId = (currentUser?._id || currentUser?.id)?.toString();
+        const myUnivId = currentUser?.universityId?.toString();
+        const isAssignee = Boolean(
+          (task.assignedTo && ((task.assignedTo._id || task.assignedTo.id || task.assignedTo)?.toString() === myId || task.assignedTo.universityId === myUnivId)) ||
+          (task.delegatedTo && ((task.delegatedTo._id || task.delegatedTo.id || task.delegatedTo)?.toString() === myId || task.delegatedTo.universityId === myUnivId)) ||
+          (task.coAssignees && task.coAssignees.some((ca: any) => (ca._id || ca.id || ca)?.toString() === myId || ca.universityId === myUnivId))
+        );
+        if (isAssignee && task.status === 'pending') {
+          try {
+            await api.updateTaskStatus(task._id, 'in_progress');
+            if (task) task.status = 'in_progress';
+          } catch (stErr) {
+            console.error('Failed auto-starting task from chat', stErr);
+          }
+        }
+
         if (onMessageSent) onMessageSent();
       }
     } catch (err: any) {

@@ -560,6 +560,7 @@ const TasksPage: React.FC = () => {
                   availableAssignees={availableAssignees}
                   onSubtaskCreated={loadTasks}
                   onTaskDeleted={loadTasks}
+                  onTaskUpdated={loadTasks}
                   onClick={() => { setOpenEditOnSelect(false); setSelectedTask(task); }} 
                   onEdit={() => { setOpenEditOnSelect(true); setSelectedTask(task); }}
                   onCreateSubtask={() => handleCreateSubtaskForTask(task._id)}
