@@ -18,6 +18,7 @@ import {
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import TaskModal from '../components/TaskModal';
+import { calculateUrgency, getUrgencyCardStyle, getUrgencyColor, getUrgencyLabel } from '../utils/taskUrgency';
 import './DeadlineRequestsPage.css';
 
 // Helper: Format Date & Time for display (strings)
@@ -345,22 +346,38 @@ const DeadlineRequestsPage: React.FC = () => {
             const canApprove = isSuperAdmin || (isDeptAdmin && isMyDeptOrTask && !isCreatorSuperAdmin);
             const isPendingOrEndorsed = ext?.status === 'pending' || ext?.status === 'endorsed';
 
+            const urgency = calculateUrgency(task);
+            const cardStyle = getUrgencyCardStyle(urgency);
+            const urgencyColor = getUrgencyColor(urgency);
+            const urgencyLabel = getUrgencyLabel(urgency);
+
             return (
               <div 
                 key={task._id} 
-                className={`dr-card ${ext?.status || 'pending'}`}
+                className="dr-card"
+                style={cardStyle}
               >
                 {/* Card Top Header */}
                 <div className="dr-card-header">
                   <div className="dr-card-top-meta">
                     <div className="dr-card-id-dept">
-                      <span className="dr-task-id">#{task.taskId || task._id.slice(-6)}</span>
+                      <span className="dr-task-id" onClick={() => setSelectedTaskForModal(task)} title="Click to view task details">#{task.taskId || task._id.slice(-6)}</span>
                       {task.department && (
                         <span className="dr-dept-badge">
                           <Building2 size={11} />
                           <span>{task.department}</span>
                         </span>
                       )}
+                      <span 
+                        className="dr-urgency-badge"
+                        style={{
+                          color: urgencyColor,
+                          borderColor: `${urgencyColor}40`,
+                          backgroundColor: `${urgencyColor}15`
+                        }}
+                      >
+                        {urgencyLabel}
+                      </span>
                     </div>
 
                     <div className="dr-badges-row">

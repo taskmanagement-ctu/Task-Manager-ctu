@@ -385,7 +385,8 @@ export const getTasks = async (req: Request, res: Response) => {
         { coAssignees: user._id },
         { assignedTo: { $in: myStaffIds } },
         { delegatedTo: { $in: myStaffIds } },
-        { coAssignees: { $in: myStaffIds } }
+        { coAssignees: { $in: myStaffIds } },
+        { currentReviewer: user._id }
       ];
     } else if (user.role === 'super_admin') {
       const myStaffAssignments = await StaffAssignment.find({ adminId: user._id, isActive: true });
@@ -1633,7 +1634,8 @@ export const getSubtasks = async (req: Request, res: Response) => {
         { coAssignees: user._id },
         { assignedTo: { $in: myStaffIds } },
         { delegatedTo: { $in: myStaffIds } },
-        { coAssignees: { $in: myStaffIds } }
+        { coAssignees: { $in: myStaffIds } },
+        { currentReviewer: user._id }
       ];
     }
     // Super Admin sees all

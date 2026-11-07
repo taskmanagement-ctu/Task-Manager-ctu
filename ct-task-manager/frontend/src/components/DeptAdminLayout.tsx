@@ -7,6 +7,7 @@ import {
   Menu, 
   ShieldCheck,
   CalendarClock,
+  ClipboardCheck,
   X
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -24,6 +25,7 @@ const DeptAdminLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [canAccessVerified, setCanAccessVerified] = useState(false);
   const [pendingDeadlinesCount, setPendingDeadlinesCount] = useState<number>(0);
+  const [pendingReviewCount, setPendingReviewCount] = useState<number>(0);
 
   // Background body scroll lock & ESC key listener
   useEffect(() => {
@@ -67,6 +69,24 @@ const DeptAdminLayout: React.FC = () => {
     touchStartY.current = null;
   };
 
+  const fetchBadgeCounts = () => {
+    api.getDeadlineRequests({ status: 'pending', limit: 1 })
+      .then(res => {
+        if (res.success && res.data?.counts?.pending !== undefined) {
+          setPendingDeadlinesCount(res.data.counts.pending);
+        }
+      })
+      .catch(() => {});
+
+    api.getTasks({ status: 'submitted_for_review', limit: 1 })
+      .then(res => {
+        if (res.success && res.data?.pagination?.total !== undefined) {
+          setPendingReviewCount(res.data.pagination.total);
+        }
+      })
+      .catch(() => {});
+  };
+
   useEffect(() => {
     api.getMyDepartmentPermissions()
       .then(res => {
@@ -78,18 +98,27 @@ const DeptAdminLayout: React.FC = () => {
         console.error('Failed to check verified user access', err);
       });
 
-    api.getDeadlineRequests({ status: 'pending', limit: 1 })
-      .then(res => {
-        if (res.success && res.data?.counts?.pending !== undefined) {
-          setPendingDeadlinesCount(res.data.counts.pending);
-        }
-      })
-      .catch(() => {});
+    fetchBadgeCounts();
+
+    const handleUpdate = () => fetchBadgeCounts();
+    window.addEventListener('task-review-updated', handleUpdate);
+    window.addEventListener('task-updated', handleUpdate);
+
+    return () => {
+      window.removeEventListener('task-review-updated', handleUpdate);
+      window.removeEventListener('task-updated', handleUpdate);
+    };
   }, []);
 
   const navLinks = [
     { to: "/admin", icon: <LayoutDashboard size={20} />, label: "Dashboard", end: true },
     { to: "/admin/tasks", icon: <CheckSquare size={20} />, label: "Tasks" },
+    { 
+      to: "/admin/review-tasks", 
+      icon: <ClipboardCheck size={20} />, 
+      label: "Review Tasks",
+      badge: pendingReviewCount > 0 ? pendingReviewCount : undefined
+    },
     { 
       to: "/admin/deadline-requests", 
       icon: <CalendarClock size={20} />, 

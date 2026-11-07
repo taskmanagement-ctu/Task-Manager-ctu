@@ -180,43 +180,29 @@
 }
 
 .dr-card {
-  background: #ffffff;
   border: 1px solid #e2e8f0;
+  border-left-width: 4px;
   border-radius: 12px;
-  padding: 1.1rem 1.35rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  padding: 1.25rem 1.45rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03);
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  gap: 1rem;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
 }
 
 .dr-card:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
-}
-
-.dr-card.pending {
-  border-left: 4px solid #f59e0b;
-}
-
-.dr-card.endorsed {
-  border-left: 4px solid #3b82f6;
-}
-
-.dr-card.approved {
-  border-left: 4px solid #10b981;
-}
-
-.dr-card.rejected {
-  border-left: 4px solid #ef4444;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -2px rgba(15, 23, 42, 0.09), 0 3px 6px -1px rgba(15, 23, 42, 0.04);
 }
 
 /* Card Header */
 .dr-card-header {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.45rem;
 }
 
 .dr-card-top-meta {
@@ -230,31 +216,49 @@
 .dr-card-id-dept {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.45rem;
   flex-wrap: wrap;
 }
 
 .dr-task-id {
-  background: #f1f5f9;
-  color: #475569;
-  font-size: 0.74rem;
+  background: #eef2ff;
+  color: #4f46e5;
+  border: 1px solid #e0e7ff;
+  font-size: 0.8rem;
   font-weight: 800;
-  padding: 0.18rem 0.5rem;
-  border-radius: 5px;
-  font-family: 'Courier New', Courier, monospace;
+  padding: 0.18rem 0.55rem;
+  border-radius: 6px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.dr-task-id:hover {
+  background: #e0e7ff;
+  color: #3730a3;
 }
 
 .dr-dept-badge {
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   font-weight: 600;
-  background: #f8fafc;
-  color: #64748b;
+  background: #ffffff;
+  color: #475569;
   border: 1px solid #e2e8f0;
-  padding: 0.16rem 0.5rem;
-  border-radius: 5px;
+  padding: 0.16rem 0.55rem;
+  border-radius: 6px;
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.3rem;
+}
+
+.dr-urgency-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.16rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
 }
 
 .dr-badges-row {
@@ -320,10 +324,11 @@
   grid-template-columns: 1fr 1.35fr;
   align-items: center;
   gap: 1rem;
-  background: #f8fafc;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  border: 1px solid #f1f5f9;
+  background: #ffffff;
+  padding: 0.85rem 1.1rem;
+  border-radius: 9px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .dr-requester-info {
@@ -418,7 +423,7 @@
 }
 
 .dr-date-box.current {
-  background: #ffffff;
+  background: #f8fafc;
   border-color: #e2e8f0;
 }
 
@@ -503,12 +508,13 @@
 /* Reason Box */
 .dr-reason-box {
   background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.07);
   border-left: 3px solid #3b82f6;
-  border-radius: 0 6px 6px 0;
-  padding: 0.45rem 0.75rem;
-  font-size: 0.8rem;
+  border-radius: 8px;
+  padding: 0.65rem 0.95rem;
+  font-size: 0.82rem;
   color: #334155;
-  line-height: 1.4;
+  line-height: 1.45;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
   display: flex;
   align-items: baseline;
@@ -528,14 +534,16 @@
 
 /* Decision Details Box */
 .dr-decision-box {
-  border-radius: 6px;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.78rem;
-  line-height: 1.4;
-  border: 1px solid;
+  border-radius: 8px;
+  padding: 0.65rem 0.95rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.25rem;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 /* Card Actions */
@@ -543,9 +551,9 @@
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 0.5rem;
-  padding-top: 0.45rem;
-  border-top: 1px solid #f1f5f9;
+  gap: 0.6rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .dr-btn {

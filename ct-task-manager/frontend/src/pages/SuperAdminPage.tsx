@@ -259,13 +259,15 @@ const SuperAdminPage = () => {
         {/* Tasks Awaiting Review */}
         <div className="sa-review-card">
           <div className="sa-review-header">
-            <div className="sa-review-title-group">
+            <div className="sa-review-title-group" style={{ cursor: 'pointer' }} onClick={() => navigate('/super-admin/review-tasks')} title="Go to Task Reviews">
               <div className="sa-review-title">
                 <ClipboardCheck className="sa-review-icon" size={20} /> Tasks Awaiting Review
               </div>
               <div className="sa-review-desc">High priority tasks requiring admin approval.</div>
             </div>
-            <div className="sa-review-count">{loading ? '...' : tasksAwaitingReview.length}</div>
+            <div className="sa-review-count" style={{ cursor: 'pointer' }} onClick={() => navigate('/super-admin/review-tasks')} title="View all pending reviews">
+              {loading ? '...' : tasksAwaitingReview.length}
+            </div>
           </div>
 
           <div className="sa-review-list">
@@ -320,7 +322,7 @@ const SuperAdminPage = () => {
             )}
           </div>
 
-          <a href="#" className="sa-view-all-link" onClick={(e) => { e.preventDefault(); navigate('/super-admin/tasks'); }}>
+          <a href="#" className="sa-view-all-link" onClick={(e) => { e.preventDefault(); navigate('/super-admin/review-tasks'); }}>
             View all pending reviews &rarr;
           </a>
         </div>

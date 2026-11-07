@@ -10,6 +10,7 @@ import {
   Building, 
   BarChart2,
   CalendarClock,
+  ClipboardCheck,
   Menu,
   X
 } from 'lucide-react';
@@ -26,8 +27,9 @@ const SuperAdminLayout: React.FC = () => {
   const { systemName } = useSettings();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [pendingDeadlinesCount, setPendingDeadlinesCount] = useState<number>(0);
+  const [pendingReviewCount, setPendingReviewCount] = useState<number>(0);
 
-  useEffect(() => {
+  const fetchBadgeCounts = () => {
     api.getDeadlineRequests({ status: 'pending', limit: 1 })
       .then(res => {
         if (res.success && res.data?.counts?.pending !== undefined) {
@@ -35,6 +37,27 @@ const SuperAdminLayout: React.FC = () => {
         }
       })
       .catch(() => {});
+
+    api.getTasks({ status: 'submitted_for_review', limit: 1 })
+      .then(res => {
+        if (res.success && res.data?.pagination?.total !== undefined) {
+          setPendingReviewCount(res.data.pagination.total);
+        }
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchBadgeCounts();
+
+    const handleUpdate = () => fetchBadgeCounts();
+    window.addEventListener('task-review-updated', handleUpdate);
+    window.addEventListener('task-updated', handleUpdate);
+
+    return () => {
+      window.removeEventListener('task-review-updated', handleUpdate);
+      window.removeEventListener('task-updated', handleUpdate);
+    };
   }, []);
 
   // Background body scroll lock & ESC key listener
@@ -125,6 +148,25 @@ const SuperAdminLayout: React.FC = () => {
           </NavLink>
           <NavLink to="/super-admin/tasks" className={({ isActive }) => `sa-nav-item ${isActive ? 'active' : ''}`} onClick={() => setIsMobileSidebarOpen(false)}>
             <FileText size={18} /> Tasks
+          </NavLink>
+          <NavLink to="/super-admin/review-tasks" className={({ isActive }) => `sa-nav-item ${isActive ? 'active' : ''}`} onClick={() => setIsMobileSidebarOpen(false)}>
+            <ClipboardCheck size={18} style={{ flexShrink: 0 }} />
+            <span style={{ whiteSpace: 'nowrap' }}>Review Tasks</span>
+            {pendingReviewCount > 0 && (
+              <span style={{
+                marginLeft: 'auto',
+                backgroundColor: '#f59e0b',
+                color: '#ffffff',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                padding: '2px 7px',
+                borderRadius: '12px',
+                lineHeight: 1.2,
+                flexShrink: 0
+              }}>
+                {pendingReviewCount}
+              </span>
+            )}
           </NavLink>
           <NavLink to="/super-admin/deadline-requests" className={({ isActive }) => `sa-nav-item ${isActive ? 'active' : ''}`} onClick={() => setIsMobileSidebarOpen(false)}>
             <CalendarClock size={18} style={{ flexShrink: 0 }} />

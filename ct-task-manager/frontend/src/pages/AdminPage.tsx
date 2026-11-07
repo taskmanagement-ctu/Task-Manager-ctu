@@ -5,7 +5,7 @@ import {
   Activity,
   ArrowRight
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api, Task } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { calculateUrgency } from '../utils/taskUrgency';
@@ -15,6 +15,7 @@ import TaskChatDrawer from '../components/TaskChatDrawer';
 import './AdminPage.css';
 
 const AdminPage: React.FC = () => {
+  const navigate = useNavigate();
   const { currentUser: user } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [team, setTeam] = useState<any[]>([]);
@@ -111,7 +112,12 @@ const AdminPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="admin-widget">
+          <div 
+            className="admin-widget" 
+            style={{ cursor: 'pointer' }} 
+            onClick={() => navigate('/admin/review-tasks')}
+            title="Go to Task Reviews & Approvals"
+          >
             <div className="admin-widget-header">
               <div className="admin-widget-title">Awaiting Review</div>
               <Activity className="admin-widget-icon" size={20} color={pendingReviewTasks.length > 0 ? "#f59e0b" : "#64748b"} />
@@ -119,7 +125,9 @@ const AdminPage: React.FC = () => {
             <div className="admin-widget-value">
               {pendingReviewTasks.length}
             </div>
-            <div className="admin-widget-sub">Need your approval</div>
+            <div className="admin-widget-sub" style={{ color: '#2563eb', fontWeight: 600 }}>
+              Need your approval &rarr;
+            </div>
             <div style={{ marginTop: '1rem', height: '30px', position: 'relative' }}>
               <svg viewBox="0 0 100 30" preserveAspectRatio="none" style={{ width: '100%', height: '100%' }}>
                 <path d="M0,20 Q10,5 20,20 T40,20 T60,10 T80,25 T100,15 L100,30 L0,30 Z" fill="#fef3c7" />
