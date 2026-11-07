@@ -523,7 +523,8 @@ const DeadlineRequestsPage: React.FC = () => {
                     title="View task details"
                   >
                     <ExternalLink size={13} />
-                    <span>View Task</span>
+                    <span className="dr-btn-label-full">View Task</span>
+                    <span className="dr-btn-label-short">View</span>
                   </button>
 
                   {/* Actions for Pending/Endorsed Requests */}

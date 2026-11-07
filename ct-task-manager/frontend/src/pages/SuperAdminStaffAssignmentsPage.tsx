@@ -356,7 +356,8 @@ const SuperAdminStaffAssignmentsPage: React.FC = () => {
                 onClick={() => setRoleFilter('all')}
               >
                 <Users size={15} />
-                <span>All Members</span>
+                <span className="saa-tab-label-full">All Members</span>
+                <span className="saa-tab-label-short">All</span>
                 <span className="saa-tab-count">{totalCount}</span>
               </button>
 
@@ -366,7 +367,8 @@ const SuperAdminStaffAssignmentsPage: React.FC = () => {
                 onClick={() => setRoleFilter('admins')}
               >
                 <Shield size={15} />
-                <span>Department Admins</span>
+                <span className="saa-tab-label-full">Department Admins</span>
+                <span className="saa-tab-label-short">Admins</span>
                 <span className="saa-tab-count admin-badge">{adminCount}</span>
               </button>
 
@@ -375,7 +377,8 @@ const SuperAdminStaffAssignmentsPage: React.FC = () => {
                 className={`saa-role-tab ${roleFilter === 'staff' ? 'active' : ''}`}
                 onClick={() => setRoleFilter('staff')}
               >
-                <span>Staff Members</span>
+                <span className="saa-tab-label-full">Staff Members</span>
+                <span className="saa-tab-label-short">Staff</span>
                 <span className="saa-tab-count">{regularStaffCount}</span>
               </button>
             </div>

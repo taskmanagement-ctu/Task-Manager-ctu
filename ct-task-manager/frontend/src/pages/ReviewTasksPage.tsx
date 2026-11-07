@@ -463,7 +463,8 @@ const ReviewTasksPage: React.FC = () => {
             className={`rt-tab ${activeTab === 'pending' ? 'active' : ''}`}
             onClick={() => handleTabChange('pending')}
           >
-            <span>Pending Review</span>
+            <span className="rt-tab-label-full">Pending Review</span>
+            <span className="rt-tab-label-short">Pending</span>
             <span className={`rt-tab-badge ${counts.pending > 0 ? 'pending' : ''}`}>
               {counts.pending}
             </span>
@@ -474,7 +475,8 @@ const ReviewTasksPage: React.FC = () => {
             className={`rt-tab ${activeTab === 'approved' ? 'active' : ''}`}
             onClick={() => handleTabChange('approved')}
           >
-            <span>Approved</span>
+            <span className="rt-tab-label-full">Approved</span>
+            <span className="rt-tab-label-short">Approved</span>
             <span className="rt-tab-badge">{counts.approved}</span>
           </button>
 
@@ -483,7 +485,8 @@ const ReviewTasksPage: React.FC = () => {
             className={`rt-tab ${activeTab === 'rejected' ? 'active' : ''}`}
             onClick={() => handleTabChange('rejected')}
           >
-            <span>Revisions Requested</span>
+            <span className="rt-tab-label-full">Revisions Requested</span>
+            <span className="rt-tab-label-short">Revisions</span>
             <span className="rt-tab-badge">{counts.rejected}</span>
           </button>
 
@@ -492,7 +495,8 @@ const ReviewTasksPage: React.FC = () => {
             className={`rt-tab ${activeTab === 'all' ? 'active' : ''}`}
             onClick={() => handleTabChange('all')}
           >
-            <span>All Tasks</span>
+            <span className="rt-tab-label-full">All Tasks</span>
+            <span className="rt-tab-label-short">All</span>
             <span className="rt-tab-badge">{counts.total}</span>
           </button>
         </div>
@@ -780,8 +784,9 @@ const ReviewTasksPage: React.FC = () => {
                     onClick={() => setSelectedTaskForModal(task)}
                     title="View complete task with full discussion and details"
                   >
-                    <ExternalLink size={14} />
-                    <span>View Full Task</span>
+                    <ExternalLink size={13} />
+                    <span className="rt-btn-label-full">View Full Task</span>
+                    <span className="rt-btn-label-short">View Task</span>
                   </button>
 
                   {task.status === 'submitted_for_review' && (
@@ -796,8 +801,9 @@ const ReviewTasksPage: React.FC = () => {
                         }}
                         title="Request changes and return task to assignee"
                       >
-                        <RotateCcw size={14} />
-                        <span>Request Changes</span>
+                        <RotateCcw size={13} />
+                        <span className="rt-btn-label-full">Request Changes</span>
+                        <span className="rt-btn-label-short">Revise</span>
                       </button>
 
                       <button 
@@ -811,8 +817,9 @@ const ReviewTasksPage: React.FC = () => {
                         }}
                         title="Approve submission, rate work quality, and close task"
                       >
-                        <CheckCircle2 size={15} />
-                        <span>Approve & Rate</span>
+                        <CheckCircle2 size={14} />
+                        <span className="rt-btn-label-full">Approve & Rate</span>
+                        <span className="rt-btn-label-short">Approve</span>
                       </button>
                     </div>
                   )}
