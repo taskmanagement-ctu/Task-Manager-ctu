@@ -24,7 +24,11 @@ import {
   AlertCircle,
   RotateCcw,
   Users,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Plus,
+  Eye,
+  EyeOff,
+  Shield
 } from 'lucide-react';
 import ExportDropdownMenu from '../components/ExportDropdownMenu';
 import { exportUsers } from '../utils/generalExport';
@@ -89,6 +93,17 @@ const UserManagementPage: React.FC = () => {
   const [transferError, setTransferError] = useState<string | null>(null);
   const [transferAllUsersList, setTransferAllUsersList] = useState<User[]>([]);
   const [loadingCandidates, setLoadingCandidates] = useState(false);
+
+  // Create Executive Admin Modal State
+  const [showExecutiveModal, setShowExecutiveModal] = useState(false);
+  const [executiveForm, setExecutiveForm] = useState({
+    universityId: '',
+    password: '',
+    confirmPassword: '',
+  });
+  const [showExecutivePassword, setShowExecutivePassword] = useState(false);
+  const [isCreatingExecutive, setIsCreatingExecutive] = useState(false);
+  const [executiveError, setExecutiveError] = useState<string | null>(null);
 
   const handleExportUsers = async (format: 'excel' | 'pdf' | 'csv') => {
     try {
@@ -351,8 +366,58 @@ const UserManagementPage: React.FC = () => {
     }
   };
 
+  const handleCreateExecutiveSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setExecutiveError(null);
+
+    const cleanId = executiveForm.universityId.trim();
+    if (!cleanId) {
+      setExecutiveError('Please enter a University ID.');
+      return;
+    }
+    if (!/^\d{3,5}$/.test(cleanId)) {
+      setExecutiveError('University ID must contain between 3 and 5 digits (e.g. 10002).');
+      return;
+    }
+    if (!executiveForm.password) {
+      setExecutiveError('Please enter an initial password.');
+      return;
+    }
+    if (executiveForm.password.length < 6) {
+      setExecutiveError('Password must be at least 6 characters.');
+      return;
+    }
+    if (executiveForm.password !== executiveForm.confirmPassword) {
+      setExecutiveError('Passwords do not match.');
+      return;
+    }
+
+    try {
+      setIsCreatingExecutive(true);
+      const res = await api.createExecutiveAdmin({
+        universityId: cleanId,
+        password: executiveForm.password,
+      });
+
+      if (res.success) {
+        setShowExecutiveModal(false);
+        setExecutiveForm({ universityId: '', password: '', confirmPassword: '' });
+        setActionSuccessMessage(`Executive Admin account (${cleanId}) created successfully!`);
+        await fetchUsers();
+        await fetchSuperAdminList();
+      } else {
+        setExecutiveError(res.message || 'Failed to create Executive Admin.');
+      }
+    } catch (err: any) {
+      setExecutiveError(err.message || 'Failed to create Executive Admin.');
+    } finally {
+      setIsCreatingExecutive(false);
+    }
+  };
+
   const getRoleIcon = (u: User) => {
     if (u.role === 'super_admin') {
+      if (u.isExecutiveAdmin) return <Crown size={14} color="#7c3aed" />;
       if (authUser?.universityId === '10001') {
         return u.universityId === '10001' ? <Crown size={14} color="#d97706" /> : <ShieldAlert size={14} />;
       }
@@ -390,6 +455,7 @@ const UserManagementPage: React.FC = () => {
 
   const formatRoleText = (u: User) => {
     if (u.role === 'super_admin') {
+      if (u.isExecutiveAdmin) return 'Executive Admin';
       if (authUser?.universityId === '10001') {
         return u.universityId === '10001' ? 'Primary Super Admin' : 'Delegated Super Admin';
       }
@@ -401,6 +467,7 @@ const UserManagementPage: React.FC = () => {
 
   const getRoleBadgeClass = (u: User) => {
     if (u.role === 'super_admin') {
+      if (u.isExecutiveAdmin) return 'badge-role badge-role-executive_super_admin';
       if (authUser?.universityId === '10001') {
         return u.universityId === '10001' ? 'badge-role badge-role-primary_super_admin' : 'badge-role badge-role-super_admin';
       }
@@ -462,6 +529,21 @@ const UserManagementPage: React.FC = () => {
                     : '1 Active Super Admin'}
                 </span>
               </div>
+              {authUser?.universityId === '10001' && (
+                <button
+                  type="button"
+                  className="btn-create-executive"
+                  onClick={() => {
+                    setExecutiveError(null);
+                    setExecutiveForm({ universityId: '', password: '', confirmPassword: '' });
+                    setShowExecutiveModal(true);
+                  }}
+                  title="Create an Executive Admin account"
+                >
+                  <Plus size={14} />
+                  <span>Create Executive Admin</span>
+                </button>
+              )}
               <button
                 type="button"
                 className="btn-transfer-superadmin"
@@ -508,9 +590,68 @@ const UserManagementPage: React.FC = () => {
               </div>
             ))}
 
+            {/* Executive Super Admin Cards (Visible ONLY to 10001 and Executive Admin themselves) */}
+            {superAdminList.filter(sa => sa.isExecutive).map(sa => (
+              <div key={sa.id || sa.universityId} className="um-gov-admin-box executive">
+                <div className="um-gov-card-header">
+                  <div className="um-gov-admin-avatar executive" title="Executive Super Administrator">
+                    <Shield size={20} />
+                  </div>
+                  <div className="um-gov-identity">
+                    <div className="um-gov-name-row">
+                      <span className="um-gov-name" title={sa.name}>
+                        {sa.name === 'Pending Setup' || !sa.name ? 'Executive Admin (Pending Setup)' : sa.name}
+                      </span>
+                      {authUser?.universityId === sa.universityId && (
+                        <span className="um-gov-you-badge">You</span>
+                      )}
+                    </div>
+                    <div className="um-gov-role-row">
+                      <span className="um-gov-admin-tag-executive">
+                        <Shield size={11} /> Executive Admin
+                      </span>
+                    </div>
+                  </div>
+                  {authUser?.universityId === '10001' && (
+                    <button
+                      type="button"
+                      className="um-gov-locate-btn"
+                      onClick={() => {
+                        setSearch(sa.universityId);
+                        setPage(1);
+                      }}
+                      title="Find in directory"
+                    >
+                      <Search size={12} />
+                      <span>Locate</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="um-gov-card-footer">
+                  <div className="um-gov-info-chip id-chip" title={`Employee ID: ${sa.universityId}`}>
+                    <span className="um-gov-chip-label">ID:</span>
+                    <strong>{sa.universityId}</strong>
+                  </div>
+                  <div className="um-gov-info-chip email-chip" title={sa.email || 'Pending Setup'}>
+                    <Mail size={12} className="um-gov-chip-icon" />
+                    <span 
+                      className="um-gov-chip-email"
+                      style={{ 
+                        fontStyle: (!sa.email || sa.email.includes('placeholder') || sa.email === '-') ? 'italic' : 'normal',
+                        color: (!sa.email || sa.email.includes('placeholder') || sa.email === '-') ? '#818cf8' : undefined 
+                      }}
+                    >
+                      {(!sa.email || sa.email.includes('placeholder') || sa.email === '-') ? 'Pending Setup' : sa.email}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+
             {/* Delegated Super Admins Cards */}
-            {superAdminList.filter(sa => sa.universityId !== '10001').length > 0 ? (
-              superAdminList.filter(sa => sa.universityId !== '10001').map(sa => (
+            {superAdminList.filter(sa => sa.universityId !== '10001' && !sa.isExecutive).length > 0 ? (
+              superAdminList.filter(sa => sa.universityId !== '10001' && !sa.isExecutive).map(sa => (
                 <div 
                   key={sa.id || sa.universityId} 
                   className={`um-gov-admin-box ${authUser?.universityId === '10001' ? 'delegated' : 'primary'}`}
@@ -741,13 +882,31 @@ const UserManagementPage: React.FC = () => {
                     <div className="user-info-cell">
                       <div className="user-avatar" style={{ backgroundImage: `url(https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=e2e8f0&color=1e293b)` }}></div>
                       <div>
-                        <div className="user-name">{user.name}</div>
-                        <div className="user-email">{user.email}</div>
+                        <div className="user-name">
+                          {user.isExecutiveAdmin && (user.name === 'Pending Setup' || !user.name) ? 'Executive Admin (Pending Setup)' : user.name}
+                        </div>
+                        <div 
+                          className="user-email" 
+                          style={{ 
+                            fontStyle: (!user.email || user.email.includes('placeholder') || user.email === '-') ? 'italic' : 'normal',
+                            color: (!user.email || user.email.includes('placeholder') || user.email === '-') ? '#94a3b8' : undefined 
+                          }}
+                        >
+                          {(!user.email || user.email.includes('placeholder') || user.email === '-') ? 'Pending Setup' : user.email}
+                        </div>
                       </div>
                     </div>
                   </td>
                   <td>
-                    <div className="user-phone">{user.phone && user.phone !== '-' ? user.phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3') : '-'}</div>
+                    <div 
+                      className="user-phone"
+                      style={{ 
+                        fontStyle: (!user.phone || user.phone === '0000000000' || user.phone === '-') ? 'italic' : 'normal',
+                        color: (!user.phone || user.phone === '0000000000' || user.phone === '-') ? '#94a3b8' : undefined 
+                      }}
+                    >
+                      {(!user.phone || user.phone === '0000000000' || user.phone === '-') ? (user.isExecutiveAdmin ? 'Pending Setup' : '-') : user.phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3')}
+                    </div>
                   </td>
                   <td>
                     <div className="user-dept">{user.department || '-'}</div>
@@ -767,6 +926,11 @@ const UserManagementPage: React.FC = () => {
                       <span className="um-roster-badge um-roster-super" title="Primary Root Super Administrator (Permanent)">
                         <Crown size={12} color="#f59e0b" />
                         Primary Root
+                      </span>
+                    ) : user.isExecutiveAdmin ? (
+                      <span className="um-roster-badge um-roster-executive" title="Executive Super Administrator">
+                        <Shield size={12} color="#4338ca" />
+                        Executive Admin
                       </span>
                     ) : user.role === 'super_admin' ? (
                       <span className="um-roster-badge um-roster-super" title="Delegated Super Administrator">
@@ -902,8 +1066,18 @@ const UserManagementPage: React.FC = () => {
                 <div className="user-info-cell">
                   <div className="user-avatar" style={{ backgroundImage: `url(https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=e2e8f0&color=1e293b)` }}></div>
                   <div>
-                    <div className="user-name">{user.name}</div>
-                    <div className="user-email">{user.email}</div>
+                    <div className="user-name">
+                      {user.isExecutiveAdmin && (user.name === 'Pending Setup' || !user.name) ? 'Executive Admin (Pending Setup)' : user.name}
+                    </div>
+                    <div 
+                      className="user-email"
+                      style={{ 
+                        fontStyle: (!user.email || user.email.includes('placeholder') || user.email === '-') ? 'italic' : 'normal',
+                        color: (!user.email || user.email.includes('placeholder') || user.email === '-') ? '#94a3b8' : undefined 
+                      }}
+                    >
+                      {(!user.email || user.email.includes('placeholder') || user.email === '-') ? 'Pending Setup' : user.email}
+                    </div>
                   </div>
                 </div>
                 <div className="um-card-status-wrapper">
@@ -914,6 +1088,10 @@ const UserManagementPage: React.FC = () => {
                   ) : user.universityId === '10001' ? (
                     <span className="um-roster-badge um-roster-super" title="Primary Root Super Administrator (Permanent)">
                       <Crown size={12} color="#f59e0b" /> Primary Root
+                    </span>
+                  ) : user.isExecutiveAdmin ? (
+                    <span className="um-roster-badge um-roster-executive" title="Executive Super Administrator">
+                      <Shield size={12} color="#4338ca" /> Executive Admin
                     </span>
                   ) : user.role === 'super_admin' ? (
                     <span className="um-roster-badge um-roster-super" title="Delegated Super Administrator">
@@ -950,7 +1128,15 @@ const UserManagementPage: React.FC = () => {
               <div className="um-card-details">
                 <div className="um-card-info-row">
                   <Mail size={15} className="um-card-info-icon" />
-                  <span className="um-card-info-text">{user.email}</span>
+                  <span 
+                    className="um-card-info-text"
+                    style={{ 
+                      fontStyle: (!user.email || user.email.includes('placeholder') || user.email === '-') ? 'italic' : 'normal',
+                      color: (!user.email || user.email.includes('placeholder') || user.email === '-') ? '#94a3b8' : undefined 
+                    }}
+                  >
+                    {(!user.email || user.email.includes('placeholder') || user.email === '-') ? 'Pending Setup' : user.email}
+                  </span>
                 </div>
 
                 <div className="um-card-info-row">
@@ -958,14 +1144,18 @@ const UserManagementPage: React.FC = () => {
                   <span className="um-card-info-text">{user.department || 'Unassigned'}</span>
                 </div>
                 
-                {user.phone && user.phone !== '-' && (
-                  <div className="um-card-info-row">
-                    <Phone size={15} className="um-card-info-icon" />
-                    <span className="um-card-info-text">
-                      {user.phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3')}
-                    </span>
-                  </div>
-                )}
+                <div className="um-card-info-row">
+                  <Phone size={15} className="um-card-info-icon" />
+                  <span 
+                    className="um-card-info-text"
+                    style={{ 
+                      fontStyle: (!user.phone || user.phone === '0000000000' || user.phone === '-') ? 'italic' : 'normal',
+                      color: (!user.phone || user.phone === '0000000000' || user.phone === '-') ? '#94a3b8' : undefined 
+                    }}
+                  >
+                    {(!user.phone || user.phone === '0000000000' || user.phone === '-') ? (user.isExecutiveAdmin ? 'Pending Setup' : '-') : user.phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3')}
+                  </span>
+                </div>
               </div>
 
               <div className="actions-cell" style={{ position: 'relative', marginTop: '0.85rem' }}>
@@ -1598,6 +1788,155 @@ const UserManagementPage: React.FC = () => {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Executive Admin Modal */}
+      {showExecutiveModal && (
+        <div 
+          className="modal-overlay" 
+          onClick={() => !isCreatingExecutive && setShowExecutiveModal(false)}
+        >
+          <div 
+            className="modal-content um-edit-modal-content" 
+            style={{ maxWidth: '520px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="um-modal-header">
+              <div className="um-modal-header-icon" style={{ backgroundColor: '#e0e7ff', color: '#4338ca' }}>
+                <Shield size={22} />
+              </div>
+              <div className="um-modal-header-text">
+                <h3 className="um-modal-title">Create Executive Admin</h3>
+                <p className="um-modal-subtitle">
+                  Provision a high-level Super Admin account (e.g. Managing Director) with institutional authority.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="um-modal-close"
+                onClick={() => !isCreatingExecutive && setShowExecutiveModal(false)}
+                disabled={isCreatingExecutive}
+                aria-label="Close modal"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {executiveError && (
+              <div className="um-modal-error" style={{ marginBottom: '1.25rem' }}>
+                <AlertCircle size={16} />
+                <span>{executiveError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleCreateExecutiveSubmit}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '0.4rem' }}>
+                    University ID <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. 10002"
+                    value={executiveForm.universityId}
+                    onChange={(e) => setExecutiveForm({ ...executiveForm, universityId: e.target.value.replace(/\D/g, '') })}
+                    maxLength={5}
+                    disabled={isCreatingExecutive}
+                    required
+                    style={{ width: '100%', boxSizing: 'border-box' }}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.25rem', display: 'block' }}>
+                    3 to 5 digit institutional ID used for logging in.
+                  </span>
+                </div>
+
+                <div className="form-group" style={{ margin: 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#334155', margin: 0 }}>
+                      Initial Password <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowExecutivePassword(!showExecutivePassword)}
+                      style={{ background: 'none', border: 'none', padding: 0, fontSize: '0.75rem', color: '#6366f1', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}
+                    >
+                      {showExecutivePassword ? <EyeOff size={13} /> : <Eye size={13} />}
+                      {showExecutivePassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  <input
+                    type={showExecutivePassword ? 'text' : 'password'}
+                    className="form-control"
+                    placeholder="Enter initial password (min 6 characters)"
+                    value={executiveForm.password}
+                    onChange={(e) => setExecutiveForm({ ...executiveForm, password: e.target.value })}
+                    disabled={isCreatingExecutive}
+                    required
+                    minLength={6}
+                    style={{ width: '100%', boxSizing: 'border-box' }}
+                  />
+                </div>
+
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '0.4rem' }}>
+                    Confirm Password <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type={showExecutivePassword ? 'text' : 'password'}
+                    className="form-control"
+                    placeholder="Re-enter initial password"
+                    value={executiveForm.confirmPassword}
+                    onChange={(e) => setExecutiveForm({ ...executiveForm, confirmPassword: e.target.value })}
+                    disabled={isCreatingExecutive}
+                    required
+                    minLength={6}
+                    style={{ width: '100%', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+
+              {/* Information Notice */}
+              <div className="um-role-primary-notice" style={{ marginBottom: '1.5rem', background: '#eef2ff', borderColor: '#c7d2fe' }}>
+                <Shield size={18} style={{ flexShrink: 0, marginTop: '2px', color: '#4f46e5' }} />
+                <div>
+                  <strong style={{ color: '#3730a3' }}>First-Time Setup &amp; Confidentiality:</strong>
+                  <p style={{ margin: '0.25rem 0 0', fontSize: '0.82rem', lineHeight: 1.45, color: '#4338ca' }}>
+                    When the Executive logs in with this ID and password, they will be prompted to enter their Name, Email, Phone, and optionally set a private password. This account is hidden from Delegated Super Admins.
+                  </p>
+                </div>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="modal-actions">
+                <button 
+                  type="button" 
+                  className="btn-paginate" 
+                  onClick={() => setShowExecutiveModal(false)}
+                  disabled={isCreatingExecutive}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn-create-executive" 
+                  style={{ padding: '0.55rem 1.25rem', fontSize: '0.88rem' }}
+                  disabled={isCreatingExecutive}
+                >
+                  {isCreatingExecutive ? (
+                    <>
+                      <Loader2 size={16} className="um-spin-icon" /> Creating Account...
+                    </>
+                  ) : (
+                    <>
+                      <Shield size={15} /> Create Executive Admin
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

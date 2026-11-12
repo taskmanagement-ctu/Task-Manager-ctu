@@ -670,6 +670,17 @@ export const login = async (req: Request, res: Response) => {
       expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as any,
     });
 
+    const isExecutive = Boolean(user.isExecutiveAdmin);
+    const isProfilePending = isExecutive && (
+      user.isProfileComplete === false ||
+      !user.phone ||
+      user.phone === '0000000000' ||
+      user.phone === '-' ||
+      !user.email ||
+      user.email === '-' ||
+      user.email.includes('@placeholder')
+    );
+
     return res.status(200).json({
       success: true,
       message: 'Login successful',
@@ -683,6 +694,8 @@ export const login = async (req: Request, res: Response) => {
           phone: user.phone,
           department: user.department,
           role: user.role,
+          isExecutiveAdmin: isExecutive,
+          isProfileComplete: !isProfilePending,
           canCreateSuperAdminTasks: user.canCreateSuperAdminTasks || false,
         },
       },
@@ -706,6 +719,17 @@ export const getMe = async (req: Request, res: Response) => {
       });
     }
 
+    const isExecutive = Boolean(user.isExecutiveAdmin);
+    const isProfilePending = isExecutive && (
+      user.isProfileComplete === false ||
+      !user.phone ||
+      user.phone === '0000000000' ||
+      user.phone === '-' ||
+      !user.email ||
+      user.email === '-' ||
+      user.email.includes('@placeholder')
+    );
+
     return res.status(200).json({
       success: true,
       data: {
@@ -718,6 +742,8 @@ export const getMe = async (req: Request, res: Response) => {
           department: user.department,
           role: user.role,
           isActive: user.isActive,
+          isExecutiveAdmin: isExecutive,
+          isProfileComplete: !isProfilePending,
           canCreateSuperAdminTasks: user.canCreateSuperAdminTasks || false,
         },
       },

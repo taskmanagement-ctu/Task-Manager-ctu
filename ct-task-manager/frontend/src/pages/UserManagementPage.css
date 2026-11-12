@@ -401,6 +401,12 @@
   border-color: #e9d5ff;
 }
 
+.um-roster-executive {
+  background-color: #eef2ff;
+  color: #4338ca;
+  border-color: #c7d2fe;
+}
+
 .um-roster-deactivated {
   background-color: #fef2f2;
   color: #991b1b;
@@ -997,7 +1003,14 @@
   box-shadow: 0 1px 2px rgba(180, 83, 9, 0.08);
 }
 
-/* Institutional Governance Panel for Super Admins */
+/* Executive Super Admin Badge */
+.badge-role-executive_super_admin {
+  background: linear-gradient(135deg, #ede9fe 0%, #f5f3ff 100%);
+  color: #5b21b6;
+  border-color: #c4b5fd;
+  box-shadow: 0 1px 2px rgba(91, 33, 182, 0.08);
+}
+
 /* Institutional Governance Panel for Super Admins */
 .um-governance-card {
   background: #ffffff;
@@ -1085,6 +1098,29 @@
   gap: 0.4rem;
 }
 
+.btn-create-executive {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  color: #ffffff;
+  border: 1px solid #4338ca;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.42rem 0.95rem;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(79, 70, 229, 0.15);
+  transition: all 0.15s ease;
+}
+
+.btn-create-executive:hover {
+  background: linear-gradient(135deg, #4338ca 0%, #3730a3 100%);
+  border-color: #3730a3;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(79, 70, 229, 0.25);
+}
+
 .btn-transfer-superadmin {
   background-color: #0f172a;
   color: #ffffff;
@@ -1140,6 +1176,19 @@
   transform: translateY(-1px);
 }
 
+.um-gov-admin-box.executive {
+  border-color: #c7d2fe;
+  border-left: 3.5px solid #6366f1;
+  background: linear-gradient(145deg, #f8faff 0%, #f3f0ff 100%);
+  box-shadow: 0 1px 3px rgba(79, 70, 229, 0.08);
+}
+
+.um-gov-admin-box.executive:hover {
+  border-color: #a5b4fc;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.15);
+  transform: translateY(-1px);
+}
+
 .um-gov-admin-box.delegated {
   border-color: #e0e7ff;
   border-left: 3.5px solid #6366f1;
@@ -1182,6 +1231,12 @@
   background: #ede9fe;
   color: #6366f1;
   border: 1.5px solid #ddd6fe;
+}
+
+.um-gov-admin-avatar.executive {
+  background: linear-gradient(135deg, #e0e7ff 0%, #ede9fe 100%);
+  color: #4338ca;
+  border: 1.5px solid #c7d2fe;
 }
 
 .um-gov-identity {
@@ -1251,6 +1306,21 @@
   color: #5b21b6;
   background: #ede9fe;
   border: 1px solid #ddd6fe;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  letter-spacing: 0.03em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.um-gov-admin-tag-executive {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #4338ca;
+  background: #e0e7ff;
+  border: 1px solid #c7d2fe;
   padding: 0.15rem 0.5rem;
   border-radius: 4px;
   letter-spacing: 0.03em;
@@ -1415,6 +1485,7 @@
     align-self: flex-start;
   }
 
+  .btn-create-executive,
   .btn-transfer-superadmin {
     width: 100%;
     justify-content: center;

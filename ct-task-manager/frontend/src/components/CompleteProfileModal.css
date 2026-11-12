@@ -1,0 +1,365 @@
+/* CompleteProfileModal.css - Matching CT Task Manager Portal UI Design System */
+
+.cpm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  padding: 1rem;
+  box-sizing: border-box;
+  animation: cpmFadeIn 0.18s ease-out;
+}
+
+@keyframes cpmFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.cpm-modal-box {
+  background: #ffffff;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 520px;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.08);
+  padding: 1.75rem !important;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  animation: cpmSlideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes cpmSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Header */
+.cpm-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  margin-bottom: 1.15rem;
+}
+
+.cpm-header-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background-color: #eff6ff;
+  color: #2563eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.cpm-close-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0.35rem;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.cpm-close-btn:hover:not(:disabled) {
+  color: #0f172a;
+  background-color: #f1f5f9;
+}
+
+/* ID Banner / Institutional Badge */
+.cpm-id-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid #2563eb;
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
+  margin-bottom: 1.25rem;
+  gap: 0.5rem;
+  box-sizing: border-box;
+}
+
+.cpm-id-badge-left {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.86rem;
+  color: #334155;
+}
+
+.cpm-id-badge-left strong {
+  color: #0f172a;
+  font-weight: 700;
+  font-family: monospace;
+  font-size: 0.92rem;
+  letter-spacing: 0.5px;
+}
+
+.cpm-banner-shield {
+  color: #2563eb;
+  flex-shrink: 0;
+}
+
+.cpm-role-tag {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+/* Error Banner */
+.cpm-error-alert {
+  margin-bottom: 1.15rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 8px;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  line-height: 1.4;
+}
+
+/* Form Styles */
+.cpm-form {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Password Card */
+.cpm-password-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1rem;
+  margin-top: 0.25rem;
+  margin-bottom: 1.25rem;
+  box-sizing: border-box;
+}
+
+.cpm-password-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.25rem;
+}
+
+.cpm-password-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.cpm-toggle-btn {
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  transition: background-color 0.15s ease;
+}
+
+.cpm-toggle-btn:hover {
+  background-color: #eff6ff;
+}
+
+.cpm-password-desc {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin: 0.2rem 0 0.85rem;
+  line-height: 1.4;
+}
+
+.cpm-password-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+/* Actions matching UserManagement standard */
+.cpm-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.cpm-btn-cancel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.65rem 1.15rem;
+  border: 1px solid #cbd5e1;
+  background-color: #ffffff;
+  color: #475569;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cpm-btn-cancel:hover:not(:disabled) {
+  background-color: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.cpm-btn-submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.65rem 1.35rem;
+  border: 1px solid #2563eb;
+  background-color: #2563eb;
+  color: #ffffff;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.15);
+}
+
+.cpm-btn-submit:hover:not(:disabled) {
+  background-color: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.cpm-btn-cancel:disabled,
+.cpm-btn-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   MOBILE RESPONSIVE VIEW (@media max-width: 640px and max-width: 480px)
+   ========================================================================== */
+
+@media (max-width: 640px) {
+  .cpm-overlay {
+    padding: 0.75rem;
+    align-items: flex-end; /* Mobile bottom-sheet or centered */
+  }
+
+  .cpm-modal-box {
+    max-width: 100%;
+    width: 100%;
+    border-radius: 16px 16px 12px 12px;
+    padding: 1.25rem 1rem !important;
+    max-height: calc(100dvh - 1.5rem);
+  }
+
+  .cpm-header {
+    margin-bottom: 0.85rem;
+    gap: 0.65rem;
+  }
+
+  .cpm-header-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+  }
+
+  .cpm-header-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .um-modal-title {
+    font-size: 1.12rem;
+  }
+
+  .um-modal-subtitle {
+    font-size: 0.78rem;
+  }
+
+  .cpm-id-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+    padding: 0.6rem 0.75rem;
+  }
+
+  .cpm-role-tag {
+    align-self: flex-start;
+  }
+
+  .cpm-password-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .um-edit-form-group {
+    margin-bottom: 0.85rem;
+  }
+
+  .um-edit-input {
+    min-height: 44px; /* Optimal mobile touch target */
+    font-size: 0.95rem;
+  }
+
+  .cpm-actions {
+    flex-direction: column-reverse;
+    gap: 0.6rem;
+    padding-top: 0.85rem;
+  }
+
+  .cpm-btn-cancel,
+  .cpm-btn-submit {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+    font-size: 0.92rem;
+  }
+}
+
+@media (max-width: 400px) {
+  .cpm-modal-box {
+    padding: 1rem 0.85rem !important;
+  }
+
+  .um-modal-title {
+    font-size: 1.05rem;
+  }
+}

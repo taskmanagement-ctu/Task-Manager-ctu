@@ -200,6 +200,7 @@ export interface SuperAdminInfo {
   department?: string | null;
   isActive: boolean;
   isPrimary: boolean;
+  isExecutive?: boolean;
   createdAt?: string;
 }
 
@@ -213,6 +214,8 @@ export interface User {
   department: string | null;
   baseDepartment?: string | null;
   role: string;
+  isExecutiveAdmin?: boolean;
+  isProfileComplete?: boolean;
   canCreateSuperAdminTasks?: boolean;
   isActive?: boolean;
   isPrimarySuperAdmin?: boolean;
@@ -772,6 +775,28 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ targetUserId }),
+    });
+  },
+
+  /**
+   * Create an Executive Admin account (Primary Super Admin 10001 only).
+   */
+  createExecutiveAdmin: async (data: { universityId: string; password: string }): Promise<{ success: boolean; message: string; data?: { user: User } }> => {
+    return fetchWithAuth('/api/users/executive-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Complete user profile and optionally update password (on first login).
+   */
+  completeProfile: async (data: { name: string; email: string; phone: string; newPassword?: string }): Promise<{ success: boolean; message: string; data?: { user: User } }> => {
+    return fetchWithAuth('/api/users/complete-profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
     });
   },
 

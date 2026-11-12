@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import bcrypt from 'bcrypt';
 import User, { PRIMARY_SUPER_ADMIN_ID } from '../models/User';
 import StaffAssignment from '../models/StaffAssignment';
 import Task from '../models/Task';
@@ -101,19 +102,29 @@ export const getUsers = async (req: Request, res: Response) => {
       query._id = { $in: assignedStaffIds };
     }
 
-    // Protection: Hide Primary Super Admin (10001) from all non-10001 users
-    const isPrimarySuperAdmin = (req as any).user?.universityId === PRIMARY_SUPER_ADMIN_ID;
+    // Protection: Hide Primary Super Admin (10001) and Executive Admins from non-primary/unauthorized users
+    const operator = (req as any).user;
+    const isPrimarySuperAdmin = operator?.universityId === PRIMARY_SUPER_ADMIN_ID;
+    const isExecutiveAdminUser = operator?.isExecutiveAdmin === true;
+
+    const exclusionConditions: any[] = [];
     if (!isPrimarySuperAdmin) {
-      if (query.$and) {
-        query.$and.push({ universityId: { $ne: PRIMARY_SUPER_ADMIN_ID } });
-      } else if (query.$or) {
-        query.$and = [
-          { $or: query.$or },
-          { universityId: { $ne: PRIMARY_SUPER_ADMIN_ID } }
-        ];
-        delete query.$or;
+      exclusionConditions.push({ universityId: { $ne: PRIMARY_SUPER_ADMIN_ID } });
+      if (!isExecutiveAdminUser) {
+        exclusionConditions.push({ isExecutiveAdmin: { $ne: true } });
+      }
+    }
+
+    if (exclusionConditions.length > 0) {
+      if (!query.$and) {
+        if (query.$or) {
+          query.$and = [{ $or: query.$or }, ...exclusionConditions];
+          delete query.$or;
+        } else {
+          query.$and = [...exclusionConditions];
+        }
       } else {
-        query.universityId = { $ne: PRIMARY_SUPER_ADMIN_ID };
+        query.$and.push(...exclusionConditions);
       }
     }
 
@@ -171,6 +182,7 @@ export const getUsers = async (req: Request, res: Response) => {
         uObj.rosterStatus = 'super_admin';
       }
       uObj.isPrimarySuperAdmin = u.universityId === PRIMARY_SUPER_ADMIN_ID;
+      uObj.isExecutiveAdmin = u.isExecutiveAdmin === true;
       return uObj;
     });
 
@@ -198,8 +210,18 @@ export const getUsers = async (req: Request, res: Response) => {
 // GET /api/users/stats
 export const getUserStats = async (req: Request, res: Response) => {
   try {
-    const isPrimarySuperAdmin = (req as any).user?.universityId === PRIMARY_SUPER_ADMIN_ID;
-    const baseFilter: any = isPrimarySuperAdmin ? {} : { universityId: { $ne: PRIMARY_SUPER_ADMIN_ID } };
+    const operator = (req as any).user;
+    const isPrimarySuperAdmin = operator?.universityId === PRIMARY_SUPER_ADMIN_ID;
+    const isExecutiveAdminUser = operator?.isExecutiveAdmin === true;
+
+    const baseFilter: any = {};
+    if (!isPrimarySuperAdmin) {
+      const exclusions: any[] = [{ universityId: { $ne: PRIMARY_SUPER_ADMIN_ID } }];
+      if (!isExecutiveAdminUser) {
+        exclusions.push({ isExecutiveAdmin: { $ne: true } });
+      }
+      baseFilter.$and = exclusions;
+    }
 
     const totalUsers = await User.countDocuments(baseFilter);
     const activeUsers = await User.countDocuments({ ...baseFilter, isActive: true });
@@ -209,7 +231,7 @@ export const getUserStats = async (req: Request, res: Response) => {
     const staff = await User.countDocuments({ ...baseFilter, role: 'staff' });
 
     const superAdminUsers = await User.find({ ...baseFilter, role: 'super_admin' })
-      .select('universityId name email phone department isActive createdAt')
+      .select('universityId name email phone department isActive createdAt isExecutiveAdmin')
       .lean();
 
     const superAdminList = superAdminUsers.map((sa: any) => ({
@@ -222,6 +244,7 @@ export const getUserStats = async (req: Request, res: Response) => {
       department: sa.department,
       isActive: sa.isActive,
       isPrimary: sa.universityId === PRIMARY_SUPER_ADMIN_ID,
+      isExecutive: sa.isExecutiveAdmin === true,
       createdAt: sa.createdAt,
     }));
 
@@ -288,6 +311,16 @@ export const updateUserRole = async (req: Request, res: Response) => {
         return res.status(403).json({
           success: false,
           message: 'Only the Primary Super Admin can modify their own account.',
+        });
+      }
+    }
+
+    // Safety 1b: Executive Admin cannot be demoted or modified by delegated super admins
+    if (userToUpdate.isExecutiveAdmin) {
+      if (operator?.universityId !== PRIMARY_SUPER_ADMIN_ID && operator?._id?.toString() !== userToUpdate._id.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Executive Admin accounts can only be managed by the Primary Super Admin.',
         });
       }
     }
@@ -539,6 +572,16 @@ export const updateUserStatus = async (req: Request, res: Response) => {
       }
     }
 
+    // Safety 1b: Executive Admin accounts cannot be deactivated by delegated super admins
+    if (userToUpdate.isExecutiveAdmin) {
+      if ((req as any).user?.universityId !== PRIMARY_SUPER_ADMIN_ID) {
+        return res.status(403).json({
+          success: false,
+          message: 'Executive Admin accounts can only be deactivated by the Primary Super Admin.',
+        });
+      }
+    }
+
     // Safety 2: Prevent deactivating the last active super admin & secondary admin cannot deactivate super admins
     if (userToUpdate.role === 'super_admin' && !isActive) {
       const superAdminCount = await User.countDocuments({ role: 'super_admin', isActive: true });
@@ -611,6 +654,16 @@ export const deleteUser = async (req: Request, res: Response) => {
         success: false,
         message: `Primary Super Admin (${PRIMARY_SUPER_ADMIN_ID}) account cannot be deleted.`,
       });
+    }
+
+    // Safety 1b: Executive Admin accounts can only be deleted by Primary Super Admin (10001)
+    if (userToDelete.isExecutiveAdmin) {
+      if (requestingUser?.universityId !== PRIMARY_SUPER_ADMIN_ID) {
+        return res.status(403).json({
+          success: false,
+          message: 'Executive Admin accounts can only be deleted by the Primary Super Admin.',
+        });
+      }
     }
 
     // Safety 2: Prevent deleting the last active Super Admin & secondary admin cannot delete another super admin
@@ -954,6 +1007,16 @@ export const updateUserAdmin = async (req: Request, res: Response) => {
         return res.status(403).json({
           success: false,
           message: 'Only the Primary Super Admin can modify their own account details.',
+        });
+      }
+    }
+
+    // Safety: Protect Executive Admin
+    if (user.isExecutiveAdmin) {
+      if (operator?.universityId !== PRIMARY_SUPER_ADMIN_ID && operator?._id?.toString() !== user._id.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Executive Admin accounts can only be modified by the Primary Super Admin.',
         });
       }
     }
@@ -1319,6 +1382,14 @@ export const transferSuperAdmin = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'Selected user is already a Super Admin.' });
     }
 
+    if (targetUser.isExecutiveAdmin) {
+      return res.status(400).json({ success: false, message: 'Cannot transfer Super Admin privileges to an Executive Admin.' });
+    }
+
+    if (operator?.isExecutiveAdmin) {
+      return res.status(403).json({ success: false, message: 'Executive Admin accounts cannot transfer Super Admin privileges.' });
+    }
+
     if (operator?._id?.toString() === targetUser._id.toString()) {
       return res.status(400).json({ success: false, message: 'Cannot transfer privileges to yourself.' });
     }
@@ -1479,6 +1550,193 @@ export const toggleSuperTaskPermission = async (req: Request, res: Response) => 
     });
   } catch (error: any) {
     console.error('Error toggling super task permission:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Server Error' });
+  }
+};
+
+// POST /api/users/executive-admin
+// Dedicated creation of an Executive Super Admin (e.g. Managing Director)
+// Only Permanent Super Admin (10001) can create this.
+export const createExecutiveAdmin = async (req: Request, res: Response) => {
+  try {
+    const operator = (req as any).user;
+    if (operator?.universityId !== PRIMARY_SUPER_ADMIN_ID) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only the Primary Super Admin can create Executive Admin accounts.',
+      });
+    }
+
+    let { universityId, password } = req.body;
+
+    if (!universityId || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'University ID and Password are required.',
+      });
+    }
+
+    universityId = normalizeUniversityId(universityId);
+    if (!isValidUniversityId(universityId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'University ID must be between 3 and 5 digits.',
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters.',
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ universityId });
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        message: `An account with University ID ${universityId} already exists.`,
+      });
+    }
+
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(password, saltRounds);
+
+    const newUser = new User({
+      universityId,
+      name: 'Pending Setup',
+      phone: '',
+      passwordHash,
+      role: 'super_admin',
+      isExecutiveAdmin: true,
+      isProfileComplete: false,
+      canCreateSuperAdminTasks: true,
+      isActive: true,
+      department: null,
+      baseDepartment: null,
+    } as any);
+
+    await newUser.save();
+
+    // Upsert into VerifiedUser so institutional registry is synced
+    await VerifiedUser.findOneAndUpdate(
+      { universityId },
+      {
+        universityId,
+        name: 'Executive Admin',
+        email: '-',
+        phone: '-',
+        userType: 'staff',
+        department: null,
+        designation: 'Executive Admin',
+        isRegistered: true,
+        registeredUserId: newUser._id,
+      },
+      { upsert: true, new: true }
+    );
+
+    const userObj = await User.findById(newUser._id).select('-passwordHash');
+
+    return res.status(201).json({
+      success: true,
+      message: `Executive Admin account (${universityId}) created successfully. They can now log in with this ID and set their details.`,
+      data: { user: userObj },
+    });
+  } catch (error: any) {
+    console.error('Error creating executive admin:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Server Error' });
+  }
+};
+
+// PUT /api/users/complete-profile
+// First-time profile completion for Executive Admin (or users requiring setup)
+export const completeProfile = async (req: Request, res: Response) => {
+  try {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Not authenticated.' });
+    }
+
+    const { name, email, phone, newPassword } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, message: 'Name is required.' });
+    }
+
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    if (!isValidEmail(cleanEmail)) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid email address.' });
+    }
+
+    const cleanPhone = normalizePhone(phone);
+    if (!isValidPhone(cleanPhone)) {
+      return res.status(400).json({ success: false, message: 'Phone number must be exactly 10 digits.' });
+    }
+
+    // Check if email is used by another user
+    const existingEmail = await User.findOne({ email: cleanEmail, _id: { $ne: user._id } });
+    if (existingEmail) {
+      return res.status(409).json({ success: false, message: 'This email is already in use by another user.' });
+    }
+
+    // Find user in DB
+    const dbUser = await User.findById(user._id);
+    if (!dbUser) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    dbUser.name = name.trim();
+    dbUser.email = cleanEmail;
+    dbUser.phone = cleanPhone;
+    dbUser.isProfileComplete = true;
+
+    // Optional password change
+    if (newPassword && newPassword.trim()) {
+      if (newPassword.trim().length < 6) {
+        return res.status(400).json({ success: false, message: 'New password must be at least 6 characters.' });
+      }
+      const saltRounds = 10;
+      dbUser.passwordHash = await bcrypt.hash(newPassword.trim(), saltRounds);
+    }
+
+    await dbUser.save();
+
+    // Sync VerifiedUser
+    await VerifiedUser.findOneAndUpdate(
+      { universityId: dbUser.universityId },
+      {
+        name: dbUser.name,
+        email: dbUser.email,
+        phone: dbUser.phone,
+        isRegistered: true,
+        registeredUserId: dbUser._id,
+      }
+    );
+
+    const updatedUser = await User.findById(dbUser._id).select('-passwordHash');
+
+    return res.status(200).json({
+      success: true,
+      message: 'Profile completed successfully!',
+      data: {
+        user: {
+          id: updatedUser?._id,
+          universityId: updatedUser?.universityId,
+          name: updatedUser?.name,
+          email: updatedUser?.email,
+          phone: updatedUser?.phone,
+          department: updatedUser?.department,
+          role: updatedUser?.role,
+          isActive: updatedUser?.isActive,
+          isExecutiveAdmin: updatedUser?.isExecutiveAdmin || false,
+          isProfileComplete: true,
+          canCreateSuperAdminTasks: updatedUser?.canCreateSuperAdminTasks || false,
+        },
+      },
+    });
+  } catch (error: any) {
+    console.error('Error completing profile:', error);
     return res.status(500).json({ success: false, message: error.message || 'Server Error' });
   }
 };

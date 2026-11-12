@@ -24,6 +24,7 @@ import SuperAdminLayout from '../components/SuperAdminLayout';
 import DeptAdminLayout from '../components/DeptAdminLayout';
 import StaffLayout from '../components/StaffLayout';
 import SystemSettingsModal from '../components/SystemSettingsModal';
+import CompleteProfileModal from '../components/CompleteProfileModal';
 
 /** Smart dispatcher for generic /tasks links (e.g. from notification emails) */
 const TaskRedirectHandler = () => {
@@ -55,6 +56,7 @@ const AppRouter = () => {
       <SettingsProvider>
         <BrowserRouter>
           <SystemSettingsModal />
+          <CompleteProfileModal />
           <Routes>
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<LoginPage />} />

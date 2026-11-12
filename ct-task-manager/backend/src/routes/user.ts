@@ -12,6 +12,8 @@ import {
   changeDepartmentAdmin,
   transferSuperAdmin,
   toggleSuperTaskPermission,
+  createExecutiveAdmin,
+  completeProfile,
 } from '../controllers/userController';
 import { changePassword } from '../controllers/authController';
 import { authenticate, authorizeRoles } from '../middleware/auth';
@@ -34,12 +36,20 @@ router.patch('/profile', updateUserProfile);
 router.patch('/change-password', changePassword);
 router.post('/change-password', changePassword);
 
+// @route   PUT /api/users/complete-profile
+// @desc    Complete profile and optionally change password on first login
+router.put('/complete-profile', completeProfile);
+
 // @route   GET /api/users
 // @desc    Get all registered users with pagination & filtering
 router.get('/', authorizeRoles('super_admin', 'department_admin'), getUsers);
 
 // The remaining routes require Super Admin access
 router.use(authorizeRoles('super_admin'));
+
+// @route   POST /api/users/executive-admin
+// @desc    Create a new Executive Super Admin account (10001 only)
+router.post('/executive-admin', createExecutiveAdmin);
 
 // @route   GET /api/users/stats
 // @desc    Get user counts by role and status
