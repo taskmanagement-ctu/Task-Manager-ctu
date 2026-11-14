@@ -226,8 +226,15 @@ const VerifiedUsersPage = () => {
     }
   };
 
-  // ─── Fetch Department Permissions (For Dept Admin) ──
+  // ─── Fetch Departments & Department Permissions ──
   useEffect(() => {
+    // Always load all departments so dropdowns and filters are populated for both Super Admin and Dept Admin
+    api.getDepartments()
+      .then(res => {
+        if (res.success) setDepartments(res.data.departments || []);
+      })
+      .catch(err => console.error('Failed to load departments', err));
+
     if (isDeptAdmin) {
       api.getMyDepartmentPermissions()
         .then(res => {
@@ -236,14 +243,8 @@ const VerifiedUsersPage = () => {
           }
         })
         .catch(err => console.error('Failed to fetch dept permissions', err));
-    } else if (currentUser?.role === 'super_admin') {
-      api.getDepartments()
-        .then(res => {
-          if (res.success) setDepartments(res.data.departments || []);
-        })
-        .catch(err => console.error('Failed to load departments', err));
     }
-  }, [isDeptAdmin, currentUser]);
+  }, [isDeptAdmin]);
 
   // ─── Fetch Pending Access Requests Count ─────────────
   const fetchPendingRequestsCount = useCallback(async () => {
@@ -397,7 +398,7 @@ const VerifiedUsersPage = () => {
       setInlineError('');
       return;
     }
-    const defaultDept = inlineForm.department || currentUser?.department || departments[0]?.name || '';
+    const defaultDept = inlineForm.department || currentUser?.department || '';
 
     setInlineForm({
       universityId: '',
@@ -1220,6 +1221,9 @@ const VerifiedUsersPage = () => {
                           {departments.map((d) => (
                             <option key={d._id} value={d.name}>{d.name}</option>
                           ))}
+                          {inlineForm.department && !departments.some(d => d.name.toLowerCase() === inlineForm.department.toLowerCase()) && (
+                            <option value={inlineForm.department}>{inlineForm.department}</option>
+                          )}
                         </select>
                       </td>
                       <td>
@@ -1585,6 +1589,9 @@ const VerifiedUsersPage = () => {
                     {departments.map((d) => (
                       <option key={d._id} value={d.name}>{d.name}</option>
                     ))}
+                    {editForm.department && !departments.some(d => d.name.toLowerCase() === editForm.department.toLowerCase()) && (
+                      <option value={editForm.department}>{editForm.department}</option>
+                    )}
                   </select>
                 </div>
 
