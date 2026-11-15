@@ -270,6 +270,7 @@ export interface Task {
   coAssignees?: any[];
   assignmentMode?: 'individual' | 'shared';
   deadline: string;
+  priority?: 'low' | 'medium' | 'high' | null;
   status: 'pending' | 'in_progress' | 'completed' | 'submitted_for_review' | 'approved' | 'rejected';
   isSubtask?: boolean;
   workflowType?: string;
@@ -898,7 +899,7 @@ export const api = {
     });
   },
 
-  updateTask: async (id: string, updates: { title?: string; description?: string; deadline?: string }): Promise<{ success: boolean; message: string; data: any }> => {
+  updateTask: async (id: string, updates: { title?: string; description?: string; deadline?: string; priority?: string }): Promise<{ success: boolean; message: string; data: any }> => {
     return fetchWithAuth(`/api/tasks/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -1011,7 +1012,7 @@ export const api = {
     return fetchWithAuth(`/api/tasks/${taskId}/subtasks`);
   },
 
-  createSubtask: async (taskId: string, data: { title: string; description?: string; deadline: string; assignedTo: string | string[]; assignmentMode?: 'individual' | 'shared' }): Promise<{ success: boolean; data: any; message?: string }> => {
+  createSubtask: async (taskId: string, data: { title: string; description?: string; deadline: string; assignedTo: string | string[]; assignmentMode?: 'individual' | 'shared'; priority?: string }): Promise<{ success: boolean; data: any; message?: string }> => {
     return fetchWithAuth(`/api/tasks/${taskId}/subtasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -11,6 +11,7 @@ export interface ITask extends Document {
   coAssignees?: mongoose.Types.ObjectId[];
   assignmentMode?: 'individual' | 'shared';
   deadline: Date;
+  priority?: 'low' | 'medium' | 'high' | null;
   status: 'pending' | 'in_progress' | 'completed' | 'submitted_for_review' | 'approved' | 'rejected';
   parentTaskId: mongoose.Types.ObjectId | null;
   isSubtask: boolean;
@@ -193,6 +194,12 @@ const taskSchema = new Schema<ITask>(
     deadline: {
       type: Date,
       required: true,
+      index: true,
+    },
+    priority: {
+      type: String,
+      enum: ['low', 'medium', 'high', null],
+      default: null,
       index: true,
     },
     status: {

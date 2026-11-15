@@ -505,7 +505,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
   const [editData, setEditData] = useState({
     title: task.title,
     description: task.description,
-    deadline: new Date(task.deadline).toISOString().slice(0, 16)
+    deadline: new Date(task.deadline).toISOString().slice(0, 16),
+    priority: task.priority || ''
   });
 
   // Assign mode
@@ -884,7 +885,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
     setEditData({
       title: initialTask.title,
       description: initialTask.description,
-      deadline: new Date(initialTask.deadline).toISOString().slice(0, 16)
+      deadline: new Date(initialTask.deadline).toISOString().slice(0, 16),
+      priority: initialTask.priority || ''
     });
     setAssignTarget(initialTask.delegatedTo ? initialTask.delegatedTo._id : (initialTask.assignedTo ? initialTask.assignedTo._id : ''));
     setIsAddingSubtaskModal(false);
@@ -1090,7 +1092,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
       await api.updateTask(task._id, {
         title: editData.title,
         description: editData.description,
-        deadline: editData.deadline
+        deadline: editData.deadline,
+        priority: editData.priority || 'auto'
       });
       setIsEditing(false);
       refreshTaskData();
@@ -2915,6 +2918,20 @@ const TaskModal: React.FC<TaskModalProps> = ({
                 value={editData.deadline}
                 onChange={e => setEditData({...editData, deadline: e.target.value})}
               />
+            </div>
+
+            <div className="tm-edit-group">
+              <label className="tm-edit-label">Priority</label>
+              <select 
+                className="tm-edit-input"
+                value={editData.priority}
+                onChange={e => setEditData({...editData, priority: e.target.value})}
+              >
+                <option value="">Auto (Calculate from due date)</option>
+                <option value="high">🔴 High Priority</option>
+                <option value="medium">🟡 Medium Priority</option>
+                <option value="low">🟢 Low Priority</option>
+              </select>
             </div>
 
             <div className="tm-edit-actions">

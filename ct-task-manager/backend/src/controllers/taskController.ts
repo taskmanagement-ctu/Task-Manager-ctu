@@ -43,9 +43,17 @@ const checkAdminStaffPermission = async (adminId: string, staffId: string) => {
 // POST /api/tasks
 export const createTask = async (req: Request, res: Response) => {
   try {
-    const { title, description, deadline, assignedTo } = req.body;
+    const { title, description, deadline, assignedTo, priority } = req.body;
     let { requiredCompletionExtensions, isSubtask, parentTaskId } = req.body;
     const user = req.user;
+
+    let normalizedPriority: 'low' | 'medium' | 'high' | null = null;
+    if (priority && typeof priority === 'string') {
+      const p = priority.toLowerCase().trim();
+      if (p === 'low' || p === 'medium' || p === 'high') {
+        normalizedPriority = p as 'low' | 'medium' | 'high';
+      }
+    }
 
     // Staff cannot create tasks
     if (user.role === 'staff') {
@@ -211,6 +219,7 @@ export const createTask = async (req: Request, res: Response) => {
         coAssignees: uniqueAssigneeIds,
         assignmentMode: 'shared',
         workflowType: wfType,
+        priority: normalizedPriority,
         attachments: attachmentIds,
         requiredCompletionExtensions: parsedExtensions,
         isSubtask: parsedIsSubtask,
@@ -278,6 +287,7 @@ export const createTask = async (req: Request, res: Response) => {
           coAssignees: info.assigneeId ? [info.assigneeId] : [],
           assignmentMode: 'individual',
           workflowType: info.workflowType,
+          priority: normalizedPriority,
           attachments: attachmentIds,
           requiredCompletionExtensions: parsedExtensions,
           isSubtask: parsedIsSubtask,
@@ -698,7 +708,7 @@ export const getTaskById = async (req: Request, res: Response) => {
 // PATCH /api/tasks/:id
 export const updateTask = async (req: Request, res: Response) => {
   try {
-    const { title, description, deadline } = req.body;
+    const { title, description, deadline, priority } = req.body;
     const user = req.user;
 
     const task = await Task.findById(req.params.id);
@@ -734,6 +744,21 @@ export const updateTask = async (req: Request, res: Response) => {
           task.dueSoonReminderSent = false;
           task.dueSoonReminderSentAt = null;
           task.lastOverdueReminderSentAt = null;
+        }
+      }
+    }
+
+    if (priority !== undefined) {
+      const p = typeof priority === 'string' ? priority.toLowerCase().trim() : null;
+      if (p === 'low' || p === 'medium' || p === 'high') {
+        if (task.priority !== p) {
+          task.priority = p as 'low' | 'medium' | 'high';
+          hasChanges = true;
+        }
+      } else if (p === null || p === '' || p === 'auto') {
+        if (task.priority !== null) {
+          task.priority = null;
+          hasChanges = true;
         }
       }
     }
@@ -1344,8 +1369,16 @@ export const reviewTask = async (req: Request, res: Response) => {
 // POST /api/tasks/:id/subtasks
 export const createSubtask = async (req: Request, res: Response) => {
   try {
-    const { title, description, deadline, assignedTo } = req.body;
+    const { title, description, deadline, assignedTo, priority } = req.body;
     const user = req.user;
+
+    let normalizedPriority: 'low' | 'medium' | 'high' | null = null;
+    if (priority && typeof priority === 'string') {
+      const p = priority.toLowerCase().trim();
+      if (p === 'low' || p === 'medium' || p === 'high') {
+        normalizedPriority = p as 'low' | 'medium' | 'high';
+      }
+    }
 
     if (user.role === 'staff') {
       return res.status(403).json({ success: false, message: 'Forbidden. Staff cannot create subtasks.' });
@@ -1478,6 +1511,7 @@ export const createSubtask = async (req: Request, res: Response) => {
         coAssignees: uniqueAssigneeIds,
         assignmentMode: 'shared',
         workflowType: wfType,
+        priority: normalizedPriority,
         isSubtask: true,
         parentTaskId: parentTask._id
       });
@@ -1543,6 +1577,7 @@ export const createSubtask = async (req: Request, res: Response) => {
           coAssignees: info.assigneeId ? [info.assigneeId] : [],
           assignmentMode: 'individual',
           workflowType: info.workflowType,
+          priority: normalizedPriority,
           isSubtask: true,
           parentTaskId: parentTask._id
         });

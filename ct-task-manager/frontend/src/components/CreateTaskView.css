@@ -412,6 +412,192 @@
   border-left: 1px solid #f1f5f9;
 }
 
+/* ─── Priority Selector & Preview ─── */
+.ct-priority-section {
+  margin-bottom: 2rem;
+}
+
+.ct-priority-mode-tag {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ct-priority-mode-tag.auto {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}
+
+.ct-priority-mode-tag.custom {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+.ct-priority-button-group {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.ct-priority-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.65rem 0.5rem;
+  border-radius: 8px;
+  border: 1.5px solid #e2e8f0;
+  background-color: #ffffff;
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ct-priority-btn:hover {
+  border-color: #cbd5e1;
+  background-color: #f8fafc;
+}
+
+.ct-priority-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+
+.dot-low {
+  background-color: #22c55e;
+}
+
+.dot-medium {
+  background-color: #f59e0b;
+}
+
+.dot-high {
+  background-color: #ef4444;
+}
+
+/* Active states for Low, Medium, High */
+.ct-priority-btn.low.active {
+  background-color: #f0fdf4;
+  border-color: #22c55e;
+  color: #15803d;
+  box-shadow: 0 0 0 1px #22c55e, 0 1px 3px rgba(34, 197, 94, 0.15);
+}
+
+.ct-priority-btn.low.active .dot-low {
+  transform: scale(1.25);
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+}
+
+.ct-priority-btn.medium.active {
+  background-color: #fffbeb;
+  border-color: #f59e0b;
+  color: #b45309;
+  box-shadow: 0 0 0 1px #f59e0b, 0 1px 3px rgba(245, 158, 11, 0.15);
+}
+
+.ct-priority-btn.medium.active .dot-medium {
+  transform: scale(1.25);
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+}
+
+.ct-priority-btn.high.active {
+  background-color: #fef2f2;
+  border-color: #ef4444;
+  color: #b91c1c;
+  box-shadow: 0 0 0 1px #ef4444, 0 1px 3px rgba(239, 68, 68, 0.15);
+}
+
+.ct-priority-btn.high.active .dot-high {
+  transform: scale(1.25);
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+}
+
+/* Priority Status Box */
+.ct-priority-status-box {
+  background-color: #f8fafc;
+  border-radius: 8px;
+  padding: 1rem 1.15rem;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s ease;
+}
+
+.ct-priority-status-box.high {
+  background-color: #fff5f5;
+  border-color: #fecaca;
+}
+
+.ct-priority-status-box.medium {
+  background-color: #fffdf5;
+  border-color: #fef08a;
+}
+
+.ct-priority-status-box.low {
+  background-color: #f7fee7;
+  border-color: #d9f99d;
+}
+
+.ct-priority-status-content {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+}
+
+.ct-priority-status-icon {
+  background-color: #ffffff;
+  padding: 0.45rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  flex-shrink: 0;
+}
+
+.ct-priority-status-text h4 {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.ct-priority-status-text p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.ct-priority-reset-link {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 0.5rem;
+  text-decoration: underline;
+  transition: color 0.15s ease;
+}
+
+.ct-priority-reset-link:hover {
+  color: #1d4ed8;
+}
+
 .ct-info-card {
   background-color: #f8fafc;
   border-radius: 8px;

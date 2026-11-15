@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { History, Clock, UploadCloud, Plus, ArrowRight, ChevronDown, ChevronUp, ArrowLeft, X, Search, Building2, Users } from 'lucide-react';
+import { History, Clock, UploadCloud, Plus, ArrowRight, ChevronDown, ChevronUp, ArrowLeft, X, Search, Building2, Users, AlertTriangle, CheckCircle2, RotateCcw } from 'lucide-react';
 import { api } from '../services/api';
+import { getAutoPriorityFromDeadline } from '../utils/taskUrgency';
 import './CreateTaskView.css';
 
 // Auto-compress image files to ~500KB max
@@ -104,6 +105,8 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
     assignmentMode?: 'individual' | 'shared';
     files: File[];
     requiredExtensions: string[];
+    priority?: 'low' | 'medium' | 'high';
+    isPriorityOverridden?: boolean;
   }>>([
     {
       title: '',
@@ -112,7 +115,9 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
       assignedTo: [],
       assignmentMode: 'individual',
       files: [],
-      requiredExtensions: []
+      requiredExtensions: [],
+      priority: undefined,
+      isPriorityOverridden: false
     }
   ]);
   const [activeTab, setActiveTab] = useState(0);
@@ -176,6 +181,33 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
       return updated;
     });
   };
+
+  const handleSelectPriority = (chosen: 'low' | 'medium' | 'high') => {
+    setTasksToCreate(prev => {
+      const n = [...prev];
+      const t = { ...n[activeTab] };
+      t.priority = chosen;
+      t.isPriorityOverridden = true;
+      n[activeTab] = t;
+      return n;
+    });
+  };
+
+  const handleResetPriorityToAuto = () => {
+    setTasksToCreate(prev => {
+      const n = [...prev];
+      const t = { ...n[activeTab] };
+      t.isPriorityOverridden = false;
+      t.priority = t.deadline ? getAutoPriorityFromDeadline(t.deadline) : undefined;
+      n[activeTab] = t;
+      return n;
+    });
+  };
+
+  const currentTask = tasksToCreate[activeTab] || tasksToCreate[0];
+  const effectivePriority: 'low' | 'medium' | 'high' | undefined = currentTask?.isPriorityOverridden && currentTask?.priority
+    ? currentTask.priority
+    : (currentTask?.deadline ? getAutoPriorityFromDeadline(currentTask.deadline) : currentTask?.priority);
   
   const toggleExtension = (ext: string) => {
     setTasksToCreate(prev => {
@@ -419,6 +451,12 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
           formData.append('attachments', file);
         });
         formData.append('requiredCompletionExtensions', JSON.stringify(task.requiredExtensions));
+
+        const effectiveTaskPriority = task.isPriorityOverridden && task.priority
+          ? task.priority
+          : (task.deadline ? getAutoPriorityFromDeadline(task.deadline) : (task.priority || 'medium'));
+        formData.append('priority', effectiveTaskPriority);
+
         return formData;
       });
 
@@ -453,7 +491,8 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
                   description: st.description.trim() || st.title.trim(),
                   deadline: st.deadline || mainDeadline,
                   assignedTo: subAssignees.length > 0 ? subAssignees : '',
-                  assignmentMode: st.assignmentMode || 'individual'
+                  assignmentMode: st.assignmentMode || 'individual',
+                  priority: getAutoPriorityFromDeadline(st.deadline || mainDeadline)
                 });
               } catch (stErr) {
                 console.error('Error creating inline subtask from CreateTaskView:', stErr);
@@ -614,7 +653,7 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
                   className="ct-add-tab-btn"
                   onClick={() => {
                     setTasksToCreate([...tasksToCreate, {
-                      title: '', description: '', deadline: '', assignedTo: [], assignmentMode: 'individual', files: [], requiredExtensions: []
+                      title: '', description: '', deadline: '', assignedTo: [], assignmentMode: 'individual', files: [], requiredExtensions: [], priority: undefined, isPriorityOverridden: false
                     }]);
                     setActiveTab(tasksToCreate.length);
                   }}
@@ -1043,7 +1082,19 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
                 className="ct-date" 
                 required
                 value={tasksToCreate[activeTab].deadline}
-                onChange={e => setTasksToCreate(prev => { const n = [...prev]; const t = {...n[activeTab]}; t.deadline = e.target.value; n[activeTab] = t; return n; })}
+                onChange={e => {
+                  const val = e.target.value;
+                  setTasksToCreate(prev => {
+                    const n = [...prev];
+                    const t = { ...n[activeTab] };
+                    t.deadline = val;
+                    if (!t.isPriorityOverridden) {
+                      t.priority = val ? getAutoPriorityFromDeadline(val) : undefined;
+                    }
+                    n[activeTab] = t;
+                    return n;
+                  });
+                }}
               />
             </div>
             </div>
@@ -1515,14 +1566,106 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
         {/* Right Sidebar Section */}
         <div className="ct-sidebar">
           
-          <label className="ct-label" style={{ marginBottom: '1rem' }}>PRIORITY PREVIEW</label>
-          <div className="ct-info-card">
-            <div className="ct-info-icon">
-              <Clock size={20} />
+          {/* ── Priority Selector & Preview ── */}
+          <div className="ct-priority-section">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+              <label className="ct-label" style={{ margin: 0 }}>PRIORITY PREVIEW</label>
+              {currentTask?.isPriorityOverridden ? (
+                <span className="ct-priority-mode-tag custom" title="Priority overridden manually">
+                  Custom
+                </span>
+              ) : currentTask?.deadline ? (
+                <span className="ct-priority-mode-tag auto" title="Priority auto-calculated from due date">
+                  Auto (Date)
+                </span>
+              ) : null}
             </div>
-            <div className="ct-info-text">
-              <h4>Set deadline</h4>
-              <p>Priority is automatically calculated based on the due date.</p>
+
+            {/* 3 Clickable Priority Pills */}
+            <div className="ct-priority-button-group">
+              <button
+                type="button"
+                className={`ct-priority-btn low ${effectivePriority === 'low' ? 'active' : ''}`}
+                onClick={() => handleSelectPriority('low')}
+                title="Low Priority (Green)"
+              >
+                <span className="ct-priority-dot dot-low" />
+                <span className="ct-priority-name">Low</span>
+              </button>
+
+              <button
+                type="button"
+                className={`ct-priority-btn medium ${effectivePriority === 'medium' ? 'active' : ''}`}
+                onClick={() => handleSelectPriority('medium')}
+                title="Medium Priority (Yellow)"
+              >
+                <span className="ct-priority-dot dot-medium" />
+                <span className="ct-priority-name">Medium</span>
+              </button>
+
+              <button
+                type="button"
+                className={`ct-priority-btn high ${effectivePriority === 'high' ? 'active' : ''}`}
+                onClick={() => handleSelectPriority('high')}
+                title="High Priority (Red)"
+              >
+                <span className="ct-priority-dot dot-high" />
+                <span className="ct-priority-name">High</span>
+              </button>
+            </div>
+
+            {/* Priority Status Card */}
+            <div className={`ct-priority-status-box ${effectivePriority || 'default'}`}>
+              <div className="ct-priority-status-content">
+                <div className="ct-priority-status-icon">
+                  {effectivePriority === 'high' ? (
+                    <AlertTriangle size={18} color="#dc2626" />
+                  ) : effectivePriority === 'medium' ? (
+                    <Clock size={18} color="#d97706" />
+                  ) : effectivePriority === 'low' ? (
+                    <CheckCircle2 size={18} color="#059669" />
+                  ) : (
+                    <Clock size={18} color="#64748b" />
+                  )}
+                </div>
+                <div className="ct-priority-status-text">
+                  {currentTask?.isPriorityOverridden ? (
+                    <>
+                      <h4>
+                        Priority: <strong style={{ textTransform: 'capitalize', color: effectivePriority === 'high' ? '#dc2626' : effectivePriority === 'medium' ? '#d97706' : '#059669' }}>{effectivePriority}</strong>
+                      </h4>
+                      <p>
+                        Custom priority chosen by you.
+                      </p>
+                      <button
+                        type="button"
+                        className="ct-priority-reset-link"
+                        onClick={handleResetPriorityToAuto}
+                        title="Revert back to automatic date calculation"
+                      >
+                        <RotateCcw size={12} style={{ marginRight: '4px' }} />
+                        Reset to date-based auto
+                      </button>
+                    </>
+                  ) : currentTask?.deadline ? (
+                    <>
+                      <h4>
+                        Priority: <strong style={{ textTransform: 'capitalize', color: effectivePriority === 'high' ? '#dc2626' : effectivePriority === 'medium' ? '#d97706' : '#059669' }}>{effectivePriority}</strong>
+                      </h4>
+                      <p>
+                        Automatically assigned based on deadline. Click any button above to change.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <h4>Set deadline</h4>
+                      <p>
+                        Priority is automatically calculated based on the due date. You can also pick manually above.
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 

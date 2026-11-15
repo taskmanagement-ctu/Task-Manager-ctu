@@ -8,16 +8,37 @@ export interface TaskUrgencyInput {
   submittedAt?: string | Date | null;
   completedAt?: string | Date | null;
   updatedAt?: string | Date | null;
+  priority?: 'low' | 'medium' | 'high' | string | null;
 }
+
+/**
+ * Calculates priority from deadline automatically:
+ *  - 0-5 days remaining: 'high'
+ *  - 6-10 days remaining: 'medium'
+ *  - 11+ days remaining: 'low'
+ */
+export const getAutoPriorityFromDeadline = (deadlineString: string): 'low' | 'medium' | 'high' => {
+  if (!deadlineString) return 'medium';
+  const deadline = new Date(deadlineString);
+  if (isNaN(deadline.getTime())) return 'medium';
+  const now = new Date();
+  deadline.setHours(0, 0, 0, 0);
+  now.setHours(0, 0, 0, 0);
+  const diffTime = deadline.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  if (diffDays <= 5) return 'high';
+  if (diffDays <= 10) return 'medium';
+  return 'low';
+};
 
 /**
  * Calculates task urgency dynamically based on the deadline.
  * If task is submitted or completed, the calculation is frozen at the submission/completion date.
+ * If creator set a custom manual priority (high/medium/low), that priority takes precedence.
  * Rules:
- *  - 0-5 days remaining: RED
- *  - 6-10 days remaining: YELLOW
- *  - 11+ days remaining: GREEN
  *  - passed: OVERDUE
+ *  - custom priority: RED (high), YELLOW (medium), GREEN (low)
+ *  - auto deadline fallback: 0-5 days (RED), 6-10 days (YELLOW), 11+ days (GREEN)
  */
 export const calculateUrgency = (
   taskOrDeadline: TaskUrgencyInput | string,
@@ -27,16 +48,26 @@ export const calculateUrgency = (
   let deadlineString = '';
   let taskStatus = status;
   let freezeDate = submittedOrCompletedAt;
+  let customPriority: string | null | undefined = null;
 
   if (typeof taskOrDeadline === 'object' && taskOrDeadline !== null) {
     deadlineString = taskOrDeadline.deadline;
     taskStatus = taskOrDeadline.status;
     freezeDate = taskOrDeadline.submittedAt || taskOrDeadline.completedAt || taskOrDeadline.updatedAt;
+    customPriority = taskOrDeadline.priority;
   } else {
     deadlineString = taskOrDeadline;
   }
 
-  if (!deadlineString) return 'GREEN';
+  if (!deadlineString) {
+    if (customPriority) {
+      const cp = String(customPriority).toLowerCase().trim();
+      if (cp === 'high' || cp === 'red') return 'RED';
+      if (cp === 'medium' || cp === 'yellow') return 'YELLOW';
+      if (cp === 'low' || cp === 'green') return 'GREEN';
+    }
+    return 'GREEN';
+  }
 
   const deadline = new Date(deadlineString);
   let comparisonDate = new Date();
@@ -62,7 +93,17 @@ export const calculateUrgency = (
 
   if (diffDays < 0) {
     return 'OVERDUE';
-  } else if (diffDays <= 5) {
+  }
+
+  // If a manual priority is set on the task, honor it:
+  if (customPriority) {
+    const cp = String(customPriority).toLowerCase().trim();
+    if (cp === 'high' || cp === 'red') return 'RED';
+    if (cp === 'medium' || cp === 'yellow') return 'YELLOW';
+    if (cp === 'low' || cp === 'green') return 'GREEN';
+  }
+
+  if (diffDays <= 5) {
     return 'RED';
   } else if (diffDays <= 10) {
     return 'YELLOW';
