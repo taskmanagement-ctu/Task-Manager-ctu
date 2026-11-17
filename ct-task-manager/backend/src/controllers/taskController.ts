@@ -541,9 +541,11 @@ export const getTasks = async (req: Request, res: Response) => {
 
     const total = await Task.countDocuments(query);
     
-    let sortObj: any = { deadline: 1, createdAt: -1 }; // default
+    let sortObj: any = { createdAt: -1 }; // default: newest tasks first
     if (sortBy === 'createdAt_desc') sortObj = { createdAt: -1 };
     else if (sortBy === 'createdAt_asc') sortObj = { createdAt: 1 };
+    else if (sortBy === 'deadline_asc') sortObj = { deadline: 1, createdAt: -1 };
+    else if (sortBy === 'deadline_desc') sortObj = { deadline: -1, createdAt: -1 };
     else if (sortBy === 'title_asc') sortObj = { title: 1 };
     else if (sortBy === 'title_desc') sortObj = { title: -1 };
 
