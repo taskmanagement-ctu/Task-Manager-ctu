@@ -66,6 +66,7 @@ const TasksPage: React.FC = () => {
           department: (!teamOnlyFilter && schoolFilter !== 'All') ? schoolFilter : undefined,
           teamOnly: teamOnlyFilter ? 'true' : undefined,
           delegatedAdminOnly: delegatedAdminOnlyFilter ? 'true' : undefined,
+          sortBy: 'createdAt_desc',
         });
         if (fullRes.data?.tasks && fullRes.data.tasks.length > 0) {
           dataToExport = fullRes.data.tasks;
@@ -87,12 +88,13 @@ const TasksPage: React.FC = () => {
     }
   };
   
-  const loadTasks = async () => {
+  const loadTasks = async (targetPage?: number) => {
     try {
       setLoading(true);
       setError('');
+      const p = targetPage !== undefined ? targetPage : page;
       const res = await api.getTasks({
-        page,
+        page: p,
         limit: 50, // Fetch a larger batch to support client-side priority/sorting
         search,
         status: statusFilter !== 'All' ? statusFilter : undefined,
@@ -100,6 +102,7 @@ const TasksPage: React.FC = () => {
         department: (!teamOnlyFilter && schoolFilter !== 'All') ? schoolFilter : undefined,
         teamOnly: teamOnlyFilter ? 'true' : undefined,
         delegatedAdminOnly: delegatedAdminOnlyFilter ? 'true' : undefined,
+        sortBy: 'createdAt_desc',
       });
       setTasks(res.data.tasks);
       setTotalPages(res.data.pagination.totalPages);
@@ -310,7 +313,9 @@ const TasksPage: React.FC = () => {
       } else {
         result = await api.createTask(taskData);
       }
-      loadTasks();
+      setPage(1);
+      setSearch('');
+      await loadTasks(1);
       setIsCreatingTask(false);
       setCreatingSubtaskFor(null);
       return result;

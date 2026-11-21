@@ -467,7 +467,7 @@ const CreateTaskView: React.FC<CreateTaskViewProps> = ({ onSubmit, onCancel, ava
         let parentId = result?.data?.task?._id || result?.data?.tasks?.[0]?._id || result?._id || result?.id;
         if (!parentId) {
           try {
-            const latest = await api.getTasks({ taskType: 'main', limit: 1 });
+            const latest = await api.getTasks({ taskType: 'main', limit: 1, sortBy: 'createdAt_desc' });
             if (latest.data?.tasks?.length > 0) {
               parentId = latest.data.tasks[0]._id;
             }
