@@ -1192,6 +1192,70 @@ export const submitReview = async (req: Request, res: Response) => {
   }
 };
 
+// PATCH /api/tasks/:id/withdraw-review
+export const withdrawReview = async (req: Request, res: Response) => {
+  try {
+    const user = req.user;
+    const task = await Task.findById(req.params.id);
+
+    if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+
+    const isPerformer = 
+      (task.assignedTo && task.assignedTo.toString() === user._id.toString()) ||
+      (task.delegatedTo && task.delegatedTo.toString() === user._id.toString()) ||
+      (Array.isArray(task.coAssignees) && task.coAssignees.some((ca: any) => (ca._id?.toString() || ca.toString()) === user._id.toString()));
+
+    if (!isPerformer) {
+      return res.status(403).json({ success: false, message: 'Forbidden. Only the assignee can withdraw review submission.' });
+    }
+
+    if (task.status !== 'submitted_for_review') {
+      return res.status(400).json({ success: false, message: 'Task is not currently in review.' });
+    }
+
+    // Enforce 2-hour grace period limit
+    if (task.submittedAt) {
+      const elapsed = Date.now() - new Date(task.submittedAt).getTime();
+      const twoHoursMs = 2 * 60 * 60 * 1000;
+      if (elapsed > twoHoursMs) {
+        return res.status(400).json({
+          success: false,
+          message: 'The 2-hour edit/withdrawal window has expired. Please contact your reviewer if revisions are needed.'
+        });
+      }
+    }
+
+    const previousReviewer = task.currentReviewer;
+
+    task.status = 'in_progress';
+    task.reviewStage = 'none';
+    task.currentReviewer = null;
+
+    await task.save();
+
+    // Notify previous reviewer that submission was withdrawn to edit documents
+    if (previousReviewer && previousReviewer.toString() !== user._id.toString()) {
+      createNotification(
+        previousReviewer,
+        'task_status_changed',
+        'Submission Withdrawn by Assignee',
+        `Task #${task.taskId || ''} "${task.title}" submission was withdrawn by the assignee to edit/update documents.`,
+        task._id,
+        user._id
+      );
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Task submission withdrawn successfully. You can now edit/replace documents and resubmit.',
+      data: { task }
+    });
+  } catch (error) {
+    console.error('Error withdrawing review submission:', error);
+    return res.status(500).json({ success: false, message: 'Server Error' });
+  }
+};
+
 // PATCH /api/tasks/:id/review
 export const reviewTask = async (req: Request, res: Response) => {
   try {

@@ -7,6 +7,7 @@ import {
   assignTask,
   updateTaskStatus,
   submitReview,
+  withdrawReview,
   reviewTask,
   createSubtask,
   getSubtasks,
@@ -95,6 +96,11 @@ router.patch('/:id/status', updateTaskStatus);
 // @desc    Submit a task for review (and upload completion attachments)
 // @access  Assignee only
 router.patch('/:id/submit-review', uploadAny.array('attachments'), submitReview);
+
+// @route   PATCH /api/tasks/:id/withdraw-review
+// @desc    Withdraw a task review submission to edit documents within 2 hours
+// @access  Assignee only
+router.patch('/:id/withdraw-review', withdrawReview);
 
 // @route   POST /api/tasks/:id/attachments
 // @desc    Upload deliverables/files for a task (any format, < 5MB)

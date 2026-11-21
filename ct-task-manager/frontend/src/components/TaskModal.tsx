@@ -677,6 +677,68 @@ const TaskModal: React.FC<TaskModalProps> = ({
 
   const [extensionNotice, setExtensionNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // ─── Review Grace Period / Withdraw Submission States ───
+  const [isConfirmWithdrawOpen, setIsConfirmWithdrawOpen] = useState(false);
+  const [isWithdrawingReview, setIsWithdrawingReview] = useState(false);
+  const [withdrawError, setWithdrawError] = useState('');
+  const [graceTimeRemainingMs, setGraceTimeRemainingMs] = useState<number>(0);
+
+  // Calculate & update 2-hour grace period timer
+  useEffect(() => {
+    const calculateRemaining = () => {
+      if (task.status !== 'submitted_for_review' || !task.submittedAt) {
+        setGraceTimeRemainingMs(0);
+        return;
+      }
+      const subTime = new Date(task.submittedAt).getTime();
+      if (isNaN(subTime)) {
+        setGraceTimeRemainingMs(0);
+        return;
+      }
+      const twoHoursMs = 2 * 60 * 60 * 1000;
+      const remaining = (subTime + twoHoursMs) - Date.now();
+      setGraceTimeRemainingMs(Math.max(0, remaining));
+    };
+
+    calculateRemaining();
+    if (task.status === 'submitted_for_review') {
+      const interval = setInterval(calculateRemaining, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [task.status, task.submittedAt]);
+
+  const formatGraceRemaining = (ms: number) => {
+    if (ms <= 0) return '0s';
+    const totalSecs = Math.floor(ms / 1000);
+    const hrs = Math.floor(totalSecs / 3600);
+    const mins = Math.floor((totalSecs % 3600) / 60);
+    const secs = totalSecs % 60;
+    if (hrs > 0) {
+      return `${hrs}h ${mins}m ${secs}s`;
+    }
+    return `${mins}m ${secs}s`;
+  };
+
+  const handleWithdrawReviewSubmission = async () => {
+    try {
+      setIsWithdrawingReview(true);
+      setWithdrawError('');
+      const res = await api.withdrawReviewSubmission(task._id);
+      if (res.success) {
+        setIsConfirmWithdrawOpen(false);
+        setWorkFileSuccess('Submission withdrawn successfully! Task is now In Progress. You can edit your documents and resubmit.');
+        setTask((prev: any) => ({ ...prev, status: 'in_progress', reviewStage: 'none', currentReviewer: null }));
+        refreshTaskData();
+      } else {
+        setWithdrawError(res.message || 'Failed to withdraw review submission.');
+      }
+    } catch (err: any) {
+      setWithdrawError(err.message || 'Failed to withdraw review submission.');
+    } finally {
+      setIsWithdrawingReview(false);
+    }
+  };
+
   const addDaysToDeadline = (baseDate: Date | string, days: number) => {
     const d = new Date(baseDate);
     if (isNaN(d.getTime())) return '';
@@ -1029,6 +1091,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
   const canDelete = isSuperAdmin || isCreator;
   // Only the assigned performer can upload, add or delete deliverables, and only while task is in-progress/pending/rejected
   const canManageDeliverables = canPerformStaffActions && ['pending', 'in_progress', 'rejected'].includes(task.status);
+  const isWithinGracePeriod = task.status === 'submitted_for_review' && graceTimeRemainingMs > 0;
   
   const currentPerformer = task.delegatedTo || task.assignedTo;
   const performerName = resolveUserName(currentPerformer) || currentPerformer?.name || '';
@@ -1991,6 +2054,43 @@ const TaskModal: React.FC<TaskModalProps> = ({
                 )
               )}
 
+              {/* Review Grace Period Banner (Assignee Edit Window) */}
+              {task.status === 'submitted_for_review' && canPerformStaffActions && (
+                <div className={`tm-review-grace-banner ${isWithinGracePeriod ? 'active' : 'expired'}`}>
+                  <div className="tm-review-grace-info">
+                    <Clock size={16} className="tm-review-grace-icon" />
+                    <div className="tm-review-grace-text-block">
+                      <div className="tm-review-grace-header-row">
+                        <span className="tm-review-grace-title">
+                          {isWithinGracePeriod ? '2-Hour Edit Window Active' : 'Task In Review (Edit Window Closed)'}
+                        </span>
+                        {isWithinGracePeriod && (
+                          <span className="tm-review-grace-timer-badge">
+                            ⏱️ {formatGraceRemaining(graceTimeRemainingMs)} left
+                          </span>
+                        )}
+                      </div>
+                      <p className="tm-review-grace-desc">
+                        {isWithinGracePeriod
+                          ? 'Need to replace or modify your uploaded documents? You can withdraw your submission to make changes and submit again.'
+                          : 'The 2-hour edit window has expired. The reviewer will evaluate your submitted documents.'}
+                      </p>
+                    </div>
+                  </div>
+                  {isWithinGracePeriod && (
+                    <button
+                      type="button"
+                      className="btn tm-btn-withdraw-review"
+                      onClick={() => { setWithdrawError(''); setIsConfirmWithdrawOpen(true); }}
+                      disabled={isWithdrawingReview}
+                    >
+                      <RotateCcw size={13} />
+                      <span>Withdraw &amp; Edit Documents</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Divider between files and comments */}
               <div className="tm-deliv-comments-divider" />
 
@@ -2873,7 +2973,23 @@ const TaskModal: React.FC<TaskModalProps> = ({
                           <span>Submit for Review</span>
                         </button>
                       )}
-                      {task.status === 'submitted_for_review' && !canReview && <span style={{ color: '#d97706', fontWeight: 'bold' }}>Waiting for Review</span>}
+                      {task.status === 'submitted_for_review' && !canReview && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                          <span style={{ color: '#d97706', fontWeight: 'bold' }}>Waiting for Review</span>
+                          {isWithinGracePeriod && (
+                            <button 
+                              type="button" 
+                              className="btn tm-btn-withdraw-pill"
+                              onClick={() => { setWithdrawError(''); setIsConfirmWithdrawOpen(true); }}
+                              disabled={isWithdrawingReview}
+                              title="Withdraw submission to edit uploaded documents"
+                            >
+                              <RotateCcw size={13} />
+                              <span>Withdraw &amp; Edit ({formatGraceRemaining(graceTimeRemainingMs)})</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
                       {task.status === 'approved' && <span style={{ color: '#059669', fontWeight: 'bold' }}>Approved</span>}
                     </div>
                   </div>
@@ -3387,6 +3503,78 @@ const TaskModal: React.FC<TaskModalProps> = ({
               >
                 {loading ? <Loader2 size={14} className="tm-spin" /> : <CheckCircle2 size={14} />}
                 <span>Confirm &amp; Submit Task</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Withdraw Review Submission Modal */}
+      {isConfirmWithdrawOpen && (
+        <div className="tm-dialog-overlay" onClick={() => { if (!isWithdrawingReview) { setIsConfirmWithdrawOpen(false); setWithdrawError(''); } }}>
+          <div className="tm-dialog-card" style={{ maxWidth: '480px', width: '100%' }} onClick={(e) => e.stopPropagation()}>
+            <div className="tm-dialog-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <div className="tm-dialog-icon-wrap" style={{ backgroundColor: '#fef3c7', color: '#d97706' }}>
+                  <RotateCcw size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#0f172a' }}>
+                    Withdraw Submission to Edit?
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>Task #{task.taskId} • {task.title}</p>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                className="tm-dialog-close" 
+                onClick={() => { if (!isWithdrawingReview) { setIsConfirmWithdrawOpen(false); setWithdrawError(''); } }}
+                disabled={isWithdrawingReview}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="tm-dialog-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+              <div style={{ backgroundColor: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '8px', padding: '0.85rem 1rem', display: 'flex', alignItems: 'flex-start', gap: '0.65rem' }}>
+                <Clock size={18} color="#d97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div style={{ fontSize: '0.84rem', color: '#92400e', lineHeight: 1.45 }}>
+                  You have <strong>{formatGraceRemaining(graceTimeRemainingMs)}</strong> remaining in your 2-hour edit window.
+                </div>
+              </div>
+
+              <p style={{ margin: 0, fontSize: '0.88rem', color: '#334155', lineHeight: 1.5 }}>
+                Withdrawing will return this task back to <strong>In Progress</strong>. You will be able to remove uploaded files, upload new or corrected documents, and submit for review again.
+              </p>
+
+              {withdrawError && (
+                <div className="tm-file-alert error">
+                  <div className="tm-alert-content">
+                    <AlertCircle size={13} className="tm-alert-icon" />
+                    <span>{withdrawError}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="tm-dialog-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}>
+              <button
+                type="button"
+                className="tm-btn-cancel"
+                onClick={() => { setIsConfirmWithdrawOpen(false); setWithdrawError(''); }}
+                disabled={isWithdrawingReview}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-warning"
+                style={{ backgroundColor: '#d97706', color: '#ffffff', fontWeight: 700, padding: '0.6rem 1.25rem', display: 'inline-flex', alignItems: 'center', gap: '0.45rem', borderRadius: '8px', border: 'none', cursor: 'pointer' }}
+                onClick={handleWithdrawReviewSubmission}
+                disabled={isWithdrawingReview}
+              >
+                {isWithdrawingReview ? <Loader2 size={14} className="tm-spin" /> : <RotateCcw size={14} />}
+                <span>Confirm &amp; Withdraw</span>
               </button>
             </div>
           </div>

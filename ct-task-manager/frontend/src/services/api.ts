@@ -972,6 +972,12 @@ export const api = {
     });
   },
 
+  withdrawReviewSubmission: async (id: string): Promise<{ success: boolean; message: string; data?: any }> => {
+    return fetchWithAuth(`/api/tasks/${id}/withdraw-review`, {
+      method: 'PATCH',
+    });
+  },
+
   uploadTaskAttachments: async (id: string, formData: FormData): Promise<{ success: boolean; message: string; data?: any }> => {
     return fetchWithAuth(`/api/tasks/${id}/attachments`, {
       method: 'POST',

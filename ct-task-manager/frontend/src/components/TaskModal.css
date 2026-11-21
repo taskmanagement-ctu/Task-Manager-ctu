@@ -2566,6 +2566,137 @@
   transform: none;
 }
 
+/* ─── Review Grace Period & Withdraw Submission ─── */
+.tm-review-grace-banner {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  transition: all 0.2s ease;
+}
+
+.tm-review-grace-banner.active {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.tm-review-grace-banner.expired {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.tm-review-grace-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 240px;
+}
+
+.tm-review-grace-banner.active .tm-review-grace-icon {
+  color: #d97706;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.tm-review-grace-banner.expired .tm-review-grace-icon {
+  color: #94a3b8;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.tm-review-grace-text-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.tm-review-grace-header-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.tm-review-grace-title {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #92400e;
+}
+
+.tm-review-grace-banner.expired .tm-review-grace-title {
+  color: #475569;
+}
+
+.tm-review-grace-timer-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fcd34d;
+  padding: 0.15rem 0.55rem;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.tm-review-grace-desc {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #78350f;
+  line-height: 1.35;
+}
+
+.tm-review-grace-banner.expired .tm-review-grace-desc {
+  color: #64748b;
+}
+
+.tm-btn-withdraw-review {
+  background: #d97706 !important;
+  color: #ffffff !important;
+  border: none !important;
+  font-size: 0.8rem !important;
+  font-weight: 600 !important;
+  padding: 0.45rem 0.85rem !important;
+  border-radius: 6px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.4rem !important;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.tm-btn-withdraw-review:hover {
+  background: #b45309 !important;
+  transform: translateY(-1px);
+}
+
+.tm-btn-withdraw-pill {
+  background: #fef3c7 !important;
+  color: #92400e !important;
+  border: 1px solid #fde68a !important;
+  font-size: 0.78rem !important;
+  font-weight: 600 !important;
+  padding: 0.35rem 0.7rem !important;
+  border-radius: 6px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tm-btn-withdraw-pill:hover {
+  background: #fde68a !important;
+  color: #78350f !important;
+}
+
 
 
 
